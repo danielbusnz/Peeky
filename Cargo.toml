@@ -1,0 +1,9 @@
+[package]
+name = "cursor-sidecar"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+gtk = { package = "gtk4", version = "0.11.3" }
+gtk4-layer-shell = "0.8.0"
+hyprland = "0.4.0-beta.3"
