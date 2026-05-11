@@ -1,5 +1,6 @@
 mod cursor;
 mod mouse;
+mod painter;
 mod providers;
 mod screenshot;
 

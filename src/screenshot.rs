@@ -35,19 +35,6 @@ pub fn capture_for_claude(
     if !output.status.success() {
         return Err(format!("grim failed: {}", String::from_utf8_lossy(&output.stderr)).into());
     }
-
-    // // Pick the closest Computer Use aspect-matched resolution.
-    // let ratio = width as f64 / height.max(1) as f64;
-    // let (declared_w, declared_h) = [
-    //     (1024u32, 768u32, 4.0 / 3.0),
-    //     (1280, 800, 16.0 / 10.0),
-    //     (1366, 768, 16.0 / 9.0),
-    // ]
-    // .into_iter()
-    // .min_by(|a, b| (a.2 - ratio).abs().partial_cmp(&(b.2 - ratio).abs()).unwrap())
-    // .map(|(w, h, _)| (w, h))
-    // .unwrap();
-
     let img = image::load_from_memory(&output.stdout)?;
     // let img = img.resize_exact(declared_w, declared_h, FilterType::Lanczos3);
 
