@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-pub fn record_until_release() -> Vec<f32> {
+pub fn record_until_release() -> (Vec<f32>, u32, u16) {
     let buffer = Arc::new(Mutex::new(Vec::<f32>::new()));
     let buffer_for_callback = Arc::clone(&buffer);
 
@@ -19,10 +19,12 @@ pub fn record_until_release() -> Vec<f32> {
         .or_else(|| host.default_input_device())
         .expect("no input device available");
 
-    let config = device
+    let supported_config = device
         .default_input_config()
-        .expect("no default input config")
-        .config();
+        .expect("no default input config");
+    let sample_rate = supported_config.sample_rate();
+    let channels = supported_config.channels();
+    let config = supported_config.config();
 
     let stream = device
         .build_input_stream(
@@ -42,5 +44,6 @@ pub fn record_until_release() -> Vec<f32> {
         thread::sleep(Duration::from_millis(10));
     }
 
-    buffer.lock().unwrap().clone()
+    let samples = buffer.lock().unwrap().clone();
+    (samples, sample_rate, channels)
 }

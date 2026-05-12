@@ -11,8 +11,13 @@ fn main() {
     hotkey::init().expect("signal handler setup");
     println!("press SUPER+space to record, release to stop...");
     hotkey::wait_for_press();
-    let samples = audio::record_until_release();
-    println!("captured {} samples", samples.len());
+    let (samples, sample_rate, channels) = audio::record_until_release();
+    println!(
+        "captured {} samples ({}Hz, {}ch)",
+        samples.len(),
+        sample_rate,
+        channels
+    );
     if samples.len() >= 10 {
         let mid = samples.len() / 2;
         println!("middle samples: {:?}", &samples[mid..mid + 10]);
