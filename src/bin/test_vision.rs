@@ -16,15 +16,33 @@ fn main() {
     };
     println!("active monitor: {}x{} at ({}, {})", mw, mh, mx, my);
 
-    println!("asking Claude...");
-    match claude.detect_element_location(
-        "What's on this screen? Answer in one sentence.",
-        mx as i64,
-        my as i64,
-        mw as i64,
-        mh as i64,
-    ) {
-        Ok((text, _point)) => println!("Claude: {}", text),
-        Err(e) => eprintln!("Claude error: {}", e),
+    let (b64, _, _) = match screenshot::capture_for_claude(mx, my, mw as i32, mh as i32) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("capture failed: {}", e);
+            return;
+        }
+    };
+
+    let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+    println!("asking Claude (describe_with_image, streaming)...");
+    print!("Claude: ");
+    let result = rt.block_on(async {
+        claude
+            .describe_with_image(
+                "What's on this screen? Answer in one sentence.",
+                &b64,
+                |token| {
+                    print!("{}", token);
+                    use std::io::Write;
+                    std::io::stdout().flush().ok();
+                },
+            )
+            .await
+    });
+    println!();
+
+    if let Err(e) = result {
+        eprintln!("Claude error: {}", e);
     }
 }

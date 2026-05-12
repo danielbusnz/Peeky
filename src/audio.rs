@@ -29,6 +29,79 @@ pub fn play(bytes: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Query the default input device's sample rate + channel count without
+/// starting capture. Used by streaming STT setup that needs to know the
+/// audio format before opening the upstream connection.
+pub fn input_config() -> (u32, u16) {
+    let host = cpal::default_host();
+    let device = host
+        .input_devices()
+        .expect("could not list input devices")
+        .find(|d| {
+            d.name()
+                .map(|n| n == "pulse" || n == "pipewire")
+                .unwrap_or(false)
+        })
+        .or_else(|| host.default_input_device())
+        .expect("no input device available");
+
+    let supported = device
+        .default_input_config()
+        .expect("no default input config");
+    (supported.sample_rate(), supported.channels())
+}
+
+/// Stream-mode recording. Captures from the mic and pipes i16 PCM chunks
+/// through `tx` as they arrive. Blocks until `hotkey::is_recording()`
+/// returns false, then drops the cpal stream and returns.
+///
+/// Caller is responsible for dropping the receiver if it no longer wants
+/// chunks. The sender (tx) is moved into the callback and dropped when the
+/// function returns — that signals end-of-stream to the consumer.
+pub fn record_stream(tx: tokio::sync::mpsc::UnboundedSender<Vec<i16>>) {
+    let host = cpal::default_host();
+    let device = host
+        .input_devices()
+        .expect("could not list input devices")
+        .find(|d| {
+            d.name()
+                .map(|n| n == "pulse" || n == "pipewire")
+                .unwrap_or(false)
+        })
+        .or_else(|| host.default_input_device())
+        .expect("no input device available");
+
+    let supported_config = device
+        .default_input_config()
+        .expect("no default input config");
+    let config = supported_config.config();
+
+    let stream = device
+        .build_input_stream(
+            &config,
+            move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                // Convert f32 in [-1.0, 1.0] → i16 PCM for Deepgram.
+                let samples: Vec<i16> = data
+                    .iter()
+                    .map(|&s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)
+                    .collect();
+                let _ = tx.send(samples);
+            },
+            move |err| eprintln!("audio stream error: {}", err),
+            None,
+        )
+        .expect("failed to build input stream");
+
+    stream.play().expect("failed to start stream");
+    eprintln!("[audio] streaming to STT...");
+
+    while crate::hotkey::is_recording() {
+        thread::sleep(Duration::from_millis(10));
+    }
+    eprintln!("[audio] recording stopped");
+    // stream + tx drop here, signaling end-of-stream to downstream consumer
+}
+
 pub fn record_until_release() -> (Vec<f32>, u32, u16) {
     let t0 = std::time::Instant::now();
     let buffer = Arc::new(Mutex::new(Vec::<f32>::new()));

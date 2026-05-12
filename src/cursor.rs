@@ -98,23 +98,33 @@ fn start_tracking(
             override_target = Some((target_x, target_y, Instant::now() + POINT_DURATION));
         }
 
-        // Pick the target: active override, or live mouse position.
-        let target = match override_target {
+        // Pick the target + whether to apply the floating-above offsets.
+        // When pointing (override active), draw EXACTLY on the target so
+        // Claude's coordinates land where they should. When following the
+        // mouse, apply the usual offsets so the sprite floats next to the
+        // pointer instead of obscuring it.
+        let (target, apply_offsets) = match override_target {
             Some((target_x, target_y, until)) if Instant::now() < until => {
-                Some((target_x as f64, target_y as f64))
+                (Some((target_x as f64, target_y as f64)), false)
             }
             _ => {
                 override_target = None;
-                crate::mouse::mouse_movement()
+                let mouse = crate::mouse::mouse_movement()
                     .ok()
-                    .map(|(mouse_x, mouse_y)| (mouse_x as f64, mouse_y as f64))
+                    .map(|(mouse_x, mouse_y)| (mouse_x as f64, mouse_y as f64));
+                (mouse, true)
             }
         };
 
         if let Some((target_x, target_y)) = target {
             cursor_x += (target_x - cursor_x) * SMOOTHING;
             cursor_y += (target_y - cursor_y) * SMOOTHING;
-            painter.set_position(cursor_x + X_OFFSET as f64, cursor_y + Y_OFFSET as f64);
+            let (ox, oy) = if apply_offsets {
+                (X_OFFSET as f64, Y_OFFSET as f64)
+            } else {
+                (0.0, 0.0)
+            };
+            painter.set_position(cursor_x + ox, cursor_y + oy);
         }
 
         glib::ControlFlow::Continue
