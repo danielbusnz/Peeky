@@ -1,4 +1,6 @@
+mod audio;
 mod cursor;
+mod hotkey;
 mod mouse;
 mod painter;
 mod providers;
@@ -11,6 +13,8 @@ fn main() {
         Ok(text) => println!("Claude: {}", text),
         Err(e) => eprintln!("Claude error: {}", e),
     }
+
+    hotkey::init().expect("signal handler setup");
 
     mouse::spawn_poller();
 
