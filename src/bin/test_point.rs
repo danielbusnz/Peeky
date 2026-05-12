@@ -18,35 +18,25 @@ fn main() {
         let claude = providers::claude::Claude::from_env()
             .expect("missing ANTHROPIC_API_KEY");
 
-        println!("capturing screenshot...");
-        let (b64, w, h) = screenshot::capture_active_workspace()
-            .expect("screenshot failed");
-        println!("captured {}x{}", w, h);
+        let (mx, my, mw, mh) =
+            screenshot::active_workspace_geometry().expect("could not query monitor");
+        println!("active monitor: {}x{} at ({}, {})", mw, mh, mx, my);
 
         let prompt = "Look at the screen. Point at the most prominent UI element \
                       you can see (an icon, button, or window control).";
-        println!("\nasking claude (tool use)...");
+        println!("\nasking claude (Computer Use + Haiku)...");
         let (text, point) = claude
-            .ask_with_image_tool(prompt, &b64)
+            .detect_element_location(prompt, mx as i64, my as i64, mw as i64, mh as i64)
             .expect("claude failed");
         println!("claude: {}\n", text);
 
         match point {
-            Some((x, y)) => {
-                let clamped_x = x.clamp(0, w as i32 - 1);
-                let clamped_y = y.clamp(0, h as i32 - 1);
-                if (clamped_x, clamped_y) != (x, y) {
-                    println!(
-                        "claude returned out-of-bounds ({}, {}) — clamped to ({}, {})",
-                        x, y, clamped_x, clamped_y
-                    );
-                } else {
-                    println!("tool fired with point: ({}, {})", x, y);
-                }
-                cursor::point_at(clamped_x, clamped_y);
+            Some((px, py)) => {
+                println!("tool fired with point: ({}, {})", px, py);
+                cursor::point_at(px as i32, py as i32);
             }
             None => {
-                println!("claude didn't invoke the point_at tool");
+                println!("claude didn't invoke the computer tool");
             }
         }
     });

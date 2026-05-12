@@ -1,24 +1,83 @@
-use super::Llm;
-use crate::screenshot::capture_for_claude;
+use crate::screenshot::{
+    capture_for_claude, pick_declared_resolution, resize_jpeg_for_computer_use,
+};
+use futures_util::StreamExt;
 
 pub struct Claude {
     pub api_key: String,
 }
 
-/// Extract the first `[POINT:x,y]` tag from a Claude response.
-///
-/// Returns `Some((x, y))` if the tag is present and the coordinates parse,
-/// otherwise `None`. Used by callers of [`Claude::ask_with_image`] to
-/// detect when Claude wants the cursor to fly to a specific screen point.
-pub fn parse_point_tag(response: &str) -> Option<(i32, i32)> {
-    let start = response.find("[POINT:")?;
-    let rest = &response[start + 7..];
-    let end = rest.find(']')?;
-    let inner = &rest[..end];
-    let mut parts = inner.split(',');
-    let x = parts.next()?.trim().parse().ok()?;
-    let y = parts.next()?.trim().parse().ok()?;
-    Some((x, y))
+impl Claude {
+    /// Streaming version of `complete`. Posts to Anthropic with `stream: true`,
+    /// parses the SSE response, and invokes `on_token` for each `text_delta`
+    /// chunk as it arrives. Returns the fully-accumulated text when the stream
+    /// completes.
+    ///
+    /// Designed to be called from a sync thread via `tokio::runtime::Runtime::block_on`,
+    /// or directly from an async context (e.g., inside a tokio task).
+    pub async fn complete_stream<F>(
+        &self,
+        prompt: &str,
+        mut on_token: F,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>>
+    where
+        F: FnMut(&str),
+    {
+        let body = serde_json::json!({
+            "model": "claude-haiku-4-5",
+            "max_tokens": 1024,
+            "stream": true,
+            "system": "You are aegis, a desktop voice assistant. Your responses will be spoken aloud. Respond conversationally in 1-2 sentences. Use only plain text — no markdown, no headers, no asterisks, no bullet points, no emojis. Write the way a person would speak.",
+            "messages": [
+                { "role": "user", "content": prompt }
+            ]
+        });
+
+        let response = reqwest::Client::new()
+            .post("https://api.anthropic.com/v1/messages")
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", "2023-06-01")
+            .header("content-type", "application/json")
+            .json(&body)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            return Err(format!("Anthropic API error {}: {}", status, text).into());
+        }
+
+        let mut stream = response.bytes_stream();
+        let mut buffer = String::new();
+        let mut accumulated = String::new();
+
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk?;
+            let s = std::str::from_utf8(&chunk)?;
+            buffer.push_str(s);
+
+            while let Some(idx) = buffer.find("\n\n") {
+                let frame: String = buffer.drain(..idx + 2).collect();
+                for line in frame.lines() {
+                    let Some(data) = line.strip_prefix("data: ") else {
+                        continue;
+                    };
+                    let Ok(event) = serde_json::from_str::<serde_json::Value>(data) else {
+                        continue;
+                    };
+                    if event["type"] == "content_block_delta" {
+                        if let Some(text) = event["delta"]["text"].as_str() {
+                            accumulated.push_str(text);
+                            on_token(text);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(accumulated)
+    }
 }
 
 impl Claude {
@@ -30,184 +89,16 @@ impl Claude {
     }
 }
 
-impl Llm for Claude {
-    fn complete(&self, prompt: &str) -> Result<String, Box<dyn std::error::Error>> {
-        let body = serde_json::json!({
-            "model": "claude-haiku-4-5",
-            "max_tokens": 1024,
-            "system": "You are aegis, a desktop voice assistant. Your responses will be spoken aloud. Respond conversationally in 1-2 sentences. Use only plain text — no markdown, no headers, no asterisks, no bullet points, no emojis. Write the way a person would speak.",
-            "messages": [
-                { "role": "user", "content": prompt }
-            ]
-        });
-
-        let response = reqwest::blocking::Client::new()
-            .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", "2023-06-01")
-            .json(&body)
-            .send()?;
-
-        if !response.status().is_success() {
-            return Err(format!(
-                "Anthropic API error {}: {}",
-                response.status(),
-                response.text().unwrap_or_default()
-            )
-            .into());
-        }
-
-        let json: serde_json::Value = response.json()?;
-        Ok(json["content"][0]["text"]
-            .as_str()
-            .ok_or("no text in response")?
-            .to_string())
-    }
-}
-
 impl Claude {
-    /// Send a prompt + image to Claude using **Tool Use** for guaranteed
-    /// structured pointing. Returns `(text, Some((x, y)))` if Claude
-    /// invoked the `point_at` tool, otherwise `(text, None)`.
+    /// Anthropic Computer Use call on Haiku 4.5. Captures the given screen
+    /// region, resizes it to one of three aspect-matched declared resolutions
+    /// (1024×768 / 1280×800 / 1366×768), POSTs to the Messages API with the
+    /// `computer_20250124` tool definition, and parses the response.
     ///
-    /// Prefer this over [`Claude::ask_with_image`] when you want a
-    /// schema-enforced response shape instead of the brittle
-    /// `[POINT:x,y]` text-tag approach.
-    pub fn ask_with_image_tool(
-        &self,
-        prompt: &str,
-        image_b64: &str,
-    ) -> Result<(String, Option<(i32, i32)>), Box<dyn std::error::Error>> {
-        let body = serde_json::json!({
-            "model": "claude-opus-4-7",
-            "max_tokens": 1024,
-            "system": "You are aegis, a desktop voice assistant looking at the user's screen. Your responses will be spoken aloud, so ALWAYS include a short conversational text reply (1-2 sentences, plain text only, no markdown / asterisks / bullets / emojis). When the user asks WHERE something is on screen, ALSO invoke the point_at tool with the element's center coordinates — but never call the tool without an accompanying text reply. Skip the tool for general or non-spatial questions, but always reply with text.",
-            "tools": [{
-                "name": "point_at",
-                "description": "Point the cursor at a specific UI element on screen. Only call when the user is asking WHERE something is or asking you to indicate a screen location.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "x": { "type": "integer", "description": "x pixel coordinate (0 = left)" },
-                        "y": { "type": "integer", "description": "y pixel coordinate (0 = top)" }
-                    },
-                    "required": ["x", "y"]
-                }
-            }],
-            "messages": [{
-                "role": "user",
-                "content": [
-                    { "type": "image", "source": { "type": "base64", "media_type": "image/jpeg", "data": image_b64 } },
-                    { "type": "text", "text": prompt }
-                ]
-            }]
-        });
-
-        let response = reqwest::blocking::Client::new()
-            .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", "2023-06-01")
-            .json(&body)
-            .send()?;
-
-        if !response.status().is_success() {
-            return Err(format!(
-                "Anthropic API error {}: {}",
-                response.status(),
-                response.text().unwrap_or_default()
-            )
-            .into());
-        }
-
-        let json: serde_json::Value = response.json()?;
-        let blocks = json["content"]
-            .as_array()
-            .ok_or("no content array in response")?;
-
-        let mut text = String::new();
-        let mut point: Option<(i32, i32)> = None;
-        for block in blocks {
-            match block["type"].as_str() {
-                Some("text") => {
-                    if let Some(t) = block["text"].as_str() {
-                        text.push_str(t);
-                    }
-                }
-                Some("tool_use") if block["name"] == "point_at" => {
-                    let x = block["input"]["x"].as_i64().map(|n| n as i32);
-                    let y = block["input"]["y"].as_i64().map(|n| n as i32);
-                    if let (Some(x), Some(y)) = (x, y) {
-                        point = Some((x, y));
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        Ok((text, point))
-    }
-
-    /// Send a prompt + image to Claude and return the text response.
-    ///
-    /// **Note:** This is the fallback "regex" approach — Claude appends
-    /// a `[POINT:x,y]` tag in plain text when relevant, which the caller
-    /// must parse with [`parse_point_tag`]. Prefer
-    /// [`Claude::ask_with_image_tool`] for new code.
-    pub fn ask_with_image(
-        &self,
-        prompt: &str,
-        image_b64: &str,
-    ) -> Result<String, Box<dyn std::error::Error>> {
-        let body = serde_json::json!({
-            "model": "claude-opus-4-7",
-            "max_tokens": 1024,
-            "system": "You are aegis, a desktop voice assistant looking at the user's screen. Your responses will be spoken aloud. Respond conversationally in 1-2 sentences using only plain text — no markdown, no asterisks, no bullet points, no emojis.\n\nIf the user asks WHERE something is on screen, end your response with the tag [POINT:x,y] using absolute pixel coordinates of that element's center. The screen is in standard pixel coordinates where (0,0) is the top-left. Only include the tag when the user is asking for a location; omit it for general questions.",
-            "messages": [{
-                "role": "user",
-                "content": [
-                    { "type": "image", "source": { "type": "base64", "media_type": "image/jpeg", "data": image_b64 } },
-                    { "type": "text", "text": prompt }
-                ]
-            }]
-        });
-
-        let response = reqwest::blocking::Client::new()
-            .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", "2023-06-01")
-            .json(&body)
-            .send()?;
-
-        if !response.status().is_success() {
-            return Err(format!(
-                "Anthropic API error {}: {}",
-                response.status(),
-                response.text().unwrap_or_default()
-            )
-            .into());
-        }
-
-        let json: serde_json::Value = response.json()?;
-        Ok(json["content"][0]["text"]
-            .as_str()
-            .ok_or("no text in response")?
-            .to_string())
-    }
-}
-
-impl Claude {
-    /// **Currently unused.** Alternative pointing approach using Anthropic's
-    /// Computer Use API.
-    ///
-    /// Kept as reference for issue #5 (cursor clicks). Our active approach
-    /// is the `[POINT:x,y]` tag inside `ask_with_image`'s system prompt,
-    /// which is cheaper and simpler. This function may be revived when we
-    /// add real click/keypress capabilities.
-    ///
-    /// Captures the given screen region, asks Claude where the user-described
-    /// element is, and returns absolute screen coordinates (or None if Claude
-    /// says there's no specific element to point at).
-    #[allow(dead_code)]
+    /// Returns `(text, Some((x, y)))` if Claude invoked the computer tool
+    /// with a `left_click` action — coordinates are scaled back to absolute
+    /// screen pixels. Returns `(text, None)` if Claude only spoke and didn't
+    /// click. The text is always populated when Claude responds.
     pub fn detect_element_location(
         &self,
         prompt: &str,
@@ -215,26 +106,33 @@ impl Claude {
         window_y: i64,
         window_width: i64,
         window_height: i64,
-    ) -> Result<Option<(i64, i64)>, Box<dyn std::error::Error>> {
-        let (image_b64, declared_w, declared_h) = capture_for_claude(
+    ) -> Result<(String, Option<(i64, i64)>), Box<dyn std::error::Error>> {
+        // Capture at native resolution
+        let (raw_b64, _, _) = capture_for_claude(
             window_x as i32,
             window_y as i32,
             window_width as i32,
             window_height as i32,
         )?;
 
+        // Pick the aspect-matched declared resolution + resize so coords come
+        // back in a known space we can scale precisely.
+        let (declared_w, declared_h) = pick_declared_resolution(window_width, window_height);
+        let image_b64 = resize_jpeg_for_computer_use(&raw_b64, declared_w, declared_h)?;
+
         let user_prompt = format!(
             "Look at the screenshot. The user asked: \"{}\". \
-             If there is a specific UI element they should interact with, click on it. \
-             If the question is conceptual, respond with text saying \"no specific element\".",
+             Respond conversationally in 1-2 sentences (plain text, no markdown, no emojis). \
+             If there is a specific UI element they're asking about, ALSO use the computer tool to left_click on it. \
+             If the question is conceptual, just respond with text and skip the click.",
             prompt
         );
 
         let body = serde_json::json!({
-            "model": "claude-opus-4-7",
-            "max_tokens": 256,
+            "model": "claude-haiku-4-5",
+            "max_tokens": 512,
             "tools": [{
-                "type": "computer_20251124",
+                "type": "computer_20250124",
                 "name": "computer",
                 "display_width_px": declared_w,
                 "display_height_px": declared_h
@@ -252,7 +150,7 @@ impl Claude {
             .post("https://api.anthropic.com/v1/messages")
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
-            .header("anthropic-beta", "computer-use-2025-11-24")
+            .header("anthropic-beta", "computer-use-2025-01-24")
             .json(&body)
             .send()?;
 
@@ -268,25 +166,51 @@ impl Claude {
         let json: serde_json::Value = response.json()?;
         let content = json["content"].as_array().ok_or("no content array")?;
 
-        for block in content {
-            if block["type"] != "tool_use" {
-                continue;
-            }
-            if block["input"]["action"] != "left_click" {
-                continue;
-            }
-            let coord = match block["input"]["coordinate"].as_array() {
-                Some(c) if c.len() == 2 => c,
-                _ => continue,
-            };
-            let x = coord[0].as_i64().ok_or("coord[0] not an integer")?;
-            let y = coord[1].as_i64().ok_or("coord[1] not an integer")?;
+        let mut text = String::new();
+        let mut point: Option<(i64, i64)> = None;
 
-            let screen_x = window_x + (x as f64 * window_width as f64 / declared_w as f64) as i64;
-            let screen_y = window_y + (y as f64 * window_height as f64 / declared_h as f64) as i64;
-            return Ok(Some((screen_x, screen_y)));
+        for block in content {
+            match block["type"].as_str() {
+                Some("text") => {
+                    if let Some(t) = block["text"].as_str() {
+                        text.push_str(t);
+                    }
+                }
+                Some("tool_use") if block["input"]["action"] == "left_click" => {
+                    let coord = match block["input"]["coordinate"].as_array() {
+                        Some(c) if c.len() == 2 => c,
+                        _ => continue,
+                    };
+
+                    // Layer 1: clamp raw declared-resolution coords from Claude
+                    // to [0, declared_w/h). Catches negatives and any
+                    // out-of-bounds hallucinations before scaling.
+                    let raw_x = coord[0]
+                        .as_i64()
+                        .unwrap_or(0)
+                        .clamp(0, declared_w as i64 - 1);
+                    let raw_y = coord[1]
+                        .as_i64()
+                        .unwrap_or(0)
+                        .clamp(0, declared_h as i64 - 1);
+
+                    // Scale declared-space coords back to actual screen pixels.
+                    let screen_x = window_x
+                        + (raw_x as f64 * window_width as f64 / declared_w as f64) as i64;
+                    let screen_y = window_y
+                        + (raw_y as f64 * window_height as f64 / declared_h as f64) as i64;
+
+                    // Layer 2: clamp to the actual screen window. Belt + suspenders
+                    // for float rounding at the edges.
+                    let clamped_x = screen_x.clamp(window_x, window_x + window_width - 1);
+                    let clamped_y = screen_y.clamp(window_y, window_y + window_height - 1);
+
+                    point = Some((clamped_x, clamped_y));
+                }
+                _ => {}
+            }
         }
 
-        Ok(None)
+        Ok((text, point))
     }
 }

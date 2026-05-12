@@ -26,14 +26,19 @@ fn run_one_turn(
     let transcript = whisper.transcribe(&samples, sr, ch)?;
     println!("you said: {}", transcript);
 
-    let (b64, w, h) = screenshot::capture_active_workspace()?;
-    let (text, point) = claude.ask_with_image_tool(&transcript, &b64)?;
+    let (x, y, w, h) = screenshot::active_workspace_geometry()?;
+    let (text, point) = claude.detect_element_location(
+        &transcript,
+        x as i64,
+        y as i64,
+        w as i64,
+        h as i64,
+    )?;
     println!("claude: {}", text);
 
-    if let Some((x, y)) = point {
-        let cx = x.clamp(0, w as i32 - 1);
-        let cy = y.clamp(0, h as i32 - 1);
-        cursor::point_at(cx, cy);
+    // Coords are already clamped to screen bounds inside detect_element_location.
+    if let Some((px, py)) = point {
+        cursor::point_at(px as i32, py as i32);
     }
 
     if !text.is_empty() {

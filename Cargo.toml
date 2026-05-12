@@ -8,12 +8,14 @@ default-run = "aegis"
 base64 = "0.22.1"
 cpal = { version = "0.17.3", features = ["jack"] }
 dotenvy = "0.15.7"
+futures-util = "0.3.32"
 gtk = { package = "gtk4", version = "0.11.3", features = ["v4_6"] }
 gtk4-layer-shell = "0.8.0"
 hound = "3.5.1"
 hyprland = "0.4.0-beta.3"
 image = "0.25.10"
-reqwest = { version = "0.13.3", features = ["blocking", "json", "multipart"] }
+reqwest = { version = "0.13.3", features = ["blocking", "json", "multipart", "stream"] }
 rodio = "0.22.2"
 serde_json = "1.0.149"
 signal-hook = "0.4.4"
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros"] }
