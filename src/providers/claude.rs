@@ -5,6 +5,22 @@ pub struct Claude {
     pub api_key: String,
 }
 
+/// Extract the first `[POINT:x,y]` tag from a Claude response.
+///
+/// Returns `Some((x, y))` if the tag is present and the coordinates parse,
+/// otherwise `None`. Used by callers of [`Claude::ask_with_image`] to
+/// detect when Claude wants the cursor to fly to a specific screen point.
+pub fn parse_point_tag(response: &str) -> Option<(i32, i32)> {
+    let start = response.find("[POINT:")?;
+    let rest = &response[start + 7..];
+    let end = rest.find(']')?;
+    let inner = &rest[..end];
+    let mut parts = inner.split(',');
+    let x = parts.next()?.trim().parse().ok()?;
+    let y = parts.next()?.trim().parse().ok()?;
+    Some((x, y))
+}
+
 impl Claude {
     /// Loads the API key from `.env` or the environment.
     pub fn from_env() -> Result<Self, Box<dyn std::error::Error>> {
@@ -50,7 +66,93 @@ impl Llm for Claude {
 }
 
 impl Claude {
+    /// Send a prompt + image to Claude using **Tool Use** for guaranteed
+    /// structured pointing. Returns `(text, Some((x, y)))` if Claude
+    /// invoked the `point_at` tool, otherwise `(text, None)`.
+    ///
+    /// Prefer this over [`Claude::ask_with_image`] when you want a
+    /// schema-enforced response shape instead of the brittle
+    /// `[POINT:x,y]` text-tag approach.
+    pub fn ask_with_image_tool(
+        &self,
+        prompt: &str,
+        image_b64: &str,
+    ) -> Result<(String, Option<(i32, i32)>), Box<dyn std::error::Error>> {
+        let body = serde_json::json!({
+            "model": "claude-opus-4-7",
+            "max_tokens": 1024,
+            "system": "You are aegis, a desktop voice assistant looking at the user's screen. Your responses will be spoken aloud. Respond conversationally in 1-2 sentences using only plain text — no markdown, no asterisks, no bullet points, no emojis. When the user asks WHERE something is on screen, invoke the point_at tool with the element's center coordinates. Skip the tool for general or non-spatial questions.",
+            "tools": [{
+                "name": "point_at",
+                "description": "Point the cursor at a specific UI element on screen. Only call when the user is asking WHERE something is or asking you to indicate a screen location.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "x": { "type": "integer", "description": "x pixel coordinate (0 = left)" },
+                        "y": { "type": "integer", "description": "y pixel coordinate (0 = top)" }
+                    },
+                    "required": ["x", "y"]
+                }
+            }],
+            "messages": [{
+                "role": "user",
+                "content": [
+                    { "type": "image", "source": { "type": "base64", "media_type": "image/jpeg", "data": image_b64 } },
+                    { "type": "text", "text": prompt }
+                ]
+            }]
+        });
+
+        let response = reqwest::blocking::Client::new()
+            .post("https://api.anthropic.com/v1/messages")
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", "2023-06-01")
+            .json(&body)
+            .send()?;
+
+        if !response.status().is_success() {
+            return Err(format!(
+                "Anthropic API error {}: {}",
+                response.status(),
+                response.text().unwrap_or_default()
+            )
+            .into());
+        }
+
+        let json: serde_json::Value = response.json()?;
+        let blocks = json["content"]
+            .as_array()
+            .ok_or("no content array in response")?;
+
+        let mut text = String::new();
+        let mut point: Option<(i32, i32)> = None;
+        for block in blocks {
+            match block["type"].as_str() {
+                Some("text") => {
+                    if let Some(t) = block["text"].as_str() {
+                        text.push_str(t);
+                    }
+                }
+                Some("tool_use") if block["name"] == "point_at" => {
+                    let x = block["input"]["x"].as_i64().map(|n| n as i32);
+                    let y = block["input"]["y"].as_i64().map(|n| n as i32);
+                    if let (Some(x), Some(y)) = (x, y) {
+                        point = Some((x, y));
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok((text, point))
+    }
+
     /// Send a prompt + image to Claude and return the text response.
+    ///
+    /// **Note:** This is the fallback "regex" approach — Claude appends
+    /// a `[POINT:x,y]` tag in plain text when relevant, which the caller
+    /// must parse with [`parse_point_tag`]. Prefer
+    /// [`Claude::ask_with_image_tool`] for new code.
     pub fn ask_with_image(
         &self,
         prompt: &str,
@@ -94,9 +196,18 @@ impl Claude {
 }
 
 impl Claude {
-    /// Computer Use API call. Captures the given screen region, asks Claude where
-    /// the user-described element is, and returns absolute screen coordinates (or
-    /// None if Claude says there's no specific element to point at).
+    /// **Currently unused.** Alternative pointing approach using Anthropic's
+    /// Computer Use API.
+    ///
+    /// Kept as reference for issue #5 (cursor clicks). Our active approach
+    /// is the `[POINT:x,y]` tag inside `ask_with_image`'s system prompt,
+    /// which is cheaper and simpler. This function may be revived when we
+    /// add real click/keypress capabilities.
+    ///
+    /// Captures the given screen region, asks Claude where the user-described
+    /// element is, and returns absolute screen coordinates (or None if Claude
+    /// says there's no specific element to point at).
+    #[allow(dead_code)]
     pub fn detect_element_location(
         &self,
         prompt: &str,

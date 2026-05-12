@@ -18,18 +18,24 @@ pub struct Painter {
 impl Painter {
     pub fn new() -> Self {
         let drawing_area = gtk::DrawingArea::new();
-        let position = Rc::new(Cell::new((0.0, 0.0)));
+        let position = Rc::new(Cell::new((0.0_f64, 0.0_f64)));
 
         let surface = build_surface();
         let scale = CURSOR_DISPLAY_SIZE / surface.width() as f64;
 
         let pos = position.clone();
-        drawing_area.set_draw_func(move |_, cr, _, _| {
-            let (x, y) = pos.get();
+        drawing_area.set_draw_func(move |_, cr, width, height| {
+            let (raw_x, raw_y) = pos.get();
+            // Keep the cursor fully on-screen even when offsets push it past an edge.
+            let max_x = (width as f64 - CURSOR_DISPLAY_SIZE).max(0.0_f64);
+            let max_y = (height as f64 - CURSOR_DISPLAY_SIZE).max(0.0_f64);
+            let x = raw_x.clamp(0.0_f64, max_x);
+            let y = raw_y.clamp(0.0_f64, max_y);
+
             cr.save().expect("cairo save failed");
             cr.translate(x, y);
             cr.scale(scale, scale);
-            cr.set_source_surface(&surface, 0.0, 0.0)
+            cr.set_source_surface(&surface, 0.0_f64, 0.0_f64)
                 .expect("set_source_surface failed");
             cr.paint().expect("paint failed");
             cr.restore().expect("cairo restore failed");
