@@ -1,4 +1,5 @@
 pub mod claude;
+pub mod tts_cartesia;
 pub mod tts_openai;
 pub mod whisper_openai;
 

@@ -39,10 +39,12 @@ pub fn record_until_release() -> (Vec<f32>, u32, u16) {
         .expect("failed to build input stream");
 
     stream.play().expect("failed to start stream");
+    println!("recording... (release to stop)");
 
     while crate::hotkey::is_recording() {
         thread::sleep(Duration::from_millis(10));
     }
+    println!("recording stopped");
 
     let samples = buffer.lock().unwrap().clone();
     (samples, sample_rate, channels)

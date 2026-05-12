@@ -19,6 +19,7 @@ impl Llm for Claude {
         let body = serde_json::json!({
             "model": "claude-haiku-4-5",
             "max_tokens": 1024,
+            "system": "You are aegis, a desktop voice assistant. Your responses will be spoken aloud. Respond conversationally in 1-2 sentences. Use only plain text — no markdown, no headers, no asterisks, no bullet points, no emojis. Write the way a person would speak.",
             "messages": [
                 { "role": "user", "content": prompt }
             ]
