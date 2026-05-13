@@ -1,8 +1,8 @@
 #[path = "../audio.rs"]
 mod audio;
-#[path = "../hotkey.rs"]
+#[path = "../hotkey/mod.rs"]
 mod hotkey;
-#[path = "../screenshot.rs"]
+#[path = "../screenshot/mod.rs"]
 mod screenshot;
 #[path = "../providers/mod.rs"]
 mod providers;

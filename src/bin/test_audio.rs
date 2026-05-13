@@ -1,6 +1,6 @@
 #[path = "../audio.rs"]
 mod audio;
-#[path = "../hotkey.rs"]
+#[path = "../hotkey/mod.rs"]
 mod hotkey;
 
 fn main() {

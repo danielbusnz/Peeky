@@ -1,12 +1,12 @@
-#[path = "../cursor.rs"]
+#[path = "../cursor/mod.rs"]
 mod cursor;
-#[path = "../mouse.rs"]
+#[path = "../mouse/mod.rs"]
 mod mouse;
 #[path = "../painter.rs"]
 mod painter;
-#[path = "../screenshot.rs"]
+#[path = "../screenshot/mod.rs"]
 mod screenshot;
-#[path = "../hotkey.rs"]
+#[path = "../hotkey/mod.rs"]
 mod hotkey;
 #[path = "../providers/mod.rs"]
 mod providers;

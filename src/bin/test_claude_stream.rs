@@ -1,4 +1,4 @@
-#[path = "../screenshot.rs"]
+#[path = "../screenshot/mod.rs"]
 mod screenshot;
 #[path = "../providers/mod.rs"]
 mod providers;

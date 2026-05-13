@@ -1,6 +1,6 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 
-#[path = "../screenshot.rs"]
+#[path = "../screenshot/mod.rs"]
 mod screenshot;
 
 fn main() {

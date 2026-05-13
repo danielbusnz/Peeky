@@ -4,6 +4,16 @@ version = "0.1.0"
 edition = "2024"
 default-run = "aegis"
 
+[features]
+# Default = current Hyprland-only build. Existing toolchain unchanged.
+default = ["hyprland"]
+# Linux + Hyprland with full layer-shell polish.
+hyprland = []
+# winit-based overlay window for X11 / Windows / macOS. Not implemented yet.
+winit-window = []
+# Cross-platform mouse, hotkey, screenshot. Not implemented yet.
+crossplatform = []
+
 [dependencies]
 base64 = "0.22.1"
 cpal = { version = "0.17.3", features = ["jack"] }
