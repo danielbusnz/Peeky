@@ -70,12 +70,16 @@ impl Claude {
             // on "I'll click on..." text before the actual tool block.
             "max_tokens": 500,
             "stream": true,
-            "system": "You are a UI coordinate finder. You take exactly ONE action: \
-                       invoke the computer tool with a left_click on the center of the \
-                       UI element the user is referring to. Do NOT explain. Do NOT \
+            "system": "You are a UI coordinate finder. A screenshot has ALREADY been \
+                       provided to you in this message — do NOT call action=\"screenshot\", \
+                       it is forbidden and will be discarded. Your ONLY valid action is \
+                       left_click with x and y coordinates pointing to the center of \
+                       the UI element the user asked about. Do NOT explain. Do NOT \
                        describe what you see. Do NOT say what you're about to do. \
                        Skip directly to the tool call. Your response must contain \
-                       only the tool_use block.",
+                       only the tool_use block with action=\"left_click\" and \
+                       coordinate=[x, y]. If you cannot find the target in the provided \
+                       screenshot, return plain text saying why — do NOT call any tool.",
             "tools": [{
                 "type": "computer_20250124",
                 "name": "computer",

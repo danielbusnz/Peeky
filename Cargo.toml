@@ -9,10 +9,10 @@ default-run = "aegis"
 default = ["hyprland"]
 # Linux + Hyprland with full layer-shell polish.
 hyprland = []
-# winit-based overlay window for X11 / Windows / macOS. Not implemented yet.
-winit-window = []
-# Cross-platform mouse, hotkey, screenshot. Not implemented yet.
-crossplatform = []
+# winit-based overlay window for X11 / Windows / macOS.
+winit-window = ["dep:winit", "dep:softbuffer", "dep:tiny-skia"]
+# Cross-platform mouse, hotkey, screenshot via xcap.
+crossplatform = ["dep:xcap", "dep:mouse_position", "dep:global-hotkey", "dep:windows-sys"]
 
 [dependencies]
 base64 = "0.22.1"
@@ -30,3 +30,10 @@ serde_json = "1.0.149"
 signal-hook = "0.4.4"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros"] }
 tokio-tungstenite = { version = "0.29.0", features = ["native-tls"] }
+global-hotkey = { version = "0.8", optional = true }
+mouse_position = { version = "0.1", optional = true }
+softbuffer = { version = "0.4", optional = true }
+tiny-skia = { version = "0.11", optional = true }
+winit = { version = "0.30", optional = true }
+windows-sys = { version = "0.59", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation"], optional = true }
+xcap = { version = "0.9.4", optional = true }
