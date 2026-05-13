@@ -98,9 +98,24 @@ cargo run --bin test_vision   # Claude describes your screen
 cargo run --bin test_point    # cursor flies to a Claude-picked target
 ```
 
+## Windows / macOS / X11 build
+
+Cross-platform impls live behind the `winit-window` + `crossplatform` features.
+Build the end-to-end smoke test (hotkey + mouse + screenshot + cursor) with:
+
+```bash
+cargo run --bin test_win --no-default-features --features winit-window,crossplatform
+```
+
+Hold `Insert`, release. Each turn logs mouse pos, saves a screenshot to the
+temp dir, and flies the cursor sprite to the mouse position. Click-through is
+on, so apps below the overlay still receive input.
+
 ## Status
 
-Hyprland-only. Windows and macOS support planned via Cargo features (see open issues).
+Hyprland is the default. Cross-platform support (winit + xcap + mouse_position
++ global-hotkey) is in active development behind the `winit-window` and
+`crossplatform` Cargo features.
 
 ## License
 
