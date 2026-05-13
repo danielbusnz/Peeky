@@ -13,11 +13,11 @@ fn main() {
     let claude = providers::claude::Claude::from_env().expect("missing ANTHROPIC_API_KEY");
     let cartesia =
         providers::tts_cartesia::TtsCartesia::from_env().expect("missing CARTESIA_API_KEY");
+    let mic = audio::Mic::init();
 
     hotkey::init().expect("signal handler setup");
-    mouse::spawn_poller();
 
-    std::thread::spawn(move || voice::run_loop(stt, claude, cartesia));
+    std::thread::spawn(move || voice::run_loop(mic, stt, claude, cartesia));
 
     cursor::cursor(300, 300);
 }

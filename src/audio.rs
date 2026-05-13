@@ -1,158 +1,255 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+use tokio::sync::mpsc::UnboundedSender;
 
-/// Play raw audio bytes (WAV or MP3) through the default output sink.
-/// Writes to a temp file first because rodio's symphonia decoder is
-/// picky about in-memory Cursor<Vec<u8>> input.
-///
-/// Interruptible: if `hotkey::is_recording()` becomes true while audio
-/// is playing, playback stops immediately and the function returns Ok.
-/// This lets the user cut off the assistant mid-sentence by pressing
-/// the talk hotkey.
-pub fn play(bytes: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
-    let path = "/tmp/aegis-playback.wav";
-    std::fs::write(path, bytes)?;
-    let file = std::io::BufReader::new(std::fs::File::open(path)?);
-    let handle = rodio::DeviceSinkBuilder::open_default_sink()?;
-    let player = rodio::play(handle.mixer(), file)?;
+/// How much audio to keep in the pre-roll buffer. The cpal callback fills
+/// this ring buffer continuously while idle. On hotkey press, the contents
+/// are flushed into the forwarding channel BEFORE live audio starts, so
+/// the user's first syllable (typically spoken while still pressing the
+/// key) is captured.
+const PREROLL_MS: u64 = 300;
 
-    while !player.empty() {
-        if crate::hotkey::is_recording() {
-            player.stop();
-            eprintln!("[audio] playback interrupted by hotkey");
-            return Ok(());
+/// Cold mic handle: device + cached config. Picked at startup on the main
+/// thread so device-enumeration errors surface before any hotkey is held.
+/// Convert to a `LiveMic` on the voice thread via `Mic::start()` to actually
+/// open the cpal stream (cpal::Stream is !Send so it must live on whichever
+/// thread owns it).
+pub struct Mic {
+    device: cpal::Device,
+    pub sample_rate: u32,
+    pub channels: u16,
+}
+
+impl Mic {
+    /// Pick the input device and probe its default config. Panics with a
+    /// clear message if no mic is available.
+    pub fn init() -> Self {
+        let device = pick_input_device();
+        #[allow(deprecated)]
+        let name = device.name().unwrap_or_else(|_| "<unknown>".to_string());
+        let supported = device
+            .default_input_config()
+            .expect("no default input config");
+        let sample_rate = supported.sample_rate();
+        let channels = supported.channels();
+        eprintln!(
+            "[audio] mic found: {} ({}Hz, {}ch)",
+            name, sample_rate, channels
+        );
+        Mic {
+            sample_rate,
+            channels,
+            device,
         }
-        thread::sleep(Duration::from_millis(50));
     }
-    Ok(())
+
+    /// Open the cpal stream and start capturing 24/7. Must be called on the
+    /// thread that will own the stream for the rest of the app's life
+    /// (cpal::Stream is !Send).
+    ///
+    /// While no capture is installed, samples from the mic are silently
+    /// dropped. Per-turn, `LiveMic::capture_until_release` installs a
+    /// sender, forwards samples through it until the hotkey is released,
+    /// then drops the sender (closing the downstream channel).
+    pub fn start(self) -> LiveMic {
+        let supported_config = self
+            .device
+            .default_input_config()
+            .expect("no default input config");
+        let config = supported_config.config();
+
+        // Compute the pre-roll capacity in samples. Sample count includes
+        // both channels for interleaved stereo, so the math accounts for
+        // channels naturally.
+        let preroll_max_samples =
+            (self.sample_rate as usize) * (self.channels as usize) * (PREROLL_MS as usize) / 1000;
+        let state = Arc::new(Mutex::new(MicState {
+            current_tx: None,
+            preroll: Preroll::new(preroll_max_samples),
+        }));
+        let state_cb = state.clone();
+
+        let stream = self
+            .device
+            .build_input_stream(
+                &config,
+                move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                    // Convert f32 in [-1.0, 1.0] → i16 PCM for Deepgram.
+                    let samples: Vec<i16> = data
+                        .iter()
+                        .map(|&s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)
+                        .collect();
+                    let mut s = state_cb.lock().unwrap();
+                    if let Some(tx) = s.current_tx.as_ref() {
+                        // Live forwarding: send straight to the receiver.
+                        let _ = tx.send(samples);
+                    } else {
+                        // Idle: keep the most recent PREROLL_MS in the
+                        // ring buffer so it can be flushed on next press.
+                        s.preroll.push(samples);
+                    }
+                },
+                move |err| eprintln!("audio stream error: {}", err),
+                None,
+            )
+            .expect("failed to build input stream");
+        stream.play().expect("failed to start stream");
+        eprintln!(
+            "[audio] cpal stream warmed up, {}ms pre-roll buffer active",
+            PREROLL_MS
+        );
+
+        LiveMic {
+            sample_rate: self.sample_rate,
+            channels: self.channels,
+            state,
+            _stream: stream,
+        }
+    }
 }
 
-/// Query the default input device's sample rate + channel count without
-/// starting capture. Used by streaming STT setup that needs to know the
-/// audio format before opening the upstream connection.
-pub fn input_config() -> (u32, u16) {
-    let host = cpal::default_host();
-    let device = host
-        .input_devices()
-        .expect("could not list input devices")
-        .find(|d| {
-            d.name()
-                .map(|n| n == "pulse" || n == "pipewire")
-                .unwrap_or(false)
-        })
-        .or_else(|| host.default_input_device())
-        .expect("no input device available");
-
-    let supported = device
-        .default_input_config()
-        .expect("no default input config");
-    (supported.sample_rate(), supported.channels())
+/// State shared between the cpal audio thread and the voice thread.
+/// One Mutex covers both fields so the press-time "flush preroll AND
+/// install tx" transition is atomic.
+struct MicState {
+    current_tx: Option<UnboundedSender<Vec<i16>>>,
+    preroll: Preroll,
 }
 
-/// Stream-mode recording. Captures from the mic and pipes i16 PCM chunks
-/// through `tx` as they arrive. Blocks until `hotkey::is_recording()`
-/// returns false, then drops the cpal stream and returns.
+/// Fixed-budget ring buffer of audio chunks, evicting the oldest chunk
+/// whenever the total sample count exceeds `max_samples`.
+struct Preroll {
+    chunks: VecDeque<Vec<i16>>,
+    total_samples: usize,
+    max_samples: usize,
+}
+
+impl Preroll {
+    fn new(max_samples: usize) -> Self {
+        Self {
+            chunks: VecDeque::new(),
+            total_samples: 0,
+            max_samples,
+        }
+    }
+
+    fn push(&mut self, samples: Vec<i16>) {
+        self.total_samples += samples.len();
+        self.chunks.push_back(samples);
+        while self.total_samples > self.max_samples {
+            match self.chunks.pop_front() {
+                Some(removed) => self.total_samples -= removed.len(),
+                None => break,
+            }
+        }
+    }
+}
+
+/// Hot mic: the cpal stream is running 24/7 in the background. Installing
+/// a sender via `capture_until_release` makes the callback forward chunks
+/// to that sender until the hotkey is released.
+pub struct LiveMic {
+    pub sample_rate: u32,
+    pub channels: u16,
+    state: Arc<Mutex<MicState>>,
+    _stream: cpal::Stream,
+}
+
+impl LiveMic {
+    /// Flush the pre-roll buffer into `tx`, install `tx` as the active
+    /// forwarding target, wait for the hotkey to release, then drop `tx`
+    /// (which closes the downstream channel and triggers Deepgram's
+    /// Strategy B return path).
+    ///
+    /// The flush + install are atomic under the state Mutex so cpal can't
+    /// drop a chunk between the two steps.
+    pub fn capture_until_release(&self, tx: UnboundedSender<Vec<i16>>) {
+        let preroll_chunks;
+        {
+            let mut s = self.state.lock().unwrap();
+            // Drain pre-roll into a local Vec first so we can release the
+            // borrow on `s.preroll` before mutating `s.current_tx`.
+            let drained: Vec<Vec<i16>> = s.preroll.chunks.drain(..).collect();
+            s.preroll.total_samples = 0;
+            preroll_chunks = drained.len();
+            for chunk in drained {
+                let _ = tx.send(chunk);
+            }
+            s.current_tx = Some(tx);
+        }
+        eprintln!(
+            "[audio] forwarding to STT (flushed {} pre-roll chunks)...",
+            preroll_chunks
+        );
+        while crate::hotkey::is_recording() {
+            thread::sleep(Duration::from_millis(1));
+        }
+        // Drop the sender. The cpal callback's next fire will see None
+        // and route chunks back to pre-roll; the receiver sees the channel
+        // close and Deepgram returns via Strategy B.
+        self.state.lock().unwrap().current_tx = None;
+        eprintln!("[audio] forwarding stopped");
+    }
+}
+
+/// The audio output side: holds the rodio DeviceSink open for the lifetime
+/// of the app so each turn doesn't pay the ~10-30ms cost of negotiating
+/// with the OS audio system. Hand out a fresh `Player` per turn via
+/// `new_player()` (cheap; just wires up to the existing sink's mixer).
 ///
-/// Caller is responsible for dropping the receiver if it no longer wants
-/// chunks. The sender (tx) is moved into the callback and dropped when the
-/// function returns — that signals end-of-stream to the consumer.
-pub fn record_stream(tx: tokio::sync::mpsc::UnboundedSender<Vec<i16>>) {
-    let host = cpal::default_host();
-    let device = host
-        .input_devices()
-        .expect("could not list input devices")
-        .find(|d| {
-            d.name()
-                .map(|n| n == "pulse" || n == "pipewire")
-                .unwrap_or(false)
-        })
-        .or_else(|| host.default_input_device())
-        .expect("no input device available");
-
-    let supported_config = device
-        .default_input_config()
-        .expect("no default input config");
-    let config = supported_config.config();
-
-    let stream = device
-        .build_input_stream(
-            &config,
-            move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                // Convert f32 in [-1.0, 1.0] → i16 PCM for Deepgram.
-                let samples: Vec<i16> = data
-                    .iter()
-                    .map(|&s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)
-                    .collect();
-                let _ = tx.send(samples);
-            },
-            move |err| eprintln!("audio stream error: {}", err),
-            None,
-        )
-        .expect("failed to build input stream");
-
-    stream.play().expect("failed to start stream");
-    eprintln!("[audio] streaming to STT...");
-
-    while crate::hotkey::is_recording() {
-        thread::sleep(Duration::from_millis(10));
-    }
-    eprintln!("[audio] recording stopped");
-    // stream + tx drop here, signaling end-of-stream to downstream consumer
+/// Must be initialized on the thread that will own it (rodio's internals
+/// may not be Send).
+pub struct AudioOutput {
+    sink: rodio::MixerDeviceSink,
+    pub channels: std::num::NonZeroU16,
+    pub sample_rate: std::num::NonZeroU32,
 }
 
-pub fn record_until_release() -> (Vec<f32>, u32, u16) {
-    let t0 = std::time::Instant::now();
-    let buffer = Arc::new(Mutex::new(Vec::<f32>::new()));
-    let buffer_for_callback = Arc::clone(&buffer);
+impl AudioOutput {
+    pub fn init() -> Result<Self, Box<dyn std::error::Error>> {
+        let sink = rodio::DeviceSinkBuilder::open_default_sink()
+            .map_err(|e| -> Box<dyn std::error::Error> { e.to_string().into() })?;
+        eprintln!("[audio] output sink opened");
+        Ok(AudioOutput {
+            sink,
+            channels: std::num::NonZeroU16::new(crate::providers::tts_cartesia::STREAM_CHANNELS)
+                .expect("STREAM_CHANNELS must be non-zero"),
+            sample_rate: std::num::NonZeroU32::new(
+                crate::providers::tts_cartesia::STREAM_SAMPLE_RATE,
+            )
+            .expect("STREAM_SAMPLE_RATE must be non-zero"),
+        })
+    }
 
+    /// Hand out a fresh Player attached to the cached sink. Cheap.
+    pub fn new_player(&self) -> rodio::Player {
+        rodio::Player::connect_new(self.sink.mixer())
+    }
+}
+
+/// Find the input device we want to capture from. Prefers the audio server
+/// (pulse/pipewire) over raw hardware devices so we auto-follow the user's
+/// active microphone choice. Falls back to cpal's default input.
+fn pick_input_device() -> cpal::Device {
     let host = cpal::default_host();
-    let device = host
+    let picked = host
         .input_devices()
         .expect("could not list input devices")
         .find(|d| {
+            #[allow(deprecated)]
             d.name()
                 .map(|n| n == "pulse" || n == "pipewire")
                 .unwrap_or(false)
         })
-        .or_else(|| host.default_input_device())
-        .expect("no input device available");
-    eprintln!("[audio] picked device in {:?}", t0.elapsed());
-
-    let t1 = std::time::Instant::now();
-    let supported_config = device
-        .default_input_config()
-        .expect("no default input config");
-    eprintln!("[audio] got config in {:?}", t1.elapsed());
-    let sample_rate = supported_config.sample_rate();
-    let channels = supported_config.channels();
-    let config = supported_config.config();
-
-    let t2 = std::time::Instant::now();
-    let stream = device
-        .build_input_stream(
-            &config,
-            move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                let mut buf = buffer_for_callback.lock().unwrap();
-                buf.extend_from_slice(data);
-            },
-            move |err| eprintln!("audio stream error: {}", err),
-            None,
-        )
-        .expect("failed to build input stream");
-    eprintln!("[audio] built stream in {:?}", t2.elapsed());
-
-    let t3 = std::time::Instant::now();
-    stream.play().expect("failed to start stream");
-    eprintln!("[audio] stream playing in {:?} (total setup: {:?})", t3.elapsed(), t0.elapsed());
-    println!("recording... (release to stop)");
-
-    while crate::hotkey::is_recording() {
-        thread::sleep(Duration::from_millis(10));
+        .or_else(|| host.default_input_device());
+    match picked {
+        Some(d) => d,
+        None => {
+            eprintln!("[audio] mic NOT found — no input device available");
+            panic!("no input device available");
+        }
     }
-    println!("recording stopped");
-
-    let samples = buffer.lock().unwrap().clone();
-    (samples, sample_rate, channels)
 }
