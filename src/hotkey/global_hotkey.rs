@@ -31,12 +31,11 @@ fn build_hotkey() -> HotKey {
 /// the program's lifetime — we never need to touch it again, only the
 /// receiver.
 pub fn init() -> std::io::Result<()> {
-    let manager = GlobalHotKeyManager::new().map_err(|e| {
-        std::io::Error::new(std::io::ErrorKind::Other, format!("manager: {}", e))
-    })?;
-    manager.register(build_hotkey()).map_err(|e| {
-        std::io::Error::new(std::io::ErrorKind::Other, format!("register: {}", e))
-    })?;
+    let manager = GlobalHotKeyManager::new()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("manager: {}", e)))?;
+    manager
+        .register(build_hotkey())
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("register: {}", e)))?;
     Box::leak(Box::new(manager));
     eprintln!("[hotkey] registered (global)");
     Ok(())

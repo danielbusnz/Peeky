@@ -73,12 +73,7 @@ impl ApplicationHandler for CursorApp {
         self.window = Some(window);
     }
 
-    fn window_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        _id: WindowId,
-        event: WindowEvent,
-    ) {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::RedrawRequested => {
@@ -102,8 +97,7 @@ impl CursorApp {
             return;
         };
         let size = window.inner_size();
-        let (Some(w), Some(h)) = (NonZeroU32::new(size.width), NonZeroU32::new(size.height))
-        else {
+        let (Some(w), Some(h)) = (NonZeroU32::new(size.width), NonZeroU32::new(size.height)) else {
             return;
         };
 
@@ -147,14 +141,15 @@ impl CursorApp {
             );
         }
 
-        // Copy tiny-skia (RGBA premultiplied) → softbuffer (0RGB packed u32).
+        // Copy tiny-skia (RGBA premultiplied) → softbuffer (packed u32).
+        // Pack alpha into the high byte: softbuffer's docs say it's 0RGB, but
+        // Windows 11's DWM is reported to honor the high byte as alpha, giving
+        // us per-pixel transparency. No-op on platforms that genuinely treat
+        // the byte as zero-padding.
         let mut buffer = surface.buffer_mut().expect("buffer_mut");
         let src = canvas.data();
         for (dst, chunk) in buffer.iter_mut().zip(src.chunks_exact(4)) {
-            let r = chunk[0] as u32;
-            let g = chunk[1] as u32;
-            let b = chunk[2] as u32;
-            *dst = (r << 16) | (g << 8) | b;
+            *dst = u32::from_be_bytes([chunk[3], chunk[0], chunk[1], chunk[2]]);
         }
         buffer.present().expect("buffer present");
     }

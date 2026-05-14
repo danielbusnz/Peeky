@@ -1,0 +1,26 @@
+name: windows-build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build cross-platform test_win
+        run: cargo build --no-default-features --features winit-window --bin test_win
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: test_win-windows
+          path: target/debug/test_win.exe
