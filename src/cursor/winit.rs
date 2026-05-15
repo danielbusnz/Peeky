@@ -57,6 +57,10 @@ struct CursorApp {
     cursor_y: f64,
     override_target: Option<(i32, i32, Instant)>,
     last_tick: Option<Instant>,
+    /// Frames rendered since `fps_log_start`. Reset every time we log.
+    frame_count: u32,
+    /// Start of the current 1-second FPS-counting window.
+    fps_log_start: Option<Instant>,
 }
 
 impl ApplicationHandler for CursorApp {
@@ -157,6 +161,23 @@ impl CursorApp {
             *dst = u32::from_be_bytes([chunk[3], chunk[0], chunk[1], chunk[2]]);
         }
         buffer.present().expect("buffer present");
+
+        // Rolling FPS log: count frames over a 1-second window, then print
+        // and reset. Diagnostic for tuning cursor smoothness on different
+        // displays. Remove once we're happy with the perceived feel.
+        self.frame_count += 1;
+        let now = Instant::now();
+        match self.fps_log_start {
+            None => self.fps_log_start = Some(now),
+            Some(start) => {
+                let elapsed = now.duration_since(start).as_secs_f64();
+                if elapsed >= 1.0 {
+                    eprintln!("[render] {:.1} fps", self.frame_count as f64 / elapsed);
+                    self.frame_count = 0;
+                    self.fps_log_start = Some(now);
+                }
+            }
+        }
     }
 }
 
@@ -190,6 +211,8 @@ pub fn cursor(initial_x: i32, initial_y: i32) -> ! {
         cursor_y: initial_y as f64,
         override_target: None,
         last_tick: None,
+        frame_count: 0,
+        fps_log_start: None,
     };
 
     event_loop.run_app(&mut app).expect("run_app failed");
