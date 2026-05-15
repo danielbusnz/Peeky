@@ -174,8 +174,12 @@ impl Claude {
             while let Some(idx) = buffer.find("\n\n") {
                 let frame: String = buffer.drain(..idx + 2).collect();
                 for line in frame.lines() {
-                    let Some(data) = line.strip_prefix("data: ") else { continue };
-                    let Ok(event) = serde_json::from_str::<serde_json::Value>(data) else { continue };
+                    let Some(data) = line.strip_prefix("data: ") else {
+                        continue;
+                    };
+                    let Ok(event) = serde_json::from_str::<serde_json::Value>(data) else {
+                        continue;
+                    };
 
                     match event["type"].as_str() {
                         Some("content_block_start") => {
@@ -203,9 +207,8 @@ impl Claude {
                                     serde_json::from_str::<serde_json::Value>(&tool_json_buffer)
                                 {
                                     if input["action"] == "left_click" {
-                                        if let Some(coord) = input["coordinate"]
-                                            .as_array()
-                                            .filter(|c| c.len() == 2)
+                                        if let Some(coord) =
+                                            input["coordinate"].as_array().filter(|c| c.len() == 2)
                                         {
                                             let raw_x = coord[0]
                                                 .as_i64()
@@ -353,8 +356,12 @@ impl Claude {
             while let Some(idx) = buffer.find("\n\n") {
                 let frame: String = buffer.drain(..idx + 2).collect();
                 for line in frame.lines() {
-                    let Some(data) = line.strip_prefix("data: ") else { continue };
-                    let Ok(event) = serde_json::from_str::<serde_json::Value>(data) else { continue };
+                    let Some(data) = line.strip_prefix("data: ") else {
+                        continue;
+                    };
+                    let Ok(event) = serde_json::from_str::<serde_json::Value>(data) else {
+                        continue;
+                    };
                     if event["type"] == "content_block_delta"
                         && event["delta"]["type"] == "text_delta"
                     {

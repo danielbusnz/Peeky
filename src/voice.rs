@@ -9,6 +9,43 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+/// Returns true if the user's query expects a spoken description from Claude.
+/// False for unambiguous "just point at X" queries, where `find_point` alone
+/// is enough and skipping `describe` saves ~1s of Claude TTFT + tokens.
+///
+/// Conservative: defaults to true on anything that isn't an obvious
+/// navigation phrase, so we err on the side of giving more info rather than
+/// less.
+fn wants_description(transcript: &str) -> bool {
+    let lower = transcript.trim().to_lowercase();
+    // Strip leading conversational filler that some queries start with.
+    let stripped = lower
+        .trim_start_matches("um, ")
+        .trim_start_matches("uh, ")
+        .trim_start_matches("ok. ")
+        .trim_start_matches("ok, ")
+        .trim_start_matches("okay. ")
+        .trim_start_matches("okay, ")
+        .trim_start_matches("no. ")
+        .trim_start_matches("no, ")
+        .trim_start_matches("hey, ")
+        .trim_start_matches("hey ");
+
+    // Only the most unambiguous "just point" patterns. Adding more here
+    // (e.g., "find", "open", "go to") would catch false negatives — they
+    // can mean either point or describe depending on context.
+    let nav_starts = [
+        "where is",
+        "where's",
+        "where are",
+        "click",
+        "click on",
+        "point at",
+        "point to",
+    ];
+    !nav_starts.iter().any(|p| stripped.starts_with(p))
+}
+
 pub fn run_loop(mic: audio::Mic, stt: SttDeepgram, claude: Claude, cartesia: TtsCartesia) {
     // Tokio runtime owned by this thread. Streaming providers (Deepgram WS,
     // Claude SSE, Cartesia SSE) all run via `rt.block_on(...)`.
@@ -30,8 +67,14 @@ pub fn run_loop(mic: audio::Mic, stt: SttDeepgram, claude: Claude, cartesia: Tts
         // parallel with recording + streaming STT. The resize is CPU-heavy
         // (~2s for Lanczos3), so doing it here saves that time off the
         // critical path.
+        // Capture + resize in parallel with recording + STT. The resize is
+        // now ~41ms (fast_image_resize SIMD), so this thread usually finishes
+        // before the user releases the hotkey. We return only the resized
+        // image now — describe used to need the native-res version, but it
+        // gets the same resized one and saves ~200ms of upload + ~1500 input
+        // tokens per turn.
         let screenshot_handle =
-            std::thread::spawn(|| -> Result<(i32, i32, u32, u32, String, String), String> {
+            std::thread::spawn(|| -> Result<(i32, i32, u32, u32, String), String> {
                 let (x, y, w, h) =
                     screenshot::active_workspace_geometry().map_err(|e| e.to_string())?;
                 let (orig_b64, _, _) = screenshot::capture_for_claude(x, y, w as i32, h as i32)
@@ -41,7 +84,7 @@ pub fn run_loop(mic: audio::Mic, stt: SttDeepgram, claude: Claude, cartesia: Tts
                 let resized_b64 =
                     screenshot::resize_jpeg_for_computer_use(&orig_b64, declared_w, declared_h)
                         .map_err(|e| e.to_string())?;
-                Ok((x, y, w, h, orig_b64, resized_b64))
+                Ok((x, y, w, h, resized_b64))
             });
 
         if let Err(e) = run_one_turn(
@@ -66,7 +109,7 @@ fn run_one_turn(
     claude: &Claude,
     cartesia: &TtsCartesia,
     screenshot_handle: std::thread::JoinHandle<
-        Result<(i32, i32, u32, u32, String, String), String>,
+        Result<(i32, i32, u32, u32, String), String>,
     >,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Set up audio streaming: cpal callback writes i16 chunks into a tokio
@@ -79,9 +122,8 @@ fn run_one_turn(
     // Spawn the Deepgram transcription task immediately so the WS opens
     // while audio starts flowing. The handle returns the final transcript.
     let stt_handle = {
-        let api_key = stt.api_key.clone();
+        let stt = stt.clone();
         rt.spawn(async move {
-            let stt = SttDeepgram { api_key };
             // TODO(#22): pass Some(interim_tx) here once speculative Claude
             // orchestration is wired up. transcribe_stream already supports
             // broadcasting interims for stability detection.
@@ -121,7 +163,7 @@ fn run_one_turn(
     // instantly. For very short turns, this can block 1-2s while the
     // Lanczos3 resize finishes — watch the timing log to see.
     let t_ss_join = std::time::Instant::now();
-    let (x, y, w, h, orig_b64, resized_b64) = screenshot_handle
+    let (x, y, w, h, resized_b64) = screenshot_handle
         .join()
         .map_err(|_| "screenshot thread panicked")?
         .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
@@ -149,11 +191,7 @@ fn run_one_turn(
     // worker thread. Inside `tokio::join!`, all sub-futures share ONE task and
     // tts_task would be starved by voice_task's rapid token processing.
     // Spawning gives Cartesia a real chance to fire mid-stream.
-    let cartesia_for_tts = TtsCartesia {
-        api_key: cartesia.api_key.clone(),
-        voice_id: cartesia.voice_id.clone(),
-        http: cartesia.http.clone(),
-    };
+    let cartesia_for_tts = cartesia.clone();
     let barge_in_flag_tts = barge_in.flag.clone();
     // Hand out a fresh Player from the cached sink (cheap). The expensive
     // open_default_sink() happens once at app startup.
@@ -226,6 +264,22 @@ fn run_one_turn(
     // `cursor_task`'s borrow of `transcript`, so clone the small string.
     let transcript_for_voice = transcript.clone();
 
+    // Decide whether to spend a second Claude call on a spoken description.
+    // Unambiguous "where is X?" / "click X" style queries don't need one —
+    // the cursor pointing IS the answer. Skipping cuts ~1s off perceived
+    // latency for those queries.
+    let want_desc = wants_description(&transcript);
+    eprintln!(
+        "[query] {} → describe={}",
+        transcript.trim(),
+        want_desc
+    );
+
+    // Both Claude calls now share the same resized image. find_point still
+    // borrows resized_b64 directly; voice_task is `async move` so it needs
+    // its own copy. Clone is ~226KB, happens once per turn.
+    let resized_b64_for_voice = resized_b64.clone();
+
     let barge_in_flag_claude = barge_in.flag.clone();
     print!("claude: ");
     rt.block_on(async {
@@ -248,10 +302,17 @@ fn run_one_turn(
         );
 
         let voice_task = async move {
+            if !want_desc {
+                eprintln!("[timing] skipping describe (point-only query)");
+                // Drop sentence_tx so tts_task's recv() returns None and it
+                // winds down without speaking anything.
+                drop(sentence_tx);
+                return Ok::<String, Box<dyn std::error::Error + Send + Sync>>(String::new());
+            }
             let mut sentence_buf = String::new();
             let mut first_token_logged = false;
             let result = claude
-                .describe_with_image(&transcript_for_voice, &orig_b64, |token| {
+                .describe_with_image(&transcript_for_voice, &resized_b64_for_voice, |token| {
                     if !first_token_logged {
                         eprintln!(
                             "[timing] first Claude text token → {:?}",

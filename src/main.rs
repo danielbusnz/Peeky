@@ -15,8 +15,8 @@ fn main() {
     // TCP connection, and there's no per-call handshake cost after the first.
     let http = reqwest::Client::new();
 
-    let stt =
-        providers::stt_deepgram::SttDeepgram::from_env().expect("missing DEEPGRAM_API_KEY");
+    let stt = providers::stt_deepgram::SttDeepgram::from_env(http.clone())
+        .expect("STT init failed");
     let claude =
         providers::claude::Claude::from_env(http.clone()).expect("Claude provider init failed");
     let cartesia = providers::tts_cartesia::TtsCartesia::from_env(http)

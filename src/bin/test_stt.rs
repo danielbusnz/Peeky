@@ -30,7 +30,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
 fn main() {
-    let stt = SttDeepgram::from_env().expect("missing DEEPGRAM_API_KEY");
+    let http = reqwest::Client::new();
+    let stt = SttDeepgram::from_env(http).expect("STT init failed");
     let mic = audio::Mic::init();
     hotkey::init().expect("signal handler setup");
 
@@ -97,11 +98,10 @@ fn main() {
 
         // Deepgram WebSocket task
         let stt_handle = {
-            let api_key = stt.api_key.clone();
+            let stt = stt.clone();
             let sample_rate = running_mic.sample_rate;
             let channels = running_mic.channels;
             rt.spawn(async move {
-                let stt = SttDeepgram { api_key };
                 stt.transcribe_stream(sample_rate, channels, deepgram_rx, None)
                     .await
             })

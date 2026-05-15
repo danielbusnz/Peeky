@@ -4,20 +4,81 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
+const PROXY_URL: &str = "https://aegis-proxy.danielbusnz.workers.dev/v1/deepgram/token";
+
 /// Streaming Speech-to-Text via Deepgram's WebSocket endpoint.
 ///
 /// Audio chunks (i16 PCM, little-endian) arrive via the channel; the
 /// transcript builds up from interim/final segments and is returned when
 /// the audio sender is dropped (end of recording).
+#[derive(Clone)]
 pub struct SttDeepgram {
-    pub api_key: String,
+    pub http: reqwest::Client,
+    pub mode: SttMode,
+}
+
+/// Auth mode. In proxy mode aegis fetches a short-lived JWT from aegis-proxy
+/// before opening Deepgram's WebSocket. In direct mode the local API key is
+/// used as a `Token`-prefixed credential — only enable with
+/// `AEGIS_DEEPGRAM_DIRECT=1` (useful for dev / burning your own quota).
+#[derive(Clone)]
+pub enum SttMode {
+    Direct { api_key: String },
+    Proxy { token_url: String, device_id: String },
 }
 
 impl SttDeepgram {
-    pub fn from_env() -> Result<Self, Box<dyn std::error::Error>> {
+    /// Initialize from `.env`/environment. Default behavior is to route auth
+    /// through aegis-proxy (no Deepgram key needed locally). Set
+    /// `AEGIS_DEEPGRAM_DIRECT=1` + provide `DEEPGRAM_API_KEY` to bypass.
+    pub fn from_env(http: reqwest::Client) -> Result<Self, Box<dyn std::error::Error>> {
         dotenvy::dotenv().ok();
-        let api_key = std::env::var("DEEPGRAM_API_KEY")?;
-        Ok(Self { api_key })
+
+        if std::env::var("AEGIS_DEEPGRAM_DIRECT").is_ok() {
+            let api_key = std::env::var("DEEPGRAM_API_KEY")?;
+            return Ok(Self {
+                http,
+                mode: SttMode::Direct { api_key },
+            });
+        }
+
+        let device_id = super::device_id::load_or_create()?;
+        Ok(Self {
+            http,
+            mode: SttMode::Proxy {
+                token_url: PROXY_URL.to_string(),
+                device_id,
+            },
+        })
+    }
+
+    /// Build the `Authorization` header value for the Deepgram WebSocket.
+    /// In direct mode the API key is used as-is with a `Token` prefix.
+    /// In proxy mode we POST to aegis-proxy for a short-lived JWT and use
+    /// `Bearer <jwt>` — Deepgram's token-based auth scheme.
+    async fn auth_header(&self) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        match &self.mode {
+            SttMode::Direct { api_key } => Ok(format!("Token {}", api_key)),
+            SttMode::Proxy { token_url, device_id } => {
+                let resp = self
+                    .http
+                    .post(token_url)
+                    .header("x-aegis-device-id", device_id)
+                    .send()
+                    .await?;
+                if !resp.status().is_success() {
+                    let status = resp.status();
+                    let body = resp.text().await.unwrap_or_default();
+                    return Err(format!("deepgram token mint failed {}: {}", status, body).into());
+                }
+                let json: serde_json::Value = resp.json().await?;
+                let token = json["token"]
+                    .as_str()
+                    .ok_or("deepgram token response missing 'token' field")?
+                    .to_string();
+                Ok(format!("Bearer {}", token))
+            }
+        }
     }
 
     /// Open a WebSocket session, pump audio chunks from `audio_rx`, return
@@ -43,13 +104,18 @@ impl SttDeepgram {
             sample_rate, channels
         );
 
+        // Resolve the auth header. In proxy mode this hits aegis-proxy for a
+        // short-lived JWT first (~50ms HTTPS round-trip). In direct mode it's
+        // an in-memory string lookup.
+        let auth = self.auth_header().await?;
+
         // Build the WS request via tungstenite's IntoClientRequest, then
         // attach the Authorization header. tokio-tungstenite auto-fills the
         // mandatory handshake headers (Sec-WebSocket-Key, Upgrade, etc.).
         let mut request = url.into_client_request()?;
         request
             .headers_mut()
-            .insert("Authorization", format!("Token {}", self.api_key).parse()?);
+            .insert("Authorization", auth.parse()?);
 
         let (ws_stream, _) = tokio_tungstenite::connect_async(request).await?;
         let (mut write, mut read) = ws_stream.split();
