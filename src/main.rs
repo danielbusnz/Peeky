@@ -1,5 +1,6 @@
 mod audio;
 mod cursor;
+mod device_id;
 mod hotkey;
 mod mouse;
 #[cfg(feature = "hyprland")]
@@ -18,7 +19,7 @@ fn main() {
     let stt =
         providers::stt_deepgram::SttDeepgram::from_env().expect("missing DEEPGRAM_API_KEY");
     let claude =
-        providers::claude::Claude::from_env(http.clone()).expect("missing ANTHROPIC_API_KEY");
+        providers::claude::Claude::from_env(http.clone()).expect("Claude provider init failed");
     let cartesia = providers::tts_cartesia::TtsCartesia::from_env(http)
         .expect("missing CARTESIA_API_KEY");
     let mic = audio::Mic::init();

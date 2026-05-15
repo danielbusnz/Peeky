@@ -2,19 +2,52 @@ use crate::screenshot::pick_declared_resolution;
 use futures_util::StreamExt;
 
 pub struct Claude {
-    pub api_key: String,
     pub http: reqwest::Client,
+    /// Full URL to POST messages requests to. Either the hosted proxy or
+    /// api.anthropic.com depending on which mode we're in.
+    pub endpoint: String,
+    /// (header_name, header_value) for auth. Either ("x-aegis-device-id", uuid)
+    /// when routed through the proxy, or ("x-api-key", anthropic_key) in
+    /// direct mode.
+    pub auth: (String, String),
 }
 
+/// Default endpoint for the hosted proxy. Override at compile time by setting
+/// `AEGIS_PROXY_URL` to a different worker URL if you deploy your own.
+const PROXY_URL: &str = "https://aegis-proxy.danielbusnz.workers.dev/v1/anthropic/messages";
+const DIRECT_URL: &str = "https://api.anthropic.com/v1/messages";
+
 impl Claude {
-    /// Loads the API key from `.env` or the environment. Takes a shared
-    /// `reqwest::Client` so multiple Claude calls (and Cartesia) reuse
-    /// the same TCP/TLS connection pool — saves the ~150ms handshake on
-    /// every call after the first.
+    /// Initialize from `.env`/environment. Default behavior is to route through
+    /// the hosted aegis-proxy on Cloudflare, identified by a per-install UUID.
+    /// No API key needed — that's the whole plug-and-play story.
+    ///
+    /// To bypass the proxy and talk to Anthropic directly (useful for local
+    /// dev, debugging, or burning your own credit), set
+    /// `AEGIS_ANTHROPIC_DIRECT=1` in the environment AND provide
+    /// `ANTHROPIC_API_KEY`.
+    ///
+    /// `http` is the shared `reqwest::Client` so connection pools (TCP/TLS)
+    /// are reused across calls. Saves the ~150ms handshake on every call
+    /// after the first.
     pub fn from_env(http: reqwest::Client) -> Result<Self, Box<dyn std::error::Error>> {
         dotenvy::dotenv().ok();
-        let api_key = std::env::var("ANTHROPIC_API_KEY")?;
-        Ok(Claude { api_key, http })
+
+        if std::env::var("AEGIS_ANTHROPIC_DIRECT").is_ok() {
+            let api_key = std::env::var("ANTHROPIC_API_KEY")?;
+            return Ok(Claude {
+                http,
+                endpoint: DIRECT_URL.to_string(),
+                auth: ("x-api-key".to_string(), api_key),
+            });
+        }
+
+        let device_id = crate::device_id::load_or_create()?;
+        Ok(Claude {
+            http,
+            endpoint: PROXY_URL.to_string(),
+            auth: ("x-aegis-device-id".to_string(), device_id),
+        })
     }
 }
 
@@ -98,8 +131,8 @@ impl Claude {
         let t_send = std::time::Instant::now();
         let response = self
             .http
-            .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", &self.api_key)
+            .post(&self.endpoint)
+            .header(&self.auth.0, &self.auth.1)
             .header("anthropic-version", "2023-06-01")
             .header("anthropic-beta", "computer-use-2025-01-24")
             .header("content-type", "application/json")
@@ -282,8 +315,8 @@ impl Claude {
         let t_send = std::time::Instant::now();
         let response = self
             .http
-            .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", &self.api_key)
+            .post(&self.endpoint)
+            .header(&self.auth.0, &self.auth.1)
             .header("anthropic-version", "2023-06-01")
             .header("content-type", "application/json")
             .json(&body)
