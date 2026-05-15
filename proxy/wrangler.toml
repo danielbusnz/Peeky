@@ -5,14 +5,19 @@ compatibility_date = "2026-05-15"
 # Default daily caps (per device, UTC day). Override here without redeploying
 # code — `wrangler deploy` picks up changes.
 #
-# Sizing for aegis: each voice turn sends two screenshots (find_point @ ~186KB
-# resized ≈ 1.3k input tokens + describe @ ~1MB full-res ≈ 1.5k input tokens)
-# plus system prompt and transcript, so ~3.5k input tokens per turn. Output
-# is much smaller (~200-300 tokens). 100k input / 20k output ≈ 30 turns/day
-# at the cap, which is enough for a test user to actually evaluate the app.
+# Sizing notes:
+#   Anthropic: each voice turn sends two screenshots @ ~1.3-1.5k tokens each
+#     plus system prompt + transcript ≈ 3.5k input tokens, ~200-300 output
+#     tokens. 100k input / 20k output ≈ 30 turns/day.
+#   Deepgram: each token gates one streaming STT session. 50 sessions/day is
+#     ~50 voice queries (one per turn). At ~10s of audio each, ~$0.04/day cap.
+#   Cartesia: each token gates one or more TTS sessions. Allow a few extra
+#     because the client may need to refresh during longer conversations.
 [vars]
 DAILY_INPUT_TOKEN_CAP = "100000"
 DAILY_OUTPUT_TOKEN_CAP = "20000"
+DAILY_DEEPGRAM_TOKEN_CAP = "50"
+DAILY_CARTESIA_TOKEN_CAP = "100"
 
 # KV namespace for per-device usage counters. Create with:
 #   wrangler kv namespace create USAGE_KV
