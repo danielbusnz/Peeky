@@ -19,7 +19,10 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Fullscreen, Window, WindowAttributes, WindowId, WindowLevel};
 
 // ── Portable constants (verbatim from hyprland.rs) ──────────────────────────
-const SMOOTHING: f64 = 0.015;
+// Time for cursor lag to halve. 91.7ms reproduces the previous 500Hz × 0.015
+// feel under a delta-time formulation, so the cursor is equally snappy at
+// 60Hz, 144Hz, or 500Hz tick rates.
+const SMOOTHING_HALF_LIFE: f64 = 0.0917;
 const Y_OFFSET: i32 = -50;
 const X_OFFSET: i32 = 10;
 const POINT_DURATION: Duration = Duration::from_secs(3);
@@ -53,6 +56,7 @@ struct CursorApp {
     cursor_x: f64,
     cursor_y: f64,
     override_target: Option<(i32, i32, Instant)>,
+    last_tick: Option<Instant>,
 }
 
 impl ApplicationHandler for CursorApp {
@@ -121,6 +125,7 @@ impl CursorApp {
             &mut self.cursor_x,
             &mut self.cursor_y,
             &mut self.override_target,
+            &mut self.last_tick,
         );
 
         // Clear to transparent. Drawing happens only if tick returned a position.
@@ -184,6 +189,7 @@ pub fn cursor(initial_x: i32, initial_y: i32) -> ! {
         cursor_x: initial_x as f64,
         cursor_y: initial_y as f64,
         override_target: None,
+        last_tick: None,
     };
 
     event_loop.run_app(&mut app).expect("run_app failed");
@@ -197,7 +203,15 @@ fn tick(
     cursor_x: &mut f64,
     cursor_y: &mut f64,
     override_target: &mut Option<(i32, i32, Instant)>,
+    last_tick: &mut Option<Instant>,
 ) -> Option<(f64, f64)> {
+    let now = Instant::now();
+    let delta_t = match *last_tick {
+        Some(prev) => now.duration_since(prev).as_secs_f64(),
+        None => 0.0,
+    };
+    *last_tick = Some(now);
+
     while let Ok((target_x, target_y)) = receiver.try_recv() {
         *override_target = Some((target_x, target_y, Instant::now() + POINT_DURATION));
     }
@@ -216,8 +230,9 @@ fn tick(
     };
 
     if let Some((target_x, target_y)) = target {
-        *cursor_x += (target_x - *cursor_x) * SMOOTHING;
-        *cursor_y += (target_y - *cursor_y) * SMOOTHING;
+        let alpha = 1.0 - 2f64.powf(-delta_t / SMOOTHING_HALF_LIFE);
+        *cursor_x += (target_x - *cursor_x) * alpha;
+        *cursor_y += (target_y - *cursor_y) * alpha;
         let (ox, oy) = if apply_offsets {
             (X_OFFSET as f64, Y_OFFSET as f64)
         } else {

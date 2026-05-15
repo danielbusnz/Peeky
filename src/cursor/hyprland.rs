@@ -10,7 +10,10 @@ use std::time::{Duration, Instant};
 use crate::painter::Painter;
 
 const APP_ID: &str = "com.tabby.cursor-mvp";
-const SMOOTHING: f64 = 0.015;
+// Time for cursor lag to halve. 91.7ms reproduces the previous 500Hz × 0.015
+// feel under a delta-time formulation, so changing TICK_MS no longer alters
+// the perceived snappiness.
+const SMOOTHING_HALF_LIFE: f64 = 0.0917;
 const TICK_MS: u64 = 2;
 const Y_OFFSET: i32 = -50;
 const X_OFFSET: i32 = 10;
@@ -91,8 +94,16 @@ fn start_tracking(
     let mut cursor_x = initial_x as f64;
     let mut cursor_y = initial_y as f64;
     let mut override_target: Option<(i32, i32, Instant)> = None;
+    let mut last_tick: Option<Instant> = None;
 
     glib::timeout_add_local(Duration::from_millis(TICK_MS), move || {
+        let now = Instant::now();
+        let delta_t = match last_tick {
+            Some(prev) => now.duration_since(prev).as_secs_f64(),
+            None => 0.0,
+        };
+        last_tick = Some(now);
+
         // Drain any pending point_at commands; the latest one wins.
         while let Ok((target_x, target_y)) = receiver.try_recv() {
             override_target = Some((target_x, target_y, Instant::now() + POINT_DURATION));
@@ -117,8 +128,9 @@ fn start_tracking(
         };
 
         if let Some((target_x, target_y)) = target {
-            cursor_x += (target_x - cursor_x) * SMOOTHING;
-            cursor_y += (target_y - cursor_y) * SMOOTHING;
+            let alpha = 1.0 - 2f64.powf(-delta_t / SMOOTHING_HALF_LIFE);
+            cursor_x += (target_x - cursor_x) * alpha;
+            cursor_y += (target_y - cursor_y) * alpha;
             let (ox, oy) = if apply_offsets {
                 (X_OFFSET as f64, Y_OFFSET as f64)
             } else {
