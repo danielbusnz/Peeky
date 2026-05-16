@@ -1,5 +1,5 @@
 use futures_util::{SinkExt, StreamExt};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
@@ -203,32 +203,48 @@ impl SttDeepgram {
             }
         }
 
-        // Phase 2: wait for Deepgram's is_final event for the tail audio.
-        // send_task already issued the Finalize message; Deepgram should
-        // emit an is_final within ~100-300ms.
+        // Phase 2: wait for Deepgram's tail is_final events.
+        //
+        // Deepgram can split a single utterance into multiple is_final
+        // segments. Breaking on the first non-empty final clips speech like
+        // "what is your" + "name". Instead: after content arrives, watch
+        // for QUIESCENCE_MS of stream silence to detect "Deepgram is done",
+        // bounded by POST_RELEASE_TIMEOUT_MS as a hard ceiling.
         eprintln!(
             "[deepgram-debug] released, awaiting is_final (timeout {}ms)...",
             POST_RELEASE_TIMEOUT_MS
         );
-        let timeout = tokio::time::sleep(Duration::from_millis(POST_RELEASE_TIMEOUT_MS));
-        tokio::pin!(timeout);
+        let outer_deadline = Instant::now() + Duration::from_millis(POST_RELEASE_TIMEOUT_MS);
         loop {
-            tokio::select! {
-                biased;
-                _ = &mut timeout => {
-                    eprintln!("[deepgram-debug] is_final timeout reached");
-                    break;
-                }
-                msg = read.next() => {
-                    match process_frame(msg, &mut finalized, &mut latest_interim) {
-                        FrameOutcome::GotFinal => {
-                            // Deepgram committed the tail — we have everything.
-                            break;
-                        }
-                        FrameOutcome::Continue => {}
-                        FrameOutcome::WsClosed => break,
+            let remaining = outer_deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                eprintln!("[deepgram-debug] is_final timeout reached");
+                break;
+            }
+            // Once we have content, only wait QUIESCENCE_MS for stragglers.
+            // While still empty, wait up to the full remaining budget.
+            let read_budget = if finalized.is_empty() {
+                remaining
+            } else {
+                remaining.min(Duration::from_millis(QUIESCENCE_MS))
+            };
+            match tokio::time::timeout(read_budget, read.next()).await {
+                Err(_) => {
+                    if !finalized.is_empty() {
+                        eprintln!("[deepgram-debug] quiescence after final ({}ms)", QUIESCENCE_MS);
+                        break;
                     }
+                    // No content yet; loop continues until outer deadline.
                 }
+                Ok(msg) => match process_frame(msg, &mut finalized, &mut latest_interim) {
+                    FrameOutcome::GotFinal => {
+                        if finalized.is_empty() {
+                            eprintln!("[deepgram-debug] empty FINAL, still waiting...");
+                        }
+                    }
+                    FrameOutcome::Continue => {}
+                    FrameOutcome::WsClosed => break,
+                },
             }
         }
 
@@ -243,7 +259,12 @@ impl SttDeepgram {
 /// If something goes wrong (network blip, Deepgram delay), we still return
 /// after this timeout with whatever interim we have, so the user isn't
 /// stuck.
-const POST_RELEASE_TIMEOUT_MS: u64 = 800;
+const POST_RELEASE_TIMEOUT_MS: u64 = 1200;
+
+/// After a non-empty is_final arrives, wait this long for additional
+/// is_final segments before considering Deepgram quiet. Deepgram splits
+/// longer utterances across segments; this catches the tail.
+const QUIESCENCE_MS: u64 = 350;
 
 /// What happened when we processed a frame.
 enum FrameOutcome {

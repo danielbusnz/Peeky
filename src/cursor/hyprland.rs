@@ -7,19 +7,35 @@ use std::sync::OnceLock;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::{Duration, Instant};
 
-use crate::painter::Painter;
+use crate::painter::{LoadingSpinner, Painter, Soundwave, Sprite};
 
 const APP_ID: &str = "com.tabby.cursor-mvp";
+const CURSOR_PNG: &[u8] = include_bytes!("../../assets/cursor.png");
+const CURSOR_DISPLAY_SIZE: f64 = 18.0;
 // Time for cursor lag to halve. 91.7ms reproduces the previous 500Hz × 0.015
 // feel under a delta-time formulation, so changing TICK_MS no longer alters
 // the perceived snappiness.
 const SMOOTHING_HALF_LIFE: f64 = 0.0917;
 const TICK_MS: u64 = 2;
-const Y_OFFSET: i32 = -50;
-const X_OFFSET: i32 = 10;
+const Y_OFFSET: i32 = -70;
+const X_OFFSET: i32 = 20;
 const POINT_DURATION: Duration = Duration::from_secs(3);
 
 static CURSOR_SENDER: OnceLock<Sender<(i32, i32)>> = OnceLock::new();
+
+pub enum CursorState {
+    Idle,
+    Listening,
+    Loading,
+}
+
+static STATE_SENDER: OnceLock<Sender<CursorState>> = OnceLock::new();
+
+pub fn set_state(state: CursorState) {
+    if let Some(sender) = STATE_SENDER.get() {
+        let _ = sender.send(state);
+    }
+}
 
 /// Ask the cursor to fly to (x, y) and sit there for ~3 seconds, then resume
 /// following the mouse. Callable from any thread. No-op if `cursor()` hasn't
@@ -35,6 +51,15 @@ pub fn cursor(x: i32, y: i32) -> glib::ExitCode {
     let _ = CURSOR_SENDER.set(sender);
     let receiver_holder = RefCell::new(Some(receiver));
 
+    let (state_sender, state_receiver) = channel();
+    let _ = STATE_SENDER.set(state_sender);
+    let state_receiver_holder = RefCell::new(Some(state_receiver));
+
+    // Wire signal events → state channel. These run on the signal-handler
+    // thread; the channel makes them safe to consume on the GTK thread.
+    crate::hotkey::on_press(|| set_state(CursorState::Listening));
+    crate::hotkey::on_release(|| set_state(CursorState::Loading));
+
     let app = Application::builder().application_id(APP_ID).build();
     app.connect_startup(install_css);
     app.connect_activate(move |app| {
@@ -42,13 +67,17 @@ pub fn cursor(x: i32, y: i32) -> glib::ExitCode {
             .borrow_mut()
             .take()
             .expect("connect_activate fired more than once");
+        let state_receiver = state_receiver_holder
+            .borrow_mut()
+            .take()
+            .expect("connect_activate fired more than once");
         let window = build_window(app);
-        let painter = Painter::new();
+        let painter = Painter::new(Box::new(Sprite::from_png(CURSOR_PNG, CURSOR_DISPLAY_SIZE)));
         window.set_child(Some(painter.widget()));
         make_click_through(&window);
         window.present();
         println!("[gtk] cursor window presented");
-        start_tracking(painter, x, y, receiver);
+        start_tracking(painter, x, y, receiver, state_receiver);
     });
     app.run()
 }
@@ -90,6 +119,7 @@ fn start_tracking(
     initial_x: i32,
     initial_y: i32,
     receiver: Receiver<(i32, i32)>,
+    state_receiver: Receiver<CursorState>,
 ) {
     // Hyprland reports cursor coords in global virtual-desktop space, but
     // our layer-shell window's coordinate space is local to the monitor it
@@ -113,6 +143,18 @@ fn start_tracking(
         };
         last_tick = Some(now);
 
+        // Drain state changes first; the latest one wins.
+        while let Ok(state) = state_receiver.try_recv() {
+            match state {
+                CursorState::Idle => painter
+                    .set_drawable(Box::new(Sprite::from_png(CURSOR_PNG, CURSOR_DISPLAY_SIZE))),
+                CursorState::Listening => {
+                    painter.set_drawable(Box::new(Soundwave::new()));
+                }
+                CursorState::Loading => painter.set_drawable(Box::new(LoadingSpinner::new())),
+            }
+        }
+
         // Drain any pending point_at commands; the latest one wins.
         while let Ok((target_x, target_y)) = receiver.try_recv() {
             override_target = Some((target_x, target_y, Instant::now() + POINT_DURATION));
@@ -133,9 +175,9 @@ fn start_tracking(
             ),
             _ => {
                 override_target = None;
-                let mouse = crate::mouse::mouse_movement().ok().map(|(mx, my)| {
-                    (mx as f64 - mon_x, my as f64 - mon_y)
-                });
+                let mouse = crate::mouse::mouse_movement()
+                    .ok()
+                    .map(|(mx, my)| (mx as f64 - mon_x, my as f64 - mon_y));
                 (mouse, true)
             }
         };

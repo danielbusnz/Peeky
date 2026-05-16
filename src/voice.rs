@@ -9,6 +9,13 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+#[cfg(feature = "hyprland")]
+fn set_cursor_idle() {
+    crate::cursor::set_state(crate::cursor::CursorState::Idle);
+}
+#[cfg(not(feature = "hyprland"))]
+fn set_cursor_idle() {}
+
 /// Returns true if the user's query expects a spoken description from Claude.
 /// False for unambiguous "just point at X" queries, where `find_point` alone
 /// is enough and skipping `describe` saves ~1s of Claude TTFT + tokens.
@@ -153,6 +160,7 @@ fn run_one_turn(
     // Guard: if the user said nothing, skip the rest of the turn.
     if transcript.trim().is_empty() {
         eprintln!("[voice] empty transcript, skipping turn");
+        set_cursor_idle();
         // Still need to drain the screenshot thread.
         let _ = screenshot_handle.join();
         return Ok(());
@@ -225,6 +233,7 @@ fn run_one_turn(
                                     release_t.elapsed()
                                 );
                                 first_chunk_logged = true;
+                                set_cursor_idle();
                             }
                             let samples: Vec<f32> = pcm_bytes
                                 .chunks_exact(2)
@@ -297,6 +306,7 @@ fn run_one_turn(
                     px,
                     py
                 );
+                set_cursor_idle();
                 cursor::point_at(px as i32, py as i32);
             },
         );
@@ -384,6 +394,10 @@ fn run_one_turn(
         }
     })
     .map_err(|e| -> Box<dyn std::error::Error> { e.to_string().into() })?;
+
+    // Safety net: ensure we always return to Idle even if neither the cursor
+    // callback nor the first-PCM-chunk path fired (barge-in, errors, no-op turns).
+    set_cursor_idle();
 
     Ok(())
 }

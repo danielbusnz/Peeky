@@ -1,16 +1,30 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::collections::VecDeque;
+use std::process::Command;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
+
+/// Latest RMS of the mic input, stored as `f32::to_bits()` so it can live in
+/// an atomic for lock-free reads from the GTK overlay thread. Updated on every
+/// cpal callback. Range is 0.0 (silence) to ~1.0 (clipping).
+pub static AUDIO_LEVEL: AtomicU32 = AtomicU32::new(0);
 
 /// How much audio to keep in the pre-roll buffer. The cpal callback fills
 /// this ring buffer continuously while idle. On hotkey press, the contents
 /// are flushed into the forwarding channel BEFORE live audio starts, so
 /// the user's first syllable (typically spoken while still pressing the
 /// key) is captured.
-const PREROLL_MS: u64 = 300;
+const PREROLL_MS: u64 = 800;
+
+/// How long to keep forwarding audio after the hotkey is released.
+/// Users typically release AS they finish the last word, and cpal delivers
+/// in 10-50ms chunks, so dropping the sender immediately clips the final
+/// syllable. Deepgram also needs some trailing context to commit the last
+/// word confidently. This window covers both.
+const POST_RELEASE_GRACE_MS: u64 = 800;
 
 /// Cold mic handle: device + cached config. Picked at startup on the main
 /// thread so device-enumeration errors surface before any hotkey is held.
@@ -59,55 +73,124 @@ impl Mic {
             .device
             .default_input_config()
             .expect("no default input config");
+        let sample_format = supported_config.sample_format();
         let config = supported_config.config();
 
-        // Compute the pre-roll capacity in samples. Sample count includes
-        // both channels for interleaved stereo, so the math accounts for
-        // channels naturally.
+        // Downmix to mono. Deepgram nova-3 (and most STT models) are
+        // mono-trained; multi-channel input degrades recognition on weak
+        // phonemes. The cpal callback averages interleaved frames into a
+        // single channel before quantizing to i16.
+        let input_channels = self.channels;
+        let output_channels: u16 = 1;
+
         let preroll_max_samples =
-            (self.sample_rate as usize) * (self.channels as usize) * (PREROLL_MS as usize) / 1000;
+            (self.sample_rate as usize) * (output_channels as usize) * (PREROLL_MS as usize) / 1000;
         let state = Arc::new(Mutex::new(MicState {
             current_tx: None,
             preroll: Preroll::new(preroll_max_samples),
         }));
-        let state_cb = state.clone();
 
-        let stream = self
-            .device
-            .build_input_stream(
-                &config,
-                move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                    // Convert f32 in [-1.0, 1.0] → i16 PCM for Deepgram.
-                    let samples: Vec<i16> = data
-                        .iter()
-                        .map(|&s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)
-                        .collect();
-                    let mut s = state_cb.lock().unwrap();
-                    if let Some(tx) = s.current_tx.as_ref() {
-                        // Live forwarding: send straight to the receiver.
-                        let _ = tx.send(samples);
-                    } else {
-                        // Idle: keep the most recent PREROLL_MS in the
-                        // ring buffer so it can be flushed on next press.
-                        s.preroll.push(samples);
-                    }
-                },
-                move |err| eprintln!("audio stream error: {}", err),
-                None,
-            )
-            .expect("failed to build input stream");
+        let err_cb = |err| eprintln!("audio stream error: {}", err);
+
+        // cpal demands a closure typed for the hardware's native sample
+        // format. Some devices (Arctis Nova, ALSA hw:) only deliver I16;
+        // others deliver F32. Branch and produce a unified i16 PCM stream
+        // for Deepgram either way.
+        let stream = match sample_format {
+            cpal::SampleFormat::F32 => {
+                let state_cb = state.clone();
+                self.device.build_input_stream(
+                    &config,
+                    move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                        let rms = if data.is_empty() {
+                            0.0
+                        } else {
+                            (data.iter().map(|&s| s * s).sum::<f32>() / data.len() as f32).sqrt()
+                        };
+                        AUDIO_LEVEL.store(rms.to_bits(), Ordering::Relaxed);
+
+                        let samples: Vec<i16> = if input_channels <= 1 {
+                            data.iter()
+                                .map(|&s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)
+                                .collect()
+                        } else {
+                            data.chunks(input_channels as usize)
+                                .map(|frame| {
+                                    let avg = frame.iter().sum::<f32>() / frame.len() as f32;
+                                    (avg.clamp(-1.0, 1.0) * i16::MAX as f32) as i16
+                                })
+                                .collect()
+                        };
+                        route_samples(&state_cb, samples);
+                    },
+                    err_cb,
+                    None,
+                )
+            }
+            cpal::SampleFormat::I16 => {
+                let state_cb = state.clone();
+                self.device.build_input_stream(
+                    &config,
+                    move |data: &[i16], _: &cpal::InputCallbackInfo| {
+                        let scale = i16::MAX as f32;
+                        let rms = if data.is_empty() {
+                            0.0
+                        } else {
+                            let sum_sq: f32 = data
+                                .iter()
+                                .map(|&s| {
+                                    let f = s as f32 / scale;
+                                    f * f
+                                })
+                                .sum();
+                            (sum_sq / data.len() as f32).sqrt()
+                        };
+                        AUDIO_LEVEL.store(rms.to_bits(), Ordering::Relaxed);
+
+                        let samples: Vec<i16> = if input_channels <= 1 {
+                            data.to_vec()
+                        } else {
+                            data.chunks(input_channels as usize)
+                                .map(|frame| {
+                                    let sum: i32 = frame.iter().map(|&s| s as i32).sum();
+                                    (sum / frame.len() as i32) as i16
+                                })
+                                .collect()
+                        };
+                        route_samples(&state_cb, samples);
+                    },
+                    err_cb,
+                    None,
+                )
+            }
+            other => panic!("unsupported cpal sample format: {:?}", other),
+        }
+        .expect("failed to build input stream");
+
         stream.play().expect("failed to start stream");
         eprintln!(
-            "[audio] cpal stream warmed up, {}ms pre-roll buffer active",
-            PREROLL_MS
+            "[audio] cpal stream warmed up, {}ms pre-roll buffer active ({}ch {:?} → 1ch mono i16)",
+            PREROLL_MS, input_channels, sample_format
         );
 
         LiveMic {
             sample_rate: self.sample_rate,
-            channels: self.channels,
+            channels: output_channels,
             state,
             _stream: stream,
         }
+    }
+}
+
+/// Per-callback routing: forward to the active sender if one is installed,
+/// otherwise tail-buffer into the preroll ring. Shared between the F32 and
+/// I16 cpal callback variants in `Mic::start`.
+fn route_samples(state: &Arc<Mutex<MicState>>, samples: Vec<i16>) {
+    let mut s = state.lock().unwrap();
+    if let Some(tx) = s.current_tx.as_ref() {
+        let _ = tx.send(samples);
+    } else {
+        s.preroll.push(samples);
     }
 }
 
@@ -125,6 +208,7 @@ struct Preroll {
     chunks: VecDeque<Vec<i16>>,
     total_samples: usize,
     max_samples: usize,
+    warmed_once: bool,
 }
 
 impl Preroll {
@@ -133,6 +217,7 @@ impl Preroll {
             chunks: VecDeque::new(),
             total_samples: 0,
             max_samples,
+            warmed_once: false,
         }
     }
 
@@ -144,6 +229,14 @@ impl Preroll {
                 Some(removed) => self.total_samples -= removed.len(),
                 None => break,
             }
+        }
+        if !self.warmed_once && self.total_samples >= self.max_samples {
+            self.warmed_once = true;
+            eprintln!(
+                "[audio] preroll filled to capacity ({} samples across {} chunks)",
+                self.total_samples,
+                self.chunks.len()
+            );
         }
     }
 }
@@ -168,6 +261,7 @@ impl LiveMic {
     /// drop a chunk between the two steps.
     pub fn capture_until_release(&self, tx: UnboundedSender<Vec<i16>>) {
         let preroll_chunks;
+        let preroll_samples;
         {
             let mut s = self.state.lock().unwrap();
             // Drain pre-roll into a local Vec first so we can release the
@@ -175,23 +269,32 @@ impl LiveMic {
             let drained: Vec<Vec<i16>> = s.preroll.chunks.drain(..).collect();
             s.preroll.total_samples = 0;
             preroll_chunks = drained.len();
+            preroll_samples = drained.iter().map(|c| c.len()).sum::<usize>();
             for chunk in drained {
                 let _ = tx.send(chunk);
             }
             s.current_tx = Some(tx);
         }
+        let frames_per_ms = (self.sample_rate as usize) * (self.channels as usize) / 1000;
+        let preroll_ms = if frames_per_ms == 0 {
+            0
+        } else {
+            preroll_samples / frames_per_ms
+        };
         eprintln!(
-            "[audio] forwarding to STT (flushed {} pre-roll chunks)...",
-            preroll_chunks
+            "[audio] forwarding to STT (flushed {} pre-roll chunks, {} samples, ~{}ms)...",
+            preroll_chunks, preroll_samples, preroll_ms
         );
         while crate::hotkey::is_recording() {
             thread::sleep(Duration::from_millis(1));
         }
-        // Drop the sender. The cpal callback's next fire will see None
-        // and route chunks back to pre-roll; the receiver sees the channel
-        // close and Deepgram returns via Strategy B.
+        // See POST_RELEASE_GRACE_MS docs for the why.
+        thread::sleep(Duration::from_millis(POST_RELEASE_GRACE_MS));
         self.state.lock().unwrap().current_tx = None;
-        eprintln!("[audio] forwarding stopped");
+        eprintln!(
+            "[audio] forwarding stopped ({}ms post-release grace included)",
+            POST_RELEASE_GRACE_MS
+        );
     }
 }
 
@@ -230,11 +333,77 @@ impl AudioOutput {
     }
 }
 
-/// Find the input device we want to capture from. Prefers the audio server
-/// (pulse/pipewire) over raw hardware devices so we auto-follow the user's
-/// active microphone choice. Falls back to cpal's default input.
+/// Find the input device we want to capture from.
+///
+/// Selection order:
+///   1. `AEGIS_INPUT_DEVICE` env var — case-insensitive substring match
+///      against device names. Manual override for edge cases (multi-DEV
+///      cards, weird routings).
+///   2. Auto-detect via `pactl`: query pipewire/pulse's default source,
+///      read its `alsa.id`, then pick the matching `front:CARD=<id>` or
+///      `hw:CARD=<id>` cpal device. Skips pipewire's resampling/wrapping
+///      and gives you the mic's native format. Auto-follows the user's
+///      system default source.
+///   3. The "pulse" or "pipewire" virtual device. Always works, but may
+///      resample and channel-duplicate.
+///   4. cpal's default input.
+///
+/// Run `cargo run --example list_audio_devices` to see what your system
+/// exposes if you need to set the env var manually.
 fn pick_input_device() -> cpal::Device {
     let host = cpal::default_host();
+
+    if let Ok(wanted) = std::env::var("AEGIS_INPUT_DEVICE") {
+        let needle = wanted.to_lowercase();
+        let matched = host
+            .input_devices()
+            .expect("could not list input devices")
+            .find(|d| {
+                #[allow(deprecated)]
+                d.name()
+                    .map(|n| n.to_lowercase().contains(&needle))
+                    .unwrap_or(false)
+            });
+        if let Some(d) = matched {
+            #[allow(deprecated)]
+            let name = d.name().unwrap_or_else(|_| "<unknown>".into());
+            eprintln!("[audio] AEGIS_INPUT_DEVICE='{}' matched {}", wanted, name);
+            return d;
+        }
+        eprintln!(
+            "[audio] AEGIS_INPUT_DEVICE='{}' matched nothing, falling back",
+            wanted
+        );
+    }
+
+    if let Some(card_id) = default_source_alsa_card_id() {
+        let needle = format!("CARD={}", card_id);
+        let matched = host
+            .input_devices()
+            .expect("could not list input devices")
+            .find(|d| {
+                #[allow(deprecated)]
+                d.name()
+                    .map(|n| {
+                        (n.starts_with("front:") || n.starts_with("hw:")) && n.contains(&needle)
+                    })
+                    .unwrap_or(false)
+            });
+        if let Some(d) = matched {
+            #[allow(deprecated)]
+            let name = d.name().unwrap_or_else(|_| "<unknown>".into());
+            eprintln!(
+                "[audio] auto-detected default source (alsa.id={}) → {}",
+                card_id, name
+            );
+            return d;
+        }
+        eprintln!(
+            "[audio] pactl reports alsa.id={} but no matching cpal front:/hw: device — falling back",
+            card_id
+        );
+    }
+
     let picked = host
         .input_devices()
         .expect("could not list input devices")
@@ -252,4 +421,46 @@ fn pick_input_device() -> cpal::Device {
             panic!("no input device available");
         }
     }
+}
+
+/// Ask pactl for the ALSA card id (e.g. "Wireless") backing pipewire/pulse's
+/// current default source. Returns None if pactl is missing, the default
+/// source has no ALSA backing (Bluetooth, virtual), or output parsing fails.
+fn default_source_alsa_card_id() -> Option<String> {
+    let info = Command::new("pactl").arg("info").output().ok()?;
+    if !info.status.success() {
+        return None;
+    }
+    let default_source = String::from_utf8_lossy(&info.stdout)
+        .lines()
+        .find_map(|l| l.strip_prefix("Default Source: ").map(str::to_string))?;
+
+    let sources = Command::new("pactl")
+        .args(["list", "sources"])
+        .output()
+        .ok()?;
+    if !sources.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&sources.stdout);
+
+    // Walk source blocks; capture alsa.id from the block whose Name matches.
+    let mut in_target_block = false;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("Source #") {
+            in_target_block = false;
+            continue;
+        }
+        if let Some(name) = trimmed.strip_prefix("Name: ") {
+            in_target_block = name == default_source;
+            continue;
+        }
+        if in_target_block {
+            if let Some(rest) = trimmed.strip_prefix("alsa.id = ") {
+                return Some(rest.trim_matches('"').to_string());
+            }
+        }
+    }
+    None
 }

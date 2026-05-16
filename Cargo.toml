@@ -78,3 +78,11 @@ required-features = ["hyprland"]
 [[bin]]
 name = "test_win"
 required-features = ["winit-window"]
+
+[[bin]]
+name = "test_soundwave"
+required-features = ["hyprland"]
+
+[[bin]]
+name = "test_loading"
+required-features = ["hyprland"]

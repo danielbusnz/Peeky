@@ -23,6 +23,12 @@ fn main() {
         .expect("missing CARTESIA_API_KEY");
     let mic = audio::Mic::init();
 
+    // Let the cursor overlay's Soundwave read live mic RMS.
+    #[cfg(feature = "hyprland")]
+    painter::set_audio_level_source(|| {
+        f32::from_bits(audio::AUDIO_LEVEL.load(std::sync::atomic::Ordering::Relaxed))
+    });
+
     hotkey::init().expect("signal handler setup");
 
     std::thread::spawn(move || voice::run_loop(mic, stt, claude, cartesia));
