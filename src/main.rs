@@ -2,6 +2,7 @@ mod actions;
 mod audio;
 mod cursor;
 mod hotkey;
+mod integrations;
 mod mouse;
 #[cfg(feature = "hyprland")]
 mod painter;

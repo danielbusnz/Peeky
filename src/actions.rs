@@ -16,6 +16,7 @@ use std::time::Duration;
 enum InputCmd {
     Click { x: i64, y: i64 },
     Type { text: String },
+    Key { combo: String },
 }
 
 static INPUT_TX: OnceLock<Sender<InputCmd>> = OnceLock::new();
@@ -57,7 +58,10 @@ pub fn open_url(raw: &str) {
     }
 
     if let Some(bin) = focused_browser_binary() {
-        eprintln!("[action:open_url] focused window is {} → routing there", bin);
+        eprintln!(
+            "[action:open_url] focused window is {} → routing there",
+            bin
+        );
         if let Err(e) = Command::new(&bin).arg(raw).spawn() {
             eprintln!(
                 "[action:open_url] direct browser spawn failed ({}), falling back to xdg-open: {}",
@@ -76,6 +80,34 @@ pub fn open_url(raw: &str) {
     }
 
     raise_likely_browser();
+}
+
+/// List the distinct window classes of all currently-mapped Hyprland
+/// clients. Used to inject "what apps are open right now" context into
+/// the agent loop's prompt so Claude can prefer switching to a running
+/// app over launching/web-versioning it. Empty Vec on any failure.
+pub fn list_running_apps() -> Vec<String> {
+    let Ok(output) = Command::new("hyprctl").args(["clients", "-j"]).output() else {
+        return vec![];
+    };
+    if !output.status.success() {
+        return vec![];
+    }
+    let Ok(arr) = serde_json::from_slice::<serde_json::Value>(&output.stdout) else {
+        return vec![];
+    };
+    let Some(clients) = arr.as_array() else {
+        return vec![];
+    };
+    let mut classes: Vec<String> = clients
+        .iter()
+        .filter_map(|c| c["class"].as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect();
+    classes.sort();
+    classes.dedup();
+    classes
 }
 
 /// Query Hyprland for the currently-focused window's class. If that class
@@ -132,10 +164,7 @@ fn binary_on_path(bin: &str) -> bool {
 pub fn launch_app(app: &str) {
     eprintln!("[action:launch_app] launching '{}'", app);
     let escaped = shell_single_quote(app);
-    let cmd = format!(
-        "gtk-launch {esc} 2>/dev/null || exec {esc}",
-        esc = escaped
-    );
+    let cmd = format!("gtk-launch {esc} 2>/dev/null || exec {esc}", esc = escaped);
     if let Err(e) = Command::new("setsid")
         .args(["-f", "sh", "-c", &cmd])
         .spawn()
@@ -166,7 +195,13 @@ pub fn switch_to_window(target: &str) {
 fn raise_likely_browser() {
     thread::spawn(|| {
         thread::sleep(Duration::from_millis(300));
-        for class in &["firefox", "Chromium", "Brave-browser", "Google-chrome", "chromium"] {
+        for class in &[
+            "firefox",
+            "Chromium",
+            "Brave-browser",
+            "Google-chrome",
+            "chromium",
+        ] {
             let _ = Command::new("hyprctl")
                 .args(["dispatch", "focuswindow", &format!("class:{}", class)])
                 .spawn();
@@ -200,6 +235,16 @@ pub fn type_text(text: &str) {
     });
 }
 
+/// Press a key or key combination ("Return", "Tab", "Escape", "ctrl+a",
+/// "ctrl+f", etc.). Enqueues onto the input executor so it's serialized
+/// against pending clicks and types.
+pub fn press_key(combo: &str) {
+    eprintln!("[action:press_key] queueing key '{}'", combo);
+    enqueue(InputCmd::Key {
+        combo: combo.to_string(),
+    });
+}
+
 fn enqueue(cmd: InputCmd) {
     match INPUT_TX.get() {
         Some(tx) => {
@@ -226,6 +271,7 @@ pub fn init_input_executor() {
             match cmd {
                 InputCmd::Click { x, y } => exec_click(x, y),
                 InputCmd::Type { text } => exec_type(&text),
+                InputCmd::Key { combo } => exec_key(&combo),
             }
         }
     });
@@ -261,11 +307,129 @@ fn exec_type(text: &str) {
     // keystrokes can land before the field is ready.
     thread::sleep(Duration::from_millis(80));
     // `--` to separate the text from ydotool flags in case it starts with -.
-    if let Err(e) = Command::new("ydotool")
-        .args(["type", "--", text])
-        .status()
-    {
+    if let Err(e) = Command::new("ydotool").args(["type", "--", text]).status() {
         eprintln!("[action:type] type failed: {}", e);
+    }
+}
+
+fn exec_key(combo: &str) {
+    let scancodes: Vec<u16> = combo
+        .split('+')
+        .filter_map(|part| key_name_to_scancode(part.trim()))
+        .collect();
+    if scancodes.is_empty() {
+        eprintln!("[action:key] no recognized keys in '{}'", combo);
+        return;
+    }
+
+    // Build the ydotool args: press all keys in order, then release in
+    // reverse. ydotool's syntax: `key 28:1 28:0` = press+release Enter.
+    // Modifier combos: `key 29:1 30:1 30:0 29:0` = Ctrl+A.
+    let mut args: Vec<String> = vec!["key".to_string()];
+    for sc in &scancodes {
+        args.push(format!("{}:1", sc));
+    }
+    for sc in scancodes.iter().rev() {
+        args.push(format!("{}:0", sc));
+    }
+
+    thread::sleep(Duration::from_millis(50));
+    if let Err(e) = Command::new("ydotool").args(&args).status() {
+        eprintln!("[action:key] ydotool key '{}' failed: {}", combo, e);
+    }
+}
+
+/// Map a key name (Claude's wording) to a Linux input-event scancode.
+/// Covers the keys aegis-style voice commands actually emit: navigation,
+/// modifiers, letters, digits. Anything not in this table returns None
+/// and gets logged as unrecognized.
+fn key_name_to_scancode(name: &str) -> Option<u16> {
+    let lower = name.to_lowercase();
+    match lower.as_str() {
+        "esc" | "escape" => Some(1),
+        "1" => Some(2),
+        "2" => Some(3),
+        "3" => Some(4),
+        "4" => Some(5),
+        "5" => Some(6),
+        "6" => Some(7),
+        "7" => Some(8),
+        "8" => Some(9),
+        "9" => Some(10),
+        "0" => Some(11),
+        "minus" | "-" => Some(12),
+        "equal" | "=" => Some(13),
+        "backspace" => Some(14),
+        "tab" => Some(15),
+        "enter" | "return" | "kp_enter" => Some(28),
+        "ctrl" | "control" | "leftctrl" => Some(29),
+        "shift" | "leftshift" => Some(42),
+        "rightshift" => Some(54),
+        "alt" | "leftalt" => Some(56),
+        "rightalt" | "altgr" => Some(100),
+        "space" => Some(57),
+        "capslock" => Some(58),
+        "f1" => Some(59),
+        "f2" => Some(60),
+        "f3" => Some(61),
+        "f4" => Some(62),
+        "f5" => Some(63),
+        "f6" => Some(64),
+        "f7" => Some(65),
+        "f8" => Some(66),
+        "f9" => Some(67),
+        "f10" => Some(68),
+        "f11" => Some(87),
+        "f12" => Some(88),
+        "home" => Some(102),
+        "up" | "arrowup" => Some(103),
+        "pageup" | "page_up" => Some(104),
+        "left" | "arrowleft" => Some(105),
+        "right" | "arrowright" => Some(106),
+        "end" => Some(107),
+        "down" | "arrowdown" => Some(108),
+        "pagedown" | "page_down" => Some(109),
+        "insert" => Some(110),
+        "delete" | "del" => Some(111),
+        "super" | "meta" | "win" | "leftmeta" => Some(125),
+        // Letters a-z map to KEY_A=30 through KEY_Z=44 in keyboard layout order
+        // (not alphabetical — it's QWERTY row order).
+        s if s.len() == 1 => {
+            let c = s.chars().next()?;
+            const QWERTY: &[(char, u16)] = &[
+                ('a', 30),
+                ('b', 48),
+                ('c', 46),
+                ('d', 32),
+                ('e', 18),
+                ('f', 33),
+                ('g', 34),
+                ('h', 35),
+                ('i', 23),
+                ('j', 36),
+                ('k', 37),
+                ('l', 38),
+                ('m', 50),
+                ('n', 49),
+                ('o', 24),
+                ('p', 25),
+                ('q', 16),
+                ('r', 19),
+                ('s', 31),
+                ('t', 20),
+                ('u', 22),
+                ('v', 47),
+                ('w', 17),
+                ('x', 45),
+                ('y', 21),
+                ('z', 44),
+            ];
+            QWERTY
+                .iter()
+                .find(|(ch, _)| *ch == c)
+                .map(|(_, code)| *code)
+        }
+        _ => None,
     }
 }
 

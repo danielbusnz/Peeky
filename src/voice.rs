@@ -72,6 +72,14 @@ fn wants_description(transcript: &str) -> bool {
         "navigate to ",
         "focus ",
         "start ",
+        // Media / integration commands — these route to tools like
+        // spotify_play, never narration.
+        "play ",
+        "pause",
+        "resume",
+        "skip",
+        "next track",
+        "previous track",
     ];
     !action_starts.iter().any(|p| stripped.starts_with(p))
 }
@@ -316,18 +324,30 @@ fn run_one_turn(
     let barge_in_flag_claude = barge_in.flag.clone();
     print!("claude: ");
     rt.block_on(async {
-        // Per-iteration screenshot capture, reusing the geometry from the
-        // initial capture. Uses the fast single-pass capture+resize path
-        // so we don't pay for the full-res JPEG round-trip every step.
+        // Per-iteration screenshot capture. Re-queries the active workspace
+        // geometry every call so the screenshot follows `switch_to_window`
+        // and workspace switches mid-chain. Falls back to the initial
+        // (x, y, w, h) if hyprctl fails. Uses the fast single-pass
+        // capture+resize path.
         let take_screenshot = move || -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-            let (dw, dh) = screenshot::pick_declared_resolution(w as i64, h as i64);
-            screenshot::capture_resized_for_claude(x, y, w as i32, h as i32, dw, dh)
+            let (cx, cy, cw, ch) = screenshot::active_workspace_geometry()
+                .map(|g| (g.0, g.1, g.2 as i32, g.3 as i32))
+                .unwrap_or((x, y, w as i32, h as i32));
+            let (dw, dh) = screenshot::pick_declared_resolution(cw as i64, ch as i64);
+            screenshot::capture_resized_for_claude(cx, cy, cw, ch, dw, dh)
                 .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.to_string().into() })
         };
+
+        let running_apps = crate::actions::list_running_apps();
+        eprintln!(
+            "[agent-loop] running apps detected: {}",
+            if running_apps.is_empty() { "(none)".to_string() } else { running_apps.join(", ") }
+        );
 
         let cursor_task = claude.run_agent_loop(
             &transcript,
             &resized_b64,
+            &running_apps,
             x as i64,
             y as i64,
             w as i64,
@@ -353,6 +373,9 @@ fn run_one_turn(
                     Action::Type { text } => {
                         crate::actions::type_text(&text);
                     }
+                    Action::Key { key } => {
+                        crate::actions::press_key(&key);
+                    }
                     Action::OpenUrl { url } => {
                         set_cursor_idle();
                         crate::actions::open_url(&url);
@@ -364,6 +387,15 @@ fn run_one_turn(
                     Action::SwitchToWindow { target } => {
                         set_cursor_idle();
                         crate::actions::switch_to_window(&target);
+                    }
+                    Action::Integration { name, input } => {
+                        set_cursor_idle();
+                        if !crate::integrations::dispatch(&name, &input) {
+                            eprintln!(
+                                "[integration] no handler for tool '{}' input={}",
+                                name, input
+                            );
+                        }
                     }
                 }
             },

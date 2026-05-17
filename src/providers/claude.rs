@@ -17,6 +17,10 @@ pub enum Action {
     /// field. Used for "type X" / "search for X" / "write X". Embed a
     /// trailing \n if the result should be submitted (Enter).
     Type { text: String },
+    /// `computer` tool, `key`. Press a key or key combination like
+    /// "Return", "Tab", "Escape", "ctrl+a", "ctrl+f". The `key` string
+    /// is whatever Claude emitted; parsing happens in the action handler.
+    Key { key: String },
     /// `open_url` custom tool. URL is whatever Claude emitted; validation
     /// happens at execution time, not here.
     OpenUrl { url: String },
@@ -25,6 +29,13 @@ pub enum Action {
     LaunchApp { app: String },
     /// `switch_to_window` custom tool. Target is a window class or title.
     SwitchToWindow { target: String },
+    /// An integration tool call (Spotify, etc.) we don't have a dedicated
+    /// variant for. Dispatched at runtime by name via the integrations
+    /// registry. `input` is the raw JSON payload Claude emitted.
+    Integration {
+        name: String,
+        input: serde_json::Value,
+    },
 }
 
 pub struct Claude {
@@ -478,6 +489,7 @@ impl Claude {
         &self,
         prompt: &str,
         initial_screenshot_b64: &str,
+        running_apps: &[String],
         window_x: i64,
         window_y: i64,
         window_width: i64,
@@ -496,13 +508,32 @@ impl Claude {
         let (declared_w, declared_h) = pick_declared_resolution(window_width, window_height);
 
         // Build initial user turn: screenshot + transcript prompt.
+        let running_list = if running_apps.is_empty() {
+            "(none detected)".to_string()
+        } else {
+            running_apps.join(", ")
+        };
         let user_prompt = format!(
-            "The user said: \"{}\". Pick the best action(s) and invoke their tools. \
-             If the request needs multiple steps (e.g. \"open YouTube and search X\"), \
-             call multiple tools across iterations — you'll get a fresh screenshot \
-             after each batch. When the task is fully done, respond with plain text \
-             and no tool calls to end the chain.",
-            prompt
+            "The user said: \"{}\". \n\n\
+             Currently-running app window classes (from Hyprland): {}.\n\n\
+             Tool preference order for actions targeting an app:\n\
+             1. SERVICE-SPECIFIC INTEGRATION TOOLS FIRST (e.g. spotify_play, \
+                spotify_pause). These are dramatically faster than visual \
+                automation — one tool call vs. 5-10 steps of click+type. \
+                Use them whenever the user's intent matches.\n\
+             2. If no integration tool exists and the target app IS in the \
+                running list above, prefer switch_to_window to focus it and \
+                interact via click+type.\n\
+             3. If no integration tool exists and the app is NOT running, \
+                use launch_app to start it (or open_url for web services).\n\
+             4. open_url is for pure web destinations — sites without a \
+                desktop app, or when the user explicitly says \"in the browser\".\n\n\
+             Pick the best action(s) and invoke their tools. If the request \
+             needs multiple steps, call multiple tools across iterations — \
+             you'll get a fresh screenshot after each batch. When the task \
+             is fully done, respond with plain text and no tool calls to end \
+             the chain.",
+            prompt, running_list
         );
         let mut messages: Vec<serde_json::Value> = vec![serde_json::json!({
             "role": "user",
@@ -633,6 +664,16 @@ impl Claude {
                                                 window_x, window_y, window_width, window_height,
                                             ) {
                                                 on_action(action);
+                                            } else {
+                                                // No dispatch (e.g. computer.screenshot/key/scroll/wait/cursor_position).
+                                                // Log so we can see what's eating the silent steps.
+                                                let action_field = input["action"]
+                                                    .as_str()
+                                                    .unwrap_or("(none)");
+                                                eprintln!(
+                                                    "[agent-loop] unhandled tool '{}' action='{}' input={}",
+                                                    name, action_field, input_json
+                                                );
                                             }
                                             tool_calls.push((id, name, input_json));
                                         }
@@ -772,9 +813,18 @@ fn system_prompt_for_actions() -> &'static str {
        button\", \"press X\", \"select that\"). Cursor moves AND a \
        real click fires.\n\
      - `computer` type(text=\"...\"): type text into the currently \
-       focused field. End text with \\n if the user wants it submitted \
-       (search, send). For multi-step intents emit BOTH left_click on \
-       the input AND type(text=\"...\\n\") in the same response.\n\
+       focused field. Prefer to end text with \\n to submit (search, \
+       send) in one tool call rather than emitting a separate \
+       key(\"Return\") afterward — fewer round trips. For multi-step \
+       intents emit BOTH left_click on the input AND type(text=\"...\\n\") \
+       in the same response.\n\
+     - `computer` key(text=\"...\"): press a key or combo. Supported: \
+       Return, Tab, Escape, Backspace, Delete, Home, End, PageUp, \
+       PageDown, Up, Down, Left, Right, F1-F12, single letters/digits, \
+       and combos like \"ctrl+a\", \"ctrl+f\", \"ctrl+enter\". Use this \
+       for hotkeys (e.g. \"c\" toggles captions on YouTube, \"k\" \
+       play/pause) or to submit forms when you didn't end a `type` with \
+       \\n.\n\
      - `open_url`: ALWAYS use this for web destinations — websites, web \
        apps, online docs. Phrases like \"open YouTube\", \"go to gmail\", \
        \"pull up github\", \"open the rust docs\", \"navigate to twitter\" \
@@ -782,8 +832,27 @@ fn system_prompt_for_actions() -> &'static str {
        https://gmail.com, https://github.com, https://doc.rust-lang.org, \
        etc.). NEVER use launch_app for these — do NOT call \
        launch_app(\"firefox\") or launch_app(\"chrome\") even if a browser \
-       isn't visibly open; aegis handles which browser to use internally. \
-       Construct the URL and call open_url.\n\
+       isn't visibly open; aegis handles which browser to use internally.\n\
+       \n\
+       PREFER DEEP-LINK URLS over UI navigation. If the request ends in \
+       \"open page X\" or \"go to search results for X on site Y\", \
+       construct the deep-link URL and call open_url ONCE — do NOT \
+       open the homepage and then click the search bar and type. \
+       Known search URL patterns:\n\
+         - YouTube search: https://www.youtube.com/results?search_query=<URL-encoded query>\n\
+         - Google search:  https://www.google.com/search?q=<URL-encoded query>\n\
+         - GitHub search:  https://github.com/search?q=<URL-encoded query>\n\
+         - Wikipedia:      https://en.wikipedia.org/wiki/<Title_With_Underscores>\n\
+         - Amazon search:  https://www.amazon.com/s?k=<URL-encoded query>\n\
+         - Spotify search: https://open.spotify.com/search/<URL-encoded query>\n\
+         - Twitter/X:      https://twitter.com/search?q=<URL-encoded query>\n\
+         - Reddit search:  https://www.reddit.com/search/?q=<URL-encoded query>\n\
+         - DuckDuckGo:     https://duckduckgo.com/?q=<URL-encoded query>\n\
+       URL-encode spaces as + (Google/Amazon/Twitter/Reddit/DDG) or %20 \
+       (Spotify, GitHub also accept +). The user's intent \"open YouTube, \
+       search for dogs\" should be a single open_url call with the search \
+       results URL — NOT open_url(youtube.com) followed by a click + \
+       type sequence. Use click+type only when no URL shortcut exists.\n\
      - `launch_app`: start a NON-browser desktop app that isn't running \
        yet (\"open spotify\", \"launch vs code\", \"open my terminal\", \
        \"open obsidian\"). Pass the lowercase common name. Do NOT use \
@@ -799,8 +868,11 @@ fn system_prompt_for_actions() -> &'static str {
 }
 
 /// Shared tools array used by both single-call and loop entry points.
+/// Appends any tools exposed by ready integrations (spotify, etc.) at
+/// the end of the array so Claude can call them when the user's intent
+/// matches.
 fn tools_array_value(declared_w: u32, declared_h: u32) -> serde_json::Value {
-    serde_json::json!([
+    let mut tools: Vec<serde_json::Value> = serde_json::json!([
         {
             "type": "computer_20250124",
             "name": "computer",
@@ -849,6 +921,12 @@ fn tools_array_value(declared_w: u32, declared_h: u32) -> serde_json::Value {
             }
         }
     ])
+    .as_array()
+    .expect("tools literal must be an array")
+    .clone();
+
+    tools.extend(crate::integrations::all_tools());
+    serde_json::Value::Array(tools)
 }
 
 /// Trim image data from `tool_result` blocks older than the most recent
@@ -917,38 +995,87 @@ fn parse_tool_call(
     window_width: i64,
     window_height: i64,
 ) -> Option<Action> {
-    match tool_name {
-        "computer" => {
-            let action = input["action"].as_str()?;
-            // `type` doesn't carry a coordinate; handle it before the coord
-            // extraction so we don't reject it for missing one.
-            if action == "type" {
-                let text = input["text"].as_str()?;
-                return Some(Action::Type {
-                    text: text.to_string(),
-                });
-            }
-            let coord = input["coordinate"].as_array().filter(|c| c.len() == 2)?;
-            let raw_x = coord[0]
-                .as_i64()
-                .unwrap_or(0)
-                .clamp(0, declared_w as i64 - 1);
-            let raw_y = coord[1]
-                .as_i64()
-                .unwrap_or(0)
-                .clamp(0, declared_h as i64 - 1);
-            let sx =
-                window_x + (raw_x as f64 * window_width as f64 / declared_w as f64) as i64;
-            let sy =
-                window_y + (raw_y as f64 * window_height as f64 / declared_h as f64) as i64;
-            let x = sx.clamp(window_x, window_x + window_width - 1);
-            let y = sy.clamp(window_y, window_y + window_height - 1);
-            match action {
-                "left_click" => Some(Action::Click { x, y }),
-                "mouse_move" => Some(Action::Point { x, y }),
-                _ => None,
-            }
+    // Claude sometimes emits malformed tool calls where the tool NAME is
+    // the action (e.g. `name: "left_click"`) instead of the proper
+    // `name: "computer", input.action: "left_click"`. Detect both shapes
+    // and normalize to a single (action_name, input) pair before matching.
+    let (effective_action, effective_input) = match tool_name {
+        "computer" => (input["action"].as_str()?.to_string(), input),
+        // The action-as-name fallback. Coordinate / text comes straight
+        // from input without an `action` field.
+        "left_click" | "right_click" | "middle_click" | "double_click"
+        | "triple_click" | "mouse_move" | "type" | "key" | "scroll"
+        | "screenshot" | "wait" | "cursor_position" => (tool_name.to_string(), input),
+        // Custom tools handled below.
+        _ => return parse_custom_tool(tool_name, input),
+    };
+
+    let action = effective_action.as_str();
+
+    // Text-only actions (no coordinate).
+    if action == "type" {
+        let text = effective_input["text"].as_str()?;
+        return Some(Action::Type {
+            text: text.to_string(),
+        });
+    }
+    if action == "key" {
+        let key = effective_input["text"].as_str()?;
+        return Some(Action::Key {
+            key: key.to_string(),
+        });
+    }
+
+    // Coordinate actions. Accept either a JSON array [x, y] OR a JSON
+    // string like "[640, 47]" — Claude's malformed shape emits the latter.
+    let (raw_x, raw_y) = extract_coordinate(&effective_input["coordinate"])?;
+    let raw_x = raw_x.clamp(0, declared_w as i64 - 1);
+    let raw_y = raw_y.clamp(0, declared_h as i64 - 1);
+    let sx = window_x + (raw_x as f64 * window_width as f64 / declared_w as f64) as i64;
+    let sy = window_y + (raw_y as f64 * window_height as f64 / declared_h as f64) as i64;
+    let x = sx.clamp(window_x, window_x + window_width - 1);
+    let y = sy.clamp(window_y, window_y + window_height - 1);
+
+    match action {
+        // Treat right/middle/double/triple clicks as left clicks for now —
+        // most apps treat them similarly for the "I want to interact with
+        // THIS element" case. We can add separate Action variants if a
+        // real use case appears.
+        "left_click" | "right_click" | "middle_click" | "double_click"
+        | "triple_click" => Some(Action::Click { x, y }),
+        "mouse_move" => Some(Action::Point { x, y }),
+        _ => None,
+    }
+}
+
+/// Parse a coordinate field that may be either a JSON array `[x, y]` or a
+/// JSON string `"[x, y]"`. Returns (x, y) as i64.
+fn extract_coordinate(value: &serde_json::Value) -> Option<(i64, i64)> {
+    if let Some(arr) = value.as_array() {
+        if arr.len() == 2 {
+            return Some((arr[0].as_i64()?, arr[1].as_i64()?));
         }
+    }
+    if let Some(s) = value.as_str() {
+        // Strip brackets/whitespace, split on comma.
+        let trimmed = s.trim().trim_start_matches('[').trim_end_matches(']');
+        let parts: Vec<&str> = trimmed.split(',').map(|p| p.trim()).collect();
+        if parts.len() == 2 {
+            let x = parts[0].parse::<i64>().ok()?;
+            let y = parts[1].parse::<i64>().ok()?;
+            return Some((x, y));
+        }
+    }
+    None
+}
+
+/// Custom tools (open_url, launch_app, switch_to_window) PLUS the
+/// integration fallback. Any tool name not in the built-in list is
+/// returned as `Action::Integration { name, input }` for runtime
+/// dispatch to whichever integration owns it (Spotify, etc.). If no
+/// integration owns it, the dispatcher logs the unknown name.
+fn parse_custom_tool(tool_name: &str, input: &serde_json::Value) -> Option<Action> {
+    match tool_name {
         "open_url" => input["url"]
             .as_str()
             .map(|s| Action::OpenUrl { url: s.to_string() }),
@@ -958,6 +1085,9 @@ fn parse_tool_call(
         "switch_to_window" => input["target"]
             .as_str()
             .map(|s| Action::SwitchToWindow { target: s.to_string() }),
-        _ => None,
+        _ => Some(Action::Integration {
+            name: tool_name.to_string(),
+            input: input.clone(),
+        }),
     }
 }
