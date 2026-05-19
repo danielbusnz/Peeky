@@ -1,5 +1,7 @@
 use crate::screenshot::pick_declared_resolution;
 use futures_util::StreamExt;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 /// A side-effecting action Claude requested via one of the tools in
@@ -517,6 +519,7 @@ impl Claude {
         window_width: i64,
         window_height: i64,
         integration_tools: Vec<serde_json::Value>,
+        early_exit: Arc<AtomicBool>,
         mut take_screenshot: S,
         mut on_action: F,
         mut dispatch_integration: D,
@@ -597,6 +600,18 @@ impl Claude {
         let mut prev_step_was_integration_only = false;
 
         for step in 0..MAX_STEPS {
+            // First-feedback short circuit: a previous step has already
+            // either fired a visible cursor action or pushed the first PCM
+            // chunk to the speaker, so the user is already getting feedback.
+            // Don't start another round trip on top of that.
+            if early_exit.load(Ordering::Relaxed) {
+                eprintln!(
+                    "[agent-loop] early exit before step {} (first feedback fired)",
+                    step + 1
+                );
+                break;
+            }
+
             let t_step_start = std::time::Instant::now();
             eprintln!(
                 "[agent-loop] step {}/{} starting (messages history: {} turns)",
@@ -685,6 +700,30 @@ impl Claude {
                         };
 
                         match event["type"].as_str() {
+                            Some("message_start") => {
+                                eprintln!(
+                                    "[sse-debug] step {} message_start: model={:?} usage={}",
+                                    step + 1,
+                                    event["message"]["model"].as_str().unwrap_or("?"),
+                                    event["message"]["usage"]
+                                );
+                            }
+                            Some("message_delta") => {
+                                eprintln!(
+                                    "[sse-debug] step {} message_delta: stop_reason={:?} stop_sequence={:?} usage={}",
+                                    step + 1,
+                                    event["delta"]["stop_reason"].as_str(),
+                                    event["delta"]["stop_sequence"].as_str(),
+                                    event["usage"]
+                                );
+                            }
+                            Some("error") => {
+                                eprintln!(
+                                    "[sse-debug] step {} ERROR event: {}",
+                                    step + 1,
+                                    event
+                                );
+                            }
                             Some("content_block_start") => {
                                 if event["content_block"]["type"].as_str() == Some("tool_use") {
                                     current_tool_name =
@@ -712,47 +751,65 @@ impl Claude {
                                     }
                                 }
                             }
+                            Some("message_stop") | Some("ping") => {
+                                // Expected, no-op. Listed so the catch-all
+                                // below can surface anything NEW we're not
+                                // handling yet.
+                            }
                             Some("content_block_stop") => {
                                 if let (Some(name), Some(id)) =
                                     (current_tool_name.take(), current_tool_id.take())
                                 {
-                                    if !tool_json_buffer.is_empty() {
-                                        let input_json = tool_json_buffer.clone();
-                                        if let Ok(input) =
-                                            serde_json::from_str::<serde_json::Value>(&input_json)
-                                        {
-                                            match parse_tool_call(
-                                                &name,
-                                                &input,
-                                                declared_w,
-                                                declared_h,
-                                                window_x,
-                                                window_y,
-                                                window_width,
-                                                window_height,
-                                            ) {
-                                                // Integration tools are dispatched post-stream
-                                                // so their text results can feed back to Claude
-                                                // as tool_result content. Skip on_action here.
-                                                Some(Action::Integration { .. }) => {}
-                                                Some(action) => on_action(action),
-                                                None => {
-                                                    let action_field = input["action"]
-                                                        .as_str()
-                                                        .unwrap_or("(none)");
-                                                    eprintln!(
-                                                        "[agent-loop] unhandled tool '{}' action='{}' input={}",
-                                                        name, action_field, input_json
-                                                    );
-                                                }
+                                    // No-arg tools (spotify_next, gmail_unread_count,
+                                    // etc.) emit no input_json_delta events, so the
+                                    // buffer is empty at stop. Treat that as "{}" so
+                                    // they aren't silently dropped.
+                                    let input_json = if tool_json_buffer.is_empty() {
+                                        "{}".to_string()
+                                    } else {
+                                        tool_json_buffer.clone()
+                                    };
+                                    if let Ok(input) =
+                                        serde_json::from_str::<serde_json::Value>(&input_json)
+                                    {
+                                        match parse_tool_call(
+                                            &name,
+                                            &input,
+                                            declared_w,
+                                            declared_h,
+                                            window_x,
+                                            window_y,
+                                            window_width,
+                                            window_height,
+                                        ) {
+                                            // Integration tools are dispatched post-stream
+                                            // so their text results can feed back to Claude
+                                            // as tool_result content. Skip on_action here.
+                                            Some(Action::Integration { .. }) => {}
+                                            Some(action) => on_action(action),
+                                            None => {
+                                                let action_field = input["action"]
+                                                    .as_str()
+                                                    .unwrap_or("(none)");
+                                                eprintln!(
+                                                    "[agent-loop] unhandled tool '{}' action='{}' input={}",
+                                                    name, action_field, input_json
+                                                );
                                             }
-                                            tool_calls.push((id, name, input_json));
                                         }
+                                        tool_calls.push((id, name, input_json));
                                     }
                                     tool_json_buffer.clear();
                                 }
                             }
-                            _ => {}
+                            other => {
+                                eprintln!(
+                                    "[sse-debug] step {} unknown event type {:?}: {}",
+                                    step + 1,
+                                    other,
+                                    event
+                                );
+                            }
                         }
                     }
                 }

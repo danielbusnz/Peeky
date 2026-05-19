@@ -289,6 +289,12 @@ fn run_one_turn(
     // iteration starts a fresh turn.
     let barge_in = BargeIn::start();
 
+    // First-feedback flag: set when either TTS plays its first PCM chunk or
+    // the cursor fires a visible action. Read by run_agent_loop between
+    // steps to bail out once the user is already getting feedback, so a
+    // chatty Claude can't keep iterating after the answer has started.
+    let early_exit = Arc::new(AtomicBool::new(false));
+
     // Sentence channel: voice_task pushes complete sentences as Claude streams;
     // tts_task drains them and fires Cartesia per sentence.
     let (sentence_tx, mut sentence_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
@@ -299,6 +305,7 @@ fn run_one_turn(
     // Spawning gives Cartesia a real chance to fire mid-stream.
     let cartesia_for_tts = cartesia.clone();
     let barge_in_flag_tts = barge_in.flag.clone();
+    let early_exit_tts = early_exit.clone();
     // Hand out a fresh Player from the cached sink (cheap). The expensive
     // open_default_sink() happens once at app startup.
     let player = audio_out.new_player();
@@ -332,6 +339,7 @@ fn run_one_turn(
                                 );
                                 first_chunk_logged = true;
                                 set_cursor_idle();
+                                early_exit_tts.store(true, Ordering::Relaxed);
                             }
                             let samples: Vec<f32> = pcm_bytes
                                 .chunks_exact(2)
@@ -429,6 +437,7 @@ fn run_one_turn(
         let sentence_tx_for_cb = sentence_tx.clone();
         let stream_to_tts = want_speech;
 
+        let early_exit_action = early_exit.clone();
         let cursor_task = claude.run_agent_loop(
             &transcript,
             initial_screenshot,
@@ -438,6 +447,7 @@ fn run_one_turn(
             w as i64,
             h as i64,
             crate::integrations::all_tools(),
+            early_exit.clone(),
             take_screenshot,
             |action| {
                 use crate::providers::claude::Action;
@@ -446,6 +456,14 @@ fn run_one_turn(
                     release_t.elapsed(),
                     action
                 );
+                // Any user-visible action trips the first-feedback flag so
+                // the agent loop bails out before its next round trip.
+                // Integration tools don't qualify — they're research, not
+                // user-visible work — so they fall through this match
+                // without flipping the flag.
+                if !matches!(action, Action::Integration { .. }) {
+                    early_exit_action.store(true, Ordering::Relaxed);
+                }
                 match action {
                     Action::Point { x: px, y: py } => {
                         set_cursor_idle();

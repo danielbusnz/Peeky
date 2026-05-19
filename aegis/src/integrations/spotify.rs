@@ -72,32 +72,27 @@ pub fn tools() -> Vec<serde_json::Value> {
 
 pub fn dispatch(name: &str, input: &serde_json::Value) -> Option<String> {
     match name {
-        "spotify_play" => {
-            match input["query"].as_str() {
-                Some(q) => play(q),
-                None => eprintln!("[integration:spotify] spotify_play missing 'query' field"),
-            }
-            Some("{}".to_string())
-        }
-        "spotify_pause" => {
-            control("pause");
-            Some("{}".to_string())
-        }
-        "spotify_resume" => {
-            // spotify_player calls this "play", not "resume".
-            control("play");
-            Some("{}".to_string())
-        }
-        "spotify_next" => {
-            control("next");
-            Some("{}".to_string())
-        }
-        "spotify_previous" => {
-            control("previous");
-            Some("{}".to_string())
-        }
+        "spotify_play" => Some(match input["query"].as_str() {
+            Some(q) => play(q),
+            None => err_body("spotify_play missing 'query' field"),
+        }),
+        "spotify_pause" => Some(control("pause")),
+        // spotify_player calls this "play", not "resume".
+        "spotify_resume" => Some(control("play")),
+        "spotify_next" => Some(control("next")),
+        "spotify_previous" => Some(control("previous")),
         _ => None,
     }
+}
+
+/// JSON-encoded `{"error": "..."}` so spotify failures reach Claude as
+/// tool_result content. Matches github.rs's convention so the agent loop
+/// sees a consistent error shape across integrations.
+fn err_body(msg: &str) -> String {
+    format!(
+        r#"{{"error":{}}}"#,
+        serde_json::Value::String(msg.to_string())
+    )
 }
 
 /// Search for `query`, take the first track ID from the result, and start
@@ -105,7 +100,7 @@ pub fn dispatch(name: &str, input: &serde_json::Value) -> Option<String> {
 /// writing) expose a single "search and play top result" command. If the
 /// search output format isn't what `extract_first_track_id` expects, the
 /// raw stdout is logged so the user can adjust the parser.
-fn play(query: &str) {
+fn play(query: &str) -> String {
     eprintln!("[integration:spotify] searching for '{}'", query);
     let search = Command::new("spotify_player")
         .args(["search", query])
@@ -113,15 +108,15 @@ fn play(query: &str) {
     let output = match search {
         Ok(o) if o.status.success() => o,
         Ok(o) => {
-            eprintln!(
-                "[integration:spotify] search failed: {}",
-                String::from_utf8_lossy(&o.stderr).trim()
-            );
-            return;
+            let stderr = String::from_utf8_lossy(&o.stderr);
+            let msg = format!("search failed: {}", stderr.trim());
+            eprintln!("[integration:spotify] {}", msg);
+            return err_body(&msg);
         }
         Err(e) => {
-            eprintln!("[integration:spotify] search spawn failed: {}", e);
-            return;
+            let msg = format!("search spawn failed: {e}");
+            eprintln!("[integration:spotify] {}", msg);
+            return err_body(&msg);
         }
     };
 
@@ -129,34 +124,54 @@ fn play(query: &str) {
     let track_id = match extract_first_track_id(&stdout) {
         Some(id) => id,
         None => {
-            eprintln!(
-                "[integration:spotify] could not parse a track ID from search output; \
-                 first few lines were:\n{}",
-                stdout.lines().take(5).collect::<Vec<_>>().join("\n  ")
+            let msg = format!(
+                "could not parse a track ID from search output; first lines were: {}",
+                stdout.lines().take(2).collect::<Vec<_>>().join(" | ")
             );
-            return;
+            eprintln!("[integration:spotify] {}", msg);
+            return err_body(&msg);
         }
     };
 
     eprintln!("[integration:spotify] playing track {}", track_id);
-    let result = Command::new("spotify_player")
+    match Command::new("spotify_player")
         .args(["playback", "start", "track", "--id", &track_id])
-        .status();
-    if let Err(e) = result {
-        eprintln!("[integration:spotify] playback start spawn failed: {}", e);
+        .status()
+    {
+        Ok(s) if s.success() => "{}".to_string(),
+        Ok(s) => {
+            let msg = format!("playback start exited with status {}", s);
+            eprintln!("[integration:spotify] {}", msg);
+            err_body(&msg)
+        }
+        Err(e) => {
+            let msg = format!("playback start spawn failed: {e}");
+            eprintln!("[integration:spotify] {}", msg);
+            err_body(&msg)
+        }
     }
 }
 
-fn control(subcommand: &str) {
+fn control(subcommand: &str) -> String {
     eprintln!("[integration:spotify] playback {}", subcommand);
-    if let Err(e) = Command::new("spotify_player")
+    // `output()` (not `spawn()`) so we actually wait for the result and can
+    // report failures back to Claude. The control subcommands are quick.
+    match Command::new("spotify_player")
         .args(["playback", subcommand])
-        .spawn()
+        .output()
     {
-        eprintln!(
-            "[integration:spotify] playback {} spawn failed: {}",
-            subcommand, e
-        );
+        Ok(o) if o.status.success() => "{}".to_string(),
+        Ok(o) => {
+            let stderr = String::from_utf8_lossy(&o.stderr);
+            let msg = format!("playback {} failed: {}", subcommand, stderr.trim());
+            eprintln!("[integration:spotify] {}", msg);
+            err_body(&msg)
+        }
+        Err(e) => {
+            let msg = format!("playback {} spawn failed: {}", subcommand, e);
+            eprintln!("[integration:spotify] {}", msg);
+            err_body(&msg)
+        }
     }
 }
 
