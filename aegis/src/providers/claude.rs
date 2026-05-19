@@ -1,7 +1,6 @@
 use crate::screenshot::pick_declared_resolution;
 use futures_util::StreamExt;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use tokio_util::sync::CancellationToken;
 use std::time::Duration;
 
 /// A side-effecting action Claude requested via one of the tools in
@@ -520,7 +519,7 @@ impl Claude {
         window_width: i64,
         window_height: i64,
         integration_tools: Vec<serde_json::Value>,
-        early_exit: Arc<AtomicBool>,
+        early_exit: CancellationToken,
         mut take_screenshot: S,
         mut on_action: F,
         mut dispatch_integration: D,
@@ -620,7 +619,7 @@ impl Claude {
             // either fired a visible cursor action or pushed the first PCM
             // chunk to the speaker, so the user is already getting feedback.
             // Don't start another round trip on top of that.
-            if early_exit.load(Ordering::Relaxed) {
+            if early_exit.is_cancelled() {
                 eprintln!(
                     "[agent-loop] early exit before step {} (first feedback fired)",
                     step + 1

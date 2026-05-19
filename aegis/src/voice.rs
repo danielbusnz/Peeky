@@ -5,9 +5,8 @@ use crate::providers::claude::Claude;
 use crate::providers::stt_deepgram::SttDeepgram;
 use crate::providers::tts_cartesia::TtsCartesia;
 use crate::screenshot;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+use tokio_util::sync::CancellationToken;
 
 #[cfg(feature = "hyprland")]
 fn set_cursor_idle() {
@@ -179,8 +178,8 @@ pub fn run_loop(mic: audio::Mic, stt: SttDeepgram, claude: Claude, cartesia: Tts
         // image now — describe used to need the native-res version, but it
         // gets the same resized one and saves ~200ms of upload + ~1500 input
         // tokens per turn.
-        let screenshot_handle =
-            std::thread::spawn(|| -> Result<(i32, i32, u32, u32, String), String> {
+        let screenshot_task = rt.spawn_blocking(
+            || -> Result<(i32, i32, u32, u32, String), String> {
                 let (x, y, w, h) =
                     screenshot::active_workspace_geometry().map_err(|e| e.to_string())?;
                 let (declared_w, declared_h) =
@@ -192,7 +191,8 @@ pub fn run_loop(mic: audio::Mic, stt: SttDeepgram, claude: Claude, cartesia: Tts
                 )
                 .map_err(|e| e.to_string())?;
                 Ok((x, y, w, h, resized_b64))
-            });
+            },
+        );
 
         if let Err(e) = run_one_turn(
             &rt,
@@ -201,7 +201,7 @@ pub fn run_loop(mic: audio::Mic, stt: SttDeepgram, claude: Claude, cartesia: Tts
             &stt,
             &claude,
             &cartesia,
-            screenshot_handle,
+            screenshot_task,
         ) {
             eprintln!("voice turn failed: {}", e);
         }
@@ -215,7 +215,7 @@ fn run_one_turn(
     stt: &SttDeepgram,
     claude: &Claude,
     cartesia: &TtsCartesia,
-    screenshot_handle: std::thread::JoinHandle<Result<(i32, i32, u32, u32, String), String>>,
+    screenshot_task: tokio::task::JoinHandle<Result<(i32, i32, u32, u32, String), String>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Set up audio streaming: cpal callback writes i16 chunks into a tokio
     // channel; Deepgram WS consumes them and returns the final transcript
@@ -259,8 +259,8 @@ fn run_one_turn(
     if transcript.trim().is_empty() {
         eprintln!("[voice] empty transcript, skipping turn");
         set_cursor_idle();
-        // Still need to drain the screenshot thread.
-        let _ = screenshot_handle.join();
+        // Still need to drain the screenshot task.
+        let _ = rt.block_on(screenshot_task);
         return Ok(());
     }
 
@@ -269,9 +269,11 @@ fn run_one_turn(
     // instantly. For very short turns, this can block 1-2s while the
     // Lanczos3 resize finishes — watch the timing log to see.
     let t_ss_join = std::time::Instant::now();
-    let (x, y, w, h, resized_b64) = screenshot_handle
-        .join()
-        .map_err(|_| "screenshot thread panicked")?
+    let (x, y, w, h, resized_b64) = rt
+        .block_on(screenshot_task)
+        .map_err(|e| -> Box<dyn std::error::Error> {
+            format!("screenshot task panicked: {e}").into()
+        })?
         .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
     let ss_wait = t_ss_join.elapsed();
     if ss_wait.as_millis() > 50 {
@@ -289,11 +291,11 @@ fn run_one_turn(
     // iteration starts a fresh turn.
     let barge_in = BargeIn::start();
 
-    // First-feedback flag: set when either TTS plays its first PCM chunk or
-    // the cursor fires a visible action. Read by run_agent_loop between
-    // steps to bail out once the user is already getting feedback, so a
-    // chatty Claude can't keep iterating after the answer has started.
-    let early_exit = Arc::new(AtomicBool::new(false));
+    // First-feedback flag: cancelled when either TTS plays its first PCM
+    // chunk or the cursor fires a visible action. Read by run_agent_loop
+    // between steps to bail out once the user is already getting feedback,
+    // so a chatty Claude can't keep iterating after the answer has started.
+    let early_exit = CancellationToken::new();
 
     // Sentence channel: voice_task pushes complete sentences as Claude streams;
     // tts_task drains them and fires Cartesia per sentence.
@@ -304,7 +306,7 @@ fn run_one_turn(
     // tts_task would be starved by voice_task's rapid token processing.
     // Spawning gives Cartesia a real chance to fire mid-stream.
     let cartesia_for_tts = cartesia.clone();
-    let barge_in_flag_tts = barge_in.flag.clone();
+    let cancel_tts = barge_in.token();
     let early_exit_tts = early_exit.clone();
     // Hand out a fresh Player from the cached sink (cheap). The expensive
     // open_default_sink() happens once at app startup.
@@ -317,7 +319,7 @@ fn run_one_turn(
         loop {
             tokio::select! {
                 biased;
-                _ = wait_for_barge_in(&barge_in_flag_tts) => {
+                _ = cancel_tts.cancelled() => {
                     eprintln!("[barge-in] tts aborted at {:?}", release_t.elapsed());
                     player.stop();
                     return Ok(());
@@ -326,7 +328,7 @@ fn run_one_turn(
                     let Some(sentence) = recv else { break };
                     tokio::select! {
                         biased;
-                        _ = wait_for_barge_in(&barge_in_flag_tts) => {
+                        _ = cancel_tts.cancelled() => {
                             eprintln!("[barge-in] tts aborted at {:?}", release_t.elapsed());
                             player.stop();
                             return Ok(());
@@ -339,7 +341,7 @@ fn run_one_turn(
                                 );
                                 first_chunk_logged = true;
                                 set_cursor_idle();
-                                early_exit_tts.store(true, Ordering::Relaxed);
+                                early_exit_tts.cancel();
                             }
                             let samples: Vec<f32> = pcm_bytes
                                 .chunks_exact(2)
@@ -363,7 +365,7 @@ fn run_one_turn(
         while !player.empty() {
             tokio::select! {
                 biased;
-                _ = wait_for_barge_in(&barge_in_flag_tts) => {
+                _ = cancel_tts.cancelled() => {
                     eprintln!("[barge-in] tts aborted during playback at {:?}", release_t.elapsed());
                     player.stop();
                     return Ok(());
@@ -394,7 +396,7 @@ fn run_one_turn(
         resized_b64.as_str()
     };
 
-    let barge_in_flag_claude = barge_in.flag.clone();
+    let cancel_claude = barge_in.token();
     print!("claude: ");
     rt.block_on(async {
         // Per-iteration screenshot capture. Re-queries the active workspace
@@ -464,7 +466,7 @@ fn run_one_turn(
                 // user-visible work — so they fall through this match
                 // without flipping the flag.
                 if !matches!(action, Action::Integration { .. }) {
-                    early_exit_action.store(true, Ordering::Relaxed);
+                    early_exit_action.cancel();
                 }
                 match action {
                     Action::Point { x: px, y: py } => {
@@ -529,7 +531,7 @@ fn run_one_turn(
         // arrives, drop the future (cancels its HTTP streams).
         tokio::select! {
             biased;
-            _ = wait_for_barge_in(&barge_in_flag_claude) => {
+            _ = cancel_claude.cancelled() => {
                 eprintln!("[barge-in] claude aborted at {:?}", release_t.elapsed());
                 drop(sentence_tx);
             }
@@ -597,11 +599,11 @@ fn run_one_turn(
     // We use an AbortHandle (cloneable) so the select! branch can abort
     // the task without consuming the JoinHandle.
     let tts_abort = tts_handle.abort_handle();
-    let barge_in_flag_outer = barge_in.flag.clone();
+    let cancel_outer = barge_in.token();
     rt.block_on(async {
         tokio::select! {
             biased;
-            _ = wait_for_barge_in(&barge_in_flag_outer) => {
+            _ = cancel_outer.cancelled() => {
                 tts_abort.abort();
                 Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
             }
@@ -630,50 +632,45 @@ fn run_one_turn(
 }
 
 /// Barge-in detector: spawns a background thread that watches for the user
-/// pressing the hotkey AGAIN (after the current turn's release), and flips
-/// a shared atomic flag when it happens. Async code racing against this
-/// flag can abort their in-flight work.
+/// pressing the hotkey AGAIN (after the current turn's release), and cancels
+/// a shared CancellationToken when it happens. Async code can race against
+/// the token's `.cancelled()` future to abort their in-flight work.
 ///
-/// On drop, signals the watchdog thread to exit. Construct AFTER the
-/// hotkey has been released (RECORDING is false); the watchdog interprets
-/// the next true→false→true cycle as a new press.
+/// On drop, cancels the token to signal the watchdog thread to exit. By
+/// the time BargeIn drops, all tasks observing the token have completed,
+/// so the cleanup cancel doesn't affect them. Construct AFTER the hotkey
+/// has been released (RECORDING is false); the watchdog interprets the
+/// next true→false→true cycle as a new press.
 struct BargeIn {
-    flag: Arc<AtomicBool>,
-    shutdown: Arc<AtomicBool>,
+    cancel: CancellationToken,
 }
 
 impl BargeIn {
     fn start() -> Self {
-        let flag = Arc::new(AtomicBool::new(false));
-        let shutdown = Arc::new(AtomicBool::new(false));
-        let flag_w = flag.clone();
-        let shutdown_w = shutdown.clone();
+        let cancel = CancellationToken::new();
+        let cancel_w = cancel.clone();
         std::thread::spawn(move || {
-            // Watchdog: as soon as hotkey::is_recording() flips true again,
-            // flip the barge-in flag. Exits when shutdown is signalled.
-            while !shutdown_w.load(Ordering::Relaxed) {
+            while !cancel_w.is_cancelled() {
                 if hotkey::is_recording() {
-                    flag_w.store(true, Ordering::Relaxed);
+                    cancel_w.cancel();
                     return;
                 }
                 std::thread::sleep(Duration::from_millis(1));
             }
         });
-        BargeIn { flag, shutdown }
+        BargeIn { cancel }
+    }
+
+    /// Owned clone of the cancellation token. Each spawned task takes one
+    /// and awaits `.cancelled()` to learn about barge-in.
+    fn token(&self) -> CancellationToken {
+        self.cancel.clone()
     }
 }
 
 impl Drop for BargeIn {
     fn drop(&mut self) {
-        self.shutdown.store(true, Ordering::Relaxed);
-    }
-}
-
-/// Async helper: yields until the barge-in flag flips true. Used inside
-/// `tokio::select!` arms to race the flag against normal work.
-async fn wait_for_barge_in(flag: &Arc<AtomicBool>) {
-    while !flag.load(Ordering::Relaxed) {
-        tokio::time::sleep(Duration::from_millis(1)).await;
+        self.cancel.cancel();
     }
 }
 

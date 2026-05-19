@@ -54,6 +54,7 @@ dependencies = [
  "tiny-skia",
  "tokio",
  "tokio-tungstenite",
+ "tokio-util",
  "url",
  "uuid",
  "winit",
