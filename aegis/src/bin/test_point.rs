@@ -12,9 +12,9 @@ mod hotkey;
 mod providers;
 
 use std::time::Duration;
+use tokio_util::sync::CancellationToken;
 
 fn main() {
-    // Catch SIGUSR1/SIGUSR2 from Hyprland so they don't kill the process.
     hotkey::init().expect("signal handler setup");
 
     std::thread::spawn(|| {
@@ -27,42 +27,61 @@ fn main() {
             screenshot::active_workspace_geometry().expect("could not query monitor");
         println!("active monitor: {}x{} at ({}, {})", mw, mh, mx, my);
 
-        let (b64, _, _) =
-            screenshot::capture_for_claude(mx, my, mw as i32, mh as i32).expect("capture failed");
-
-        let prompt = "Find the most prominent UI element on screen and click it.";
-        println!("\nasking Claude (find_action only)...");
+        let (dw, dh) = screenshot::pick_declared_resolution(mw as i64, mh as i64);
+        let initial_b64 =
+            screenshot::capture_resized_for_claude(mx, my, mw as i32, mh as i32, dw, dh)
+                .expect("capture failed");
 
         let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
         let start = std::time::Instant::now();
-        let action = rt
-            .block_on(async {
-                claude
-                    .find_action(
-                        prompt,
-                        &b64,
-                        mx as i64,
-                        my as i64,
-                        mw as i64,
-                        mh as i64,
-                        |action| {
-                            use providers::claude::Action;
-                            if let Action::Click { x, y } = action {
-                                eprintln!(
-                                    "[cursor] firing at ({}, {}) at +{:?}",
-                                    x,
-                                    y,
-                                    start.elapsed()
-                                );
+        let result = rt.block_on(async {
+            let take_screenshot =
+                move || -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+                    let (cx, cy, cw, ch) = screenshot::active_workspace_geometry()
+                        .map(|g| (g.0, g.1, g.2 as i32, g.3 as i32))
+                        .unwrap_or((mx, my, mw as i32, mh as i32));
+                    let (dw, dh) = screenshot::pick_declared_resolution(cw as i64, ch as i64);
+                    screenshot::capture_resized_for_claude(cx, cy, cw, ch, dw, dh).map_err(
+                        |e| -> Box<dyn std::error::Error + Send + Sync> { e.to_string().into() },
+                    )
+                };
+            claude
+                .run_agent_loop(
+                    "Find the most prominent UI element on screen and click it.",
+                    &initial_b64,
+                    &[],
+                    None,
+                    mx as i64,
+                    my as i64,
+                    mw as i64,
+                    mh as i64,
+                    vec![],
+                    CancellationToken::new(),
+                    take_screenshot,
+                    |action| {
+                        use providers::claude::Action;
+                        eprintln!("[action +{:?}] {:?}", start.elapsed(), action);
+                        match action {
+                            Action::Point { x, y } | Action::Click { x, y } => {
                                 ai_cursor::point_at(x as i32, y as i32);
                             }
-                        },
-                    )
-                    .await
-            })
-            .expect("find_action failed");
+                            _ => {}
+                        }
+                    },
+                    |_name, _input| None,
+                    |_token| {},
+                )
+                .await
+        });
 
-        println!("[done] total: {:?}, action: {:?}", start.elapsed(), action);
+        match result {
+            Ok(text) => println!(
+                "[done] total: {:?}, final text: {:?}",
+                start.elapsed(),
+                text
+            ),
+            Err(e) => eprintln!("[error] {}", e),
+        }
     });
 
     ai_cursor::cursor(500, 500);

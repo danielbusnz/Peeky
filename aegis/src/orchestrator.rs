@@ -318,7 +318,7 @@ fn run_one_turn(
                 // Integration tools don't qualify — they're research, not
                 // user-visible work — so they fall through this match
                 // without flipping the flag.
-                if !matches!(action, Action::Integration { .. }) {
+                if !matches!(action, Action::Integration) {
                     early_exit_action.cancel();
                 }
                 match action {
@@ -355,7 +355,7 @@ fn run_one_turn(
                     // Integration tools are NOT dispatched here; run_agent_loop
                     // handles them post-stream via dispatch_integration so their
                     // return values reach Claude as tool_result content.
-                    Action::Integration { .. } => {}
+                    Action::Integration => {}
                 }
             },
             |name, input| {

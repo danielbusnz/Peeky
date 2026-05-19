@@ -4,7 +4,7 @@ use tokio_util::sync::CancellationToken;
 use std::time::Duration;
 
 /// A side-effecting action Claude requested via one of the tools in
-/// `find_action`. The streaming parser surfaces these in real time so the
+/// `run_agent_loop`. The streaming parser surfaces these in real time so the
 /// caller can fire them before the response is finished.
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -36,12 +36,11 @@ pub enum Action {
     /// `switch_to_window` custom tool. Target is a window class or title.
     SwitchToWindow { target: String },
     /// An integration tool call (Spotify, etc.) we don't have a dedicated
-    /// variant for. Dispatched at runtime by name via the integrations
-    /// registry. `input` is the raw JSON payload Claude emitted.
-    Integration {
-        name: String,
-        input: serde_json::Value,
-    },
+    /// variant for. Dispatched at runtime via the integrations registry;
+    /// the name + raw JSON payload are pulled from the outer SSE event, not
+    /// from this variant. The variant exists purely so the on_action
+    /// callback can tell integration tools apart from cursor-visible ones.
+    Integration,
 }
 
 pub struct Claude {
@@ -113,387 +112,6 @@ impl Claude {
 }
 
 impl Claude {
-    /// Action-dispatch call optimized for SPEED. Claude looks at the
-    /// screenshot, picks ONE tool (click, open_url, launch_app, or
-    /// switch_to_window), and invokes it. The prompt forces the model
-    /// to skip preamble and go straight to the tool call. Designed to
-    /// fire in parallel with [`Claude::describe_with_image`] so the
-    /// action lands before the spoken response is ready.
-    ///
-    /// `image_b64` is a base64-encoded JPEG captured at native resolution.
-    /// This function resizes it to the aspect-matched declared resolution
-    /// internally so click coords can be scaled back accurately.
-    ///
-    /// `on_action` fires the instant Claude finishes streaming the tool's
-    /// input JSON, so the caller can dispatch the side effect (cursor
-    /// move, browser open, app launch, etc.) mid-stream.
-    pub async fn find_action<F>(
-        &self,
-        prompt: &str,
-        image_b64: &str,
-        window_x: i64,
-        window_y: i64,
-        window_width: i64,
-        window_height: i64,
-        mut on_action: F,
-    ) -> Result<Option<Action>, Box<dyn std::error::Error + Send + Sync>>
-    where
-        F: FnMut(Action),
-    {
-        // `image_b64` is expected to be PRE-RESIZED to one of the Computer Use
-        // declared resolutions. We re-derive (declared_w, declared_h) from the
-        // window dimensions so the coord-scaling math stays consistent.
-        let (declared_w, declared_h) = pick_declared_resolution(window_width, window_height);
-        eprintln!(
-            "[timing-claude:find_action] image size ({} KB b64)",
-            image_b64.len() / 1024
-        );
-
-        let user_prompt = format!(
-            "The user said: \"{}\". Pick the single best action and invoke its tool. \
-             Skip directly to the tool call — no text, no preamble.",
-            prompt
-        );
-
-        let body = serde_json::json!({
-            "model": "claude-haiku-4-5",
-            // 500 gives ample headroom for any preamble Claude might emit
-            // before the tool call. Empirically the model uses ~60 tokens
-            // on "I'll click on..." text before the actual tool block.
-            "max_tokens": 500,
-            "stream": true,
-            "system": "You are a desktop voice-assistant action dispatcher. A screenshot \
-                       of the user's screen is in this message — do NOT call \
-                       action=\"screenshot\" on the computer tool, it is forbidden. \
-                       Pick exactly ONE tool based on the user's request:\n\
-                       - `computer` mouse_move(coordinate=[x,y]): the user wants to SEE \
-                         where something is on screen, no click (\"where is the play \
-                         button\", \"show me X\", \"find X\", \"point at X\"). Cursor \
-                         visually moves but no input is injected.\n\
-                       - `computer` left_click(coordinate=[x,y]): the user wants to \
-                         actually CLICK something visible on screen (\"click the play \
-                         button\", \"press X\", \"select that\"). Cursor moves AND a \
-                         real click fires.\n\
-                       - `computer` type(text=\"...\"): type text into the currently \
-                         focused field (\"type hello\", \"search for X\"). If the user \
-                         clearly wants the text submitted (e.g. \"search for X\", \"send \
-                         the message X\"), end `text` with \\n so Enter fires. For multi-\
-                         step intents like \"search YouTube for cats\" emit BOTH a \
-                         left_click on the search bar AND a type(text=\"cats\\n\") in the \
-                         same response — aegis will run them in order.\n\
-                       - `open_url`: to navigate to a URL (\"open the rust docs for map\", \
-                         \"pull up youtube.com\"). Use https:// URLs only.\n\
-                       - `launch_app`: to start an app that may not be running yet \
-                         (\"open spotify\", \"launch vs code\", \"open my terminal\"). \
-                         Pass the lowercase common name.\n\
-                       - `switch_to_window`: to focus an app the user already has open \
-                         (\"switch to firefox\", \"focus my terminal\"). Pass a window \
-                         class or title substring.\n\
-                       No preamble, no description, no explanation. Skip directly to \
-                       the tool call. If none fits, return plain text saying why.",
-            "tools": [
-                {
-                    "type": "computer_20250124",
-                    "name": "computer",
-                    "display_width_px": declared_w,
-                    "display_height_px": declared_h
-                },
-                {
-                    "name": "open_url",
-                    "description": "Open a URL in the user's default web browser. \
-                        Use ONLY for full https:// or http:// URLs the user explicitly \
-                        wants to navigate to. Do NOT use for clicking a link visible on \
-                        screen — use the computer tool's left_click for that.",
-                    "input_schema": {
-                        "type": "object",
-                        "properties": {
-                            "url": {
-                                "type": "string",
-                                "description": "Fully-qualified URL including scheme."
-                            }
-                        },
-                        "required": ["url"]
-                    }
-                },
-                {
-                    "name": "launch_app",
-                    "description": "Launch a desktop application by name. Use for queries \
-                        like 'open Spotify', 'launch Firefox', 'open my terminal'. The app \
-                        argument is the app's common name (e.g. 'spotify', 'firefox', \
-                        'code', 'kitty'). Do NOT use for switching to an already-running \
-                        app — use switch_to_window for that.",
-                    "input_schema": {
-                        "type": "object",
-                        "properties": {
-                            "app": {
-                                "type": "string",
-                                "description": "App name or .desktop file basename, lowercase."
-                            }
-                        },
-                        "required": ["app"]
-                    }
-                },
-                {
-                    "name": "switch_to_window",
-                    "description": "Focus an already-running application window. Use for \
-                        'switch to Firefox', 'focus my terminal' when the app is already \
-                        open. Do NOT use to launch a new app — use launch_app for that. \
-                        The target is a window class or title substring.",
-                    "input_schema": {
-                        "type": "object",
-                        "properties": {
-                            "target": {
-                                "type": "string",
-                                "description": "Window class (e.g. 'firefox') or title substring."
-                            }
-                        },
-                        "required": ["target"]
-                    }
-                }
-            ],
-            "messages": [{
-                "role": "user",
-                "content": [
-                    { "type": "image", "source": { "type": "base64", "media_type": "image/jpeg", "data": image_b64 } },
-                    { "type": "text", "text": user_prompt }
-                ]
-            }]
-        });
-
-        let t_send = std::time::Instant::now();
-        let response = self
-            .http
-            .post(&self.endpoint)
-            .header(&self.auth.0, &self.auth.1)
-            .header("anthropic-version", "2023-06-01")
-            .header("anthropic-beta", "computer-use-2025-01-24")
-            .header("content-type", "application/json")
-            .json(&body)
-            .send()
-            .await?;
-        eprintln!(
-            "[timing-claude:find_action] upload + headers received → {:?}",
-            t_send.elapsed()
-        );
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let text = response.text().await.unwrap_or_default();
-            return Err(format!("Computer Use API error {}: {}", status, text).into());
-        }
-
-        let mut stream = response.bytes_stream();
-        let mut buffer = String::new();
-        let mut tool_json_buffer = String::new();
-        let mut text_buffer = String::new();
-        let mut current_tool_name: Option<String> = None;
-        let mut last_action: Option<Action> = None;
-        let mut first_byte_logged = false;
-        let mut stop_reason: Option<String> = None;
-
-        while let Some(chunk) = stream.next().await {
-            if !first_byte_logged {
-                eprintln!(
-                    "[timing-claude:find_action] first SSE byte → {:?}",
-                    t_send.elapsed()
-                );
-                first_byte_logged = true;
-            }
-            let chunk = chunk?;
-            let s = std::str::from_utf8(&chunk)?;
-            buffer.push_str(s);
-
-            while let Some(idx) = buffer.find("\n\n") {
-                let frame: String = buffer.drain(..idx + 2).collect();
-                for line in frame.lines() {
-                    let Some(data) = line.strip_prefix("data: ") else {
-                        continue;
-                    };
-                    let Ok(event) = serde_json::from_str::<serde_json::Value>(data) else {
-                        continue;
-                    };
-
-                    match event["type"].as_str() {
-                        Some("content_block_start") => {
-                            if event["content_block"]["type"].as_str() == Some("tool_use") {
-                                current_tool_name =
-                                    event["content_block"]["name"].as_str().map(str::to_string);
-                                tool_json_buffer.clear();
-                            } else {
-                                current_tool_name = None;
-                            }
-                        }
-                        Some("content_block_delta") => {
-                            let delta_type = event["delta"]["type"].as_str();
-                            if delta_type == Some("input_json_delta") {
-                                if let Some(j) = event["delta"]["partial_json"].as_str() {
-                                    tool_json_buffer.push_str(j);
-                                }
-                            } else if delta_type == Some("text_delta") {
-                                if let Some(t) = event["delta"]["text"].as_str() {
-                                    text_buffer.push_str(t);
-                                }
-                            }
-                        }
-                        Some("content_block_stop") => {
-                            if let Some(name) = current_tool_name.take() {
-                                if !tool_json_buffer.is_empty() {
-                                    match serde_json::from_str::<serde_json::Value>(
-                                        &tool_json_buffer,
-                                    ) {
-                                        Ok(input) => {
-                                            if let Some(action) = parse_tool_call(
-                                                &name,
-                                                &input,
-                                                declared_w,
-                                                declared_h,
-                                                window_x,
-                                                window_y,
-                                                window_width,
-                                                window_height,
-                                            ) {
-                                                on_action(action.clone());
-                                                last_action = Some(action);
-                                            } else {
-                                                eprintln!(
-                                                    "[claude:find_action] tool '{}' input didn't match any handler: {}",
-                                                    name, tool_json_buffer
-                                                );
-                                            }
-                                        }
-                                        Err(e) => {
-                                            eprintln!(
-                                                "[claude:find_action] tool '{}' JSON didn't parse ({}): {}",
-                                                name, e, tool_json_buffer
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        Some("message_delta") => {
-                            if let Some(reason) = event["delta"]["stop_reason"].as_str() {
-                                stop_reason = Some(reason.to_string());
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
-
-        if last_action.is_none() {
-            eprintln!(
-                "[claude:find_action] NO ACTION returned. stop_reason={:?}, text_emitted={:?}",
-                stop_reason.as_deref().unwrap_or("(none)"),
-                if text_buffer.is_empty() {
-                    "(empty)".to_string()
-                } else {
-                    text_buffer.clone()
-                }
-            );
-        }
-
-        Ok(last_action)
-    }
-
-    /// Vision call optimized for the SPOKEN RESPONSE — Claude looks at the
-    /// screenshot and answers in plain text, streaming tokens as they arrive.
-    /// No tools, no Computer Use overhead. Designed to be fired in parallel
-    /// with [`Claude::find_action`].
-    ///
-    /// The `on_token` callback fires for each text delta so callers can pipe
-    /// partial text to a streaming TTS.
-    pub async fn describe_with_image<F>(
-        &self,
-        prompt: &str,
-        image_b64: &str,
-        mut on_token: F,
-    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>>
-    where
-        F: FnMut(&str),
-    {
-        eprintln!(
-            "[timing-claude:describe] image size ({} KB b64)",
-            image_b64.len() / 1024
-        );
-
-        let body = serde_json::json!({
-            "model": "claude-haiku-4-5",
-            "max_tokens": 200,
-            "stream": true,
-            "system": "You are aegis, a desktop voice assistant looking at the user's screen. Your responses will be spoken aloud. Respond conversationally in 1-2 sentences using only plain text — no markdown, no asterisks, no bullet points, no emojis.\n\nIMPORTANT: A parallel dispatcher already handles opening URLs, launching apps, switching windows, and clicking UI elements for the user. If the user is asking you to do one of those things, do NOT say you can't — assume it's being handled, and either acknowledge briefly (\"opening it now\") or just answer any non-action part of their question. Never tell the user you can't open apps, navigate to URLs, switch windows, or click things.",
-            "messages": [{
-                "role": "user",
-                "content": [
-                    { "type": "image", "source": { "type": "base64", "media_type": "image/jpeg", "data": image_b64 } },
-                    { "type": "text", "text": prompt }
-                ]
-            }]
-        });
-
-        let t_send = std::time::Instant::now();
-        let response = self
-            .http
-            .post(&self.endpoint)
-            .header(&self.auth.0, &self.auth.1)
-            .header("anthropic-version", "2023-06-01")
-            .header("content-type", "application/json")
-            .json(&body)
-            .send()
-            .await?;
-        eprintln!(
-            "[timing-claude:describe] upload + headers received → {:?}",
-            t_send.elapsed()
-        );
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let text = response.text().await.unwrap_or_default();
-            return Err(format!("Anthropic API error {}: {}", status, text).into());
-        }
-
-        let mut stream = response.bytes_stream();
-        let mut buffer = String::new();
-        let mut accumulated = String::new();
-        let mut first_byte_logged = false;
-
-        while let Some(chunk) = stream.next().await {
-            if !first_byte_logged {
-                eprintln!(
-                    "[timing-claude:describe] first SSE byte → {:?}",
-                    t_send.elapsed()
-                );
-                first_byte_logged = true;
-            }
-            let chunk = chunk?;
-            let s = std::str::from_utf8(&chunk)?;
-            buffer.push_str(s);
-
-            while let Some(idx) = buffer.find("\n\n") {
-                let frame: String = buffer.drain(..idx + 2).collect();
-                for line in frame.lines() {
-                    let Some(data) = line.strip_prefix("data: ") else {
-                        continue;
-                    };
-                    let Ok(event) = serde_json::from_str::<serde_json::Value>(data) else {
-                        continue;
-                    };
-                    if event["type"] == "content_block_delta"
-                        && event["delta"]["type"] == "text_delta"
-                    {
-                        if let Some(t) = event["delta"]["text"].as_str() {
-                            accumulated.push_str(t);
-                            on_token(t);
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(accumulated)
-    }
-
     /// Multi-step agent loop. Each iteration calls Claude with the running
     /// message history, executes any tool_use blocks via `on_action`, waits
     /// SETTLE_MS for the UI to settle, captures a fresh screenshot via
@@ -503,10 +121,9 @@ impl Claude {
     /// when MAX_STEPS is reached, or when the future is dropped by an
     /// outer barge-in select.
     ///
-    /// Returns the final text content from the last iteration — useful as
-    /// a spoken summary if you want to drop the parallel `describe_with_image`
-    /// later. For now voice.rs still runs describe in parallel and the
-    /// returned text is informational only.
+    /// Returns the final text content from the last iteration. voice.rs
+    /// pipes mid-chain text deltas to TTS via `on_text_delta` and treats
+    /// the final return value as the spoken summary.
     #[allow(clippy::too_many_arguments)]
     pub async fn run_agent_loop<F, S, D, T>(
         &self,
@@ -800,7 +417,7 @@ impl Claude {
                                             // Integration tools are dispatched post-stream
                                             // so their text results can feed back to Claude
                                             // as tool_result content. Skip on_action here.
-                                            Some(Action::Integration { .. }) => {}
+                                            Some(Action::Integration) => {}
                                             Some(action) => on_action(action),
                                             None => {
                                                 let action_field = input["action"]
@@ -1002,9 +619,9 @@ impl Claude {
     }
 }
 
-/// Shared system prompt used by `find_action` and `run_agent_loop`. Kept
-/// as a function (not a const) so it can be tweaked without breaking the
-/// const-eval rules around multi-line raw strings.
+/// System prompt for `run_agent_loop`. Kept as a function (not a const)
+/// so it can be tweaked without breaking the const-eval rules around
+/// multi-line raw strings.
 fn system_prompt_for_actions() -> &'static str {
     "You are a desktop voice-assistant action dispatcher.\n\n\
      CRITICAL: NEVER hedge or apologize for limitations. If a tool exists \
@@ -1346,9 +963,9 @@ fn extract_coordinate(value: &serde_json::Value) -> Option<(i64, i64)> {
 
 /// Custom tools (open_url, launch_app, switch_to_window) PLUS the
 /// integration fallback. Any tool name not in the built-in list is
-/// returned as `Action::Integration { name, input }` for runtime
-/// dispatch to whichever integration owns it (Spotify, etc.). If no
-/// integration owns it, the dispatcher logs the unknown name.
+/// returned as `Action::Integration` for runtime dispatch to whichever
+/// integration owns it (Spotify, etc.). If no integration owns it, the
+/// dispatcher logs the unknown name.
 fn parse_custom_tool(tool_name: &str, input: &serde_json::Value) -> Option<Action> {
     match tool_name {
         "open_url" => input["url"]
@@ -1360,9 +977,6 @@ fn parse_custom_tool(tool_name: &str, input: &serde_json::Value) -> Option<Actio
         "switch_to_window" => input["target"].as_str().map(|s| Action::SwitchToWindow {
             target: s.to_string(),
         }),
-        _ => Some(Action::Integration {
-            name: tool_name.to_string(),
-            input: input.clone(),
-        }),
+        _ => Some(Action::Integration),
     }
 }
