@@ -19,12 +19,12 @@
 // Visual check on Windows: while holding Insert, the cursor sprite should
 // be visible AND clicks should pass through to the app underneath.
 
-#[path = "../cursor/mod.rs"]
-mod cursor;
+#[path = "../ai_cursor/mod.rs"]
+mod ai_cursor;
 #[path = "../hotkey/mod.rs"]
 mod hotkey;
-#[path = "../mouse/mod.rs"]
-mod mouse;
+#[path = "../mouse_position/mod.rs"]
+mod mouse_position;
 #[path = "../painter.rs"]
 mod painter;
 #[path = "../screenshot/mod.rs"]
@@ -54,7 +54,7 @@ fn main() {
             log_t(&t, "press detected");
 
             // 1. Mouse position
-            match mouse::mouse_movement() {
+            match mouse_position::mouse_movement() {
                 Ok((x, y)) => eprintln!(
                     "[t={:>8.1?}] mouse at ({}, {})",
                     t.elapsed(),
@@ -113,10 +113,10 @@ fn main() {
             }
 
             // 3. Fly cursor to mouse position
-            if let Ok((mx, my)) = mouse::mouse_movement() {
-                cursor::point_at(mx as i32, my as i32);
+            if let Ok((mx, my)) = mouse_position::mouse_movement() {
+                ai_cursor::point_at(mx as i32, my as i32);
                 eprintln!(
-                    "[t={:>8.1?}] cursor::point_at({}, {}) fired",
+                    "[t={:>8.1?}] ai_cursor::point_at({}, {}) fired",
                     t.elapsed(),
                     mx,
                     my
@@ -134,7 +134,7 @@ fn main() {
     });
 
     // Main thread owns the cursor window forever.
-    cursor::cursor(500, 500);
+    ai_cursor::cursor(500, 500);
 }
 
 fn log_t(t: &Instant, msg: &str) {

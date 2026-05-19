@@ -170,7 +170,7 @@ fn start_tracking(
             ),
             _ => {
                 override_target = None;
-                let mouse = crate::mouse::mouse_movement()
+                let mouse = crate::mouse_position::mouse_movement()
                     .ok()
                     .map(|(mx, my)| (mx as f64 - mon_x, my as f64 - mon_y));
                 (mouse, true)

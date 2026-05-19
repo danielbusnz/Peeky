@@ -1,222 +1,72 @@
 use crate::audio;
-use crate::cursor;
+use crate::barge_in::BargeIn;
+use crate::ai_cursor;
 use crate::hotkey;
+use crate::intent::{is_integration_intent, wants_description};
 use crate::providers::claude::Claude;
 use crate::providers::stt_deepgram::SttDeepgram;
 use crate::providers::tts_cartesia::TtsCartesia;
 use crate::screenshot;
+use crate::voice_session::VoiceSession;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 #[cfg(feature = "hyprland")]
 fn set_cursor_idle() {
-    crate::cursor::set_state(crate::cursor::CursorState::Idle);
+    crate::ai_cursor::set_state(crate::ai_cursor::CursorState::Idle);
 }
 #[cfg(not(feature = "hyprland"))]
 fn set_cursor_idle() {}
 
-/// True when the transcript clearly points at an integration tool (Gmail,
-/// GitHub, Spotify) rather than something visual on screen. Used to skip
-/// the initial-screenshot upload on step 1 (cuts ~700ms off integration
-/// queries). Substring match against a hardcoded keyword list. Same risk
-/// of phrasing drift as the other heuristics — if it misses, we just keep
-/// the screenshot attached and the query still works.
-fn is_integration_intent(transcript: &str) -> bool {
-    let padded = format!(" {} ", transcript.trim().to_lowercase());
-    const KEYWORDS: &[&str] = &[
-        " mail",
-        " email",
-        " inbox",
-        " unread",
-        " pr ",
-        " prs",
-        " pull request",
-        " issue",
-        " issues",
-        " notification",
-        " github",
-        " repo",
-        " spotify",
-        " song",
-        " track",
-        " playlist",
-    ];
-    KEYWORDS.iter().any(|k| padded.contains(k))
-}
-
-/// Returns true if the user's query expects a spoken description from Claude.
-/// False for "just do X" commands — pointing AND action verbs — where the
-/// effect (cursor flying, browser opening, app launching) is the response
-/// and TTS narration would just be noise.
-///
-/// Conservative: defaults to true on anything ambiguous, so we err on the
-/// side of giving more info rather than less.
-fn wants_description(transcript: &str) -> bool {
-    let lower = transcript.trim().to_lowercase();
-    // Strip leading conversational filler AND polite-request scaffolding
-    // so phrases like "can you open up youtube please" resolve to a bare
-    // "open up youtube" before the action-prefix match.
-    let stripped = lower
-        .trim_start_matches("um, ")
-        .trim_start_matches("uh, ")
-        .trim_start_matches("ok. ")
-        .trim_start_matches("ok, ")
-        .trim_start_matches("okay. ")
-        .trim_start_matches("okay, ")
-        .trim_start_matches("no. ")
-        .trim_start_matches("no, ")
-        .trim_start_matches("hey, ")
-        .trim_start_matches("hey ")
-        .trim_start_matches("can you ")
-        .trim_start_matches("could you ")
-        .trim_start_matches("would you ")
-        .trim_start_matches("please ")
-        .trim_start_matches("i want to ")
-        .trim_start_matches("i'd like to ")
-        .trim_start_matches("i want you to ")
-        .trim_start_matches("let's ")
-        .trim_start_matches("lets ")
-        .trim_start_matches("just ");
-
-    // Integration-domain queries ALWAYS want spoken answers; the API result
-    // is prose Claude composes from JSON. "Open up my issues" matches the
-    // "open " action prefix below but is really "tell me my issues" — so
-    // short-circuit on these keywords before the action match runs.
-    let integration_keywords = [
-        " mail",
-        " email",
-        " inbox",
-        " messages",
-        " unread",
-        " pr ",
-        " prs",
-        " pull request",
-        " pull requests",
-        " issue",
-        " issues",
-        " notification",
-        " notifications",
-        " ci ",
-        " actions ",
-        " github",
-        " repo ",
-        " repos",
-    ];
-    let padded = format!(" {stripped} ");
-    if integration_keywords.iter().any(|k| padded.contains(k)) {
-        return true;
-    }
-
-    // Phrases that are unambiguously commands, not questions. Pointing verbs
-    // ("where is X", "click X") and action verbs ("open X", "launch X",
-    // "switch to X", "go to X") all dispatch through find_action's tools;
-    // narrating them adds latency without adding info.
-    let action_starts = [
-        // Pointing
-        "where is",
-        "where's",
-        "where are",
-        "click",
-        "click on",
-        "point at",
-        "point to",
-        // Actions
-        "open ",
-        "launch ",
-        "switch to ",
-        "switch ",
-        "go to ",
-        "navigate to ",
-        "focus ",
-        "start ",
-        // Media / integration commands — these route to tools like
-        // spotify_play, never narration.
-        "play ",
-        "pause",
-        "resume",
-        "skip",
-        "next track",
-        "previous track",
-    ];
-    !action_starts.iter().any(|p| stripped.starts_with(p))
-}
-
 pub fn run_loop(mic: audio::Mic, stt: SttDeepgram, claude: Claude, cartesia: TtsCartesia) {
-    // Tokio runtime owned by this thread. Streaming providers (Deepgram WS,
-    // Claude SSE, Cartesia SSE) all run via `rt.block_on(...)`.
-    let rt = tokio::runtime::Runtime::new().expect("failed to start tokio runtime");
-
-    // Pre-open HTTPS pools to Claude, Deepgram, and Cartesia so the first
-    // voice turn doesn't pay TCP+TLS handshake cost. Each warm() fires a
-    // fast-failing request on this runtime; the connection stays in the
-    // pool for the real call.
-    let t_warm = std::time::Instant::now();
-    rt.block_on(async {
-        let _ = tokio::join!(claude.warm(), stt.warm(), cartesia.warm());
-    });
-    eprintln!("[warmup] HTTP pools primed in {:?}", t_warm.elapsed());
-
-    // Warm up cpal once on this thread (cpal::Stream is !Send). The stream
-    // runs forever; per-turn we just install a sender to start forwarding.
-    let running_mic = mic.start();
-
-    // Open the audio output sink ONCE at startup. Per-turn we just hand
-    // out a fresh Player against this sink (~free).
-    let audio_out = audio::AudioOutput::init().expect("could not open audio output");
+    let session = VoiceSession::start(mic, stt, claude, cartesia);
 
     println!("aegis ready — hold SUPER+space to talk");
     loop {
         hotkey::wait_for_press();
 
         // Pre-capture the screenshot AND pre-resize for Computer Use, in
-        // parallel with recording + streaming STT. The resize is CPU-heavy
-        // (~2s for Lanczos3), so doing it here saves that time off the
-        // critical path.
-        // Capture + resize in parallel with recording + STT. The resize is
-        // now ~41ms (fast_image_resize SIMD), so this thread usually finishes
-        // before the user releases the hotkey. We return only the resized
-        // image now — describe used to need the native-res version, but it
-        // gets the same resized one and saves ~200ms of upload + ~1500 input
+        // parallel with recording + streaming STT. The resize is now ~41ms
+        // (fast_image_resize SIMD), so this thread usually finishes before
+        // the user releases the hotkey. Single-pass capture+resize+encode
+        // skips the full-res JPEG round-trip the old two-call path paid
+        // (~2-3s on 5K screens) and saves ~200ms of upload + ~1500 input
         // tokens per turn.
-        let screenshot_task = rt.spawn_blocking(
-            || -> Result<(i32, i32, u32, u32, String), String> {
-                let (x, y, w, h) =
-                    screenshot::active_workspace_geometry().map_err(|e| e.to_string())?;
-                let (declared_w, declared_h) =
-                    screenshot::pick_declared_resolution(w as i64, h as i64);
-                // Single-pass capture+resize+encode. Skips the full-res JPEG
-                // round-trip the old two-call path paid (~2-3s on 5K screens).
-                let resized_b64 = screenshot::capture_resized_for_claude(
-                    x, y, w as i32, h as i32, declared_w, declared_h,
-                )
-                .map_err(|e| e.to_string())?;
-                Ok((x, y, w, h, resized_b64))
-            },
-        );
+        let screenshot_task =
+            session
+                .rt
+                .spawn_blocking(|| -> Result<(i32, i32, u32, u32, String), String> {
+                    let (x, y, w, h) =
+                        screenshot::active_workspace_geometry().map_err(|e| e.to_string())?;
+                    let (declared_w, declared_h) =
+                        screenshot::pick_declared_resolution(w as i64, h as i64);
+                    let resized_b64 = screenshot::capture_resized_for_claude(
+                        x, y, w as i32, h as i32, declared_w, declared_h,
+                    )
+                    .map_err(|e| e.to_string())?;
+                    Ok((x, y, w, h, resized_b64))
+                });
 
-        if let Err(e) = run_one_turn(
-            &rt,
-            &running_mic,
-            &audio_out,
-            &stt,
-            &claude,
-            &cartesia,
-            screenshot_task,
-        ) {
+        if let Err(e) = run_one_turn(&session, screenshot_task) {
             eprintln!("voice turn failed: {}", e);
         }
     }
 }
 
 fn run_one_turn(
-    rt: &tokio::runtime::Runtime,
-    mic: &audio::LiveMic,
-    audio_out: &audio::AudioOutput,
-    stt: &SttDeepgram,
-    claude: &Claude,
-    cartesia: &TtsCartesia,
+    session: &VoiceSession,
     screenshot_task: tokio::task::JoinHandle<Result<(i32, i32, u32, u32, String), String>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // Unpack session resources as locals so the rest of the function body
+    // reads as if these were direct parameters. Pure shorthand; no copies.
+    let rt = &session.rt;
+    let mic = &session.mic;
+    let audio_out = &session.audio_out;
+    let stt = &session.stt;
+    let claude = &session.claude;
+    let cartesia = &session.cartesia;
+
+    // ────── phase 1: record + transcribe ──────
     // Set up audio streaming: cpal callback writes i16 chunks into a tokio
     // channel; Deepgram WS consumes them and returns the final transcript
     // when the audio sender is dropped.
@@ -243,6 +93,7 @@ fn run_one_turn(
     // channel and triggers Deepgram's Strategy B return.
     mic.capture_until_release(audio_tx);
 
+    // ────── phase 2: await transcript & screenshot ──────
     // T = 0: user just released the hotkey. Measure everything from here.
     let release_t = std::time::Instant::now();
     eprintln!("[timing] release → 0ms");
@@ -285,6 +136,7 @@ fn run_one_turn(
         eprintln!("[timing] screenshot ready → {:?}", release_t.elapsed());
     }
 
+    // ────── phase 3: set up state + spawn TTS streamer ──────
     // Barge-in detection: from this point on, watch for the user pressing
     // the hotkey AGAIN (new press during processing/playback). If detected,
     // abort all in-flight work and return immediately so the next loop
@@ -376,6 +228,7 @@ fn run_one_turn(
         Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
     });
 
+    // ────── phase 4: decide intent + run agent loop ──────
     // Whether the user's query expects a spoken answer at all. Point-and-click
     // style queries ("click X", "where is Y") get silent action; everything
     // else gets TTS of the agent loop's final text.
@@ -471,11 +324,11 @@ fn run_one_turn(
                 match action {
                     Action::Point { x: px, y: py } => {
                         set_cursor_idle();
-                        cursor::point_at(px as i32, py as i32);
+                        ai_cursor::point_at(px as i32, py as i32);
                     }
                     Action::Click { x: px, y: py } => {
                         set_cursor_idle();
-                        cursor::point_at(px as i32, py as i32);
+                        ai_cursor::point_at(px as i32, py as i32);
                         crate::actions::click_at(px, py);
                     }
                     Action::Type { text } => {
@@ -527,6 +380,7 @@ fn run_one_turn(
             },
         );
 
+        // ────── phase 5: race against barge-in + flush final text ──────
         // Race the agent loop against a barge-in signal. If a new press
         // arrives, drop the future (cancels its HTTP streams).
         tokio::select! {
@@ -593,6 +447,7 @@ fn run_one_turn(
     .map_err(|e| -> Box<dyn std::error::Error> { e.to_string().into() })?;
     println!();
 
+    // ────── phase 6: wait for TTS + cleanup ──────
     // Wait for tts_task to finish speaking everything before returning, but
     // also bail immediately on barge-in. (tts_task is also checking the
     // barge-in flag internally so it will stop the player on its own.)
@@ -629,49 +484,6 @@ fn run_one_turn(
     }
 
     Ok(())
-}
-
-/// Barge-in detector: spawns a background thread that watches for the user
-/// pressing the hotkey AGAIN (after the current turn's release), and cancels
-/// a shared CancellationToken when it happens. Async code can race against
-/// the token's `.cancelled()` future to abort their in-flight work.
-///
-/// On drop, cancels the token to signal the watchdog thread to exit. By
-/// the time BargeIn drops, all tasks observing the token have completed,
-/// so the cleanup cancel doesn't affect them. Construct AFTER the hotkey
-/// has been released (RECORDING is false); the watchdog interprets the
-/// next true→false→true cycle as a new press.
-struct BargeIn {
-    cancel: CancellationToken,
-}
-
-impl BargeIn {
-    fn start() -> Self {
-        let cancel = CancellationToken::new();
-        let cancel_w = cancel.clone();
-        std::thread::spawn(move || {
-            while !cancel_w.is_cancelled() {
-                if hotkey::is_recording() {
-                    cancel_w.cancel();
-                    return;
-                }
-                std::thread::sleep(Duration::from_millis(1));
-            }
-        });
-        BargeIn { cancel }
-    }
-
-    /// Owned clone of the cancellation token. Each spawned task takes one
-    /// and awaits `.cancelled()` to learn about barge-in.
-    fn token(&self) -> CancellationToken {
-        self.cancel.clone()
-    }
-}
-
-impl Drop for BargeIn {
-    fn drop(&mut self) {
-        self.cancel.cancel();
-    }
 }
 
 /// Find the byte index of the first sentence-ending punctuation followed by

@@ -1,14 +1,17 @@
 mod actions;
 mod audio;
-mod cursor;
+mod barge_in;
+mod ai_cursor;
 mod hotkey;
 mod integrations;
-mod mouse;
+mod intent;
+mod mouse_position;
 #[cfg(any(feature = "hyprland", feature = "winit-window"))]
 mod painter;
 mod providers;
 mod screenshot;
-mod voice;
+mod voice_session;
+mod orchestrator;
 
 fn main() {
     // One reqwest::Client shared across all HTTP providers. Internal Arc
@@ -39,7 +42,7 @@ fn main() {
     // cursor opens immediately. Pure diagnostics — never gates boot.
     std::thread::spawn(integrations::health::check_and_print);
 
-    std::thread::spawn(move || voice::run_loop(mic, stt, claude, cartesia));
+    std::thread::spawn(move || orchestrator::run_loop(mic, stt, claude, cartesia));
 
-    cursor::cursor(300, 300);
+    ai_cursor::cursor(300, 300);
 }

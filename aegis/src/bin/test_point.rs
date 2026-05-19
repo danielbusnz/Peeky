@@ -1,7 +1,7 @@
-#[path = "../cursor/mod.rs"]
-mod cursor;
-#[path = "../mouse/mod.rs"]
-mod mouse;
+#[path = "../ai_cursor/mod.rs"]
+mod ai_cursor;
+#[path = "../mouse_position/mod.rs"]
+mod mouse_position;
 #[path = "../painter.rs"]
 mod painter;
 #[path = "../screenshot/mod.rs"]
@@ -54,7 +54,7 @@ fn main() {
                                     y,
                                     start.elapsed()
                                 );
-                                cursor::point_at(x as i32, y as i32);
+                                ai_cursor::point_at(x as i32, y as i32);
                             }
                         },
                     )
@@ -65,5 +65,5 @@ fn main() {
         println!("[done] total: {:?}, action: {:?}", start.elapsed(), action);
     });
 
-    cursor::cursor(500, 500);
+    ai_cursor::cursor(500, 500);
 }

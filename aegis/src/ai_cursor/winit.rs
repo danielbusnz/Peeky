@@ -375,7 +375,7 @@ fn tick(
         }
         _ => {
             *override_target = None;
-            let mouse = crate::mouse::mouse_movement()
+            let mouse = crate::mouse_position::mouse_movement()
                 .ok()
                 .map(|(mx, my)| (mx as f64, my as f64));
             (mouse, true)
