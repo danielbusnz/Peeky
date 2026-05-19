@@ -25,6 +25,8 @@ mod cursor;
 mod hotkey;
 #[path = "../mouse/mod.rs"]
 mod mouse;
+#[path = "../painter.rs"]
+mod painter;
 #[path = "../screenshot/mod.rs"]
 mod screenshot;
 

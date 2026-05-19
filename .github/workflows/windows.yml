@@ -16,11 +16,19 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Type-check all targets
+        run: cargo check --all-targets --no-default-features --features winit-window
+
+      - name: Build aegis (main bin)
+        run: cargo build --no-default-features --features winit-window --bin aegis
+
       - name: Build cross-platform test_win
         run: cargo build --no-default-features --features winit-window --bin test_win
 
-      - name: Upload binary
+      - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
-          name: test_win-windows
-          path: target/debug/test_win.exe
+          name: aegis-windows
+          path: |
+            target/debug/aegis.exe
+            target/debug/test_win.exe

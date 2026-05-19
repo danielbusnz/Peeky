@@ -7,6 +7,7 @@ use std::sync::OnceLock;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::{Duration, Instant};
 
+use super::CursorState;
 use crate::painter::{LoadingSpinner, Painter, Soundwave, Sprite};
 
 const APP_ID: &str = "com.tabby.cursor-mvp";
@@ -22,13 +23,6 @@ const X_OFFSET: i32 = 20;
 const POINT_DURATION: Duration = Duration::from_secs(3);
 
 static CURSOR_SENDER: OnceLock<Sender<(i32, i32)>> = OnceLock::new();
-
-#[derive(Debug)]
-pub enum CursorState {
-    Idle,
-    Listening,
-    Loading,
-}
 
 static STATE_SENDER: OnceLock<Sender<CursorState>> = OnceLock::new();
 

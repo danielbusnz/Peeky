@@ -4,7 +4,7 @@ mod cursor;
 mod hotkey;
 mod integrations;
 mod mouse;
-#[cfg(feature = "hyprland")]
+#[cfg(any(feature = "hyprland", feature = "winit-window"))]
 mod painter;
 mod providers;
 mod screenshot;
@@ -28,7 +28,7 @@ fn main() {
     actions::check_input_injection_available();
 
     // Let the cursor overlay's Soundwave read live mic RMS.
-    #[cfg(feature = "hyprland")]
+    #[cfg(any(feature = "hyprland", feature = "winit-window"))]
     painter::set_audio_level_source(|| {
         f32::from_bits(audio::AUDIO_LEVEL.load(std::sync::atomic::Ordering::Relaxed))
     });

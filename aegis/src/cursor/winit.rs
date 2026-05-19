@@ -1,9 +1,8 @@
 //! winit-based cursor overlay. Covers Windows, macOS, and X11.
 //!
 //! Drawing pipeline mirrors the Cairo path in hyprland.rs:
-//!   PNG sprite → tiny-skia Pixmap → drawn with Transform::from_translate
-//!   at sub-pixel f32 coords + bilinear sampling → blitted to softbuffer's
-//!   surface as 0RGB u32 pixels.
+//!   drawable (sprite/soundwave/spinner) → tiny-skia Pixmap → dirty-region
+//!   copy to softbuffer's surface as 0RGB u32 pixels.
 
 use std::num::NonZeroU32;
 use std::sync::Arc;
@@ -12,26 +11,38 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::{Duration, Instant};
 
 use softbuffer::{Context, Surface};
-use tiny_skia::{FilterQuality, Pixmap, PixmapPaint, Transform};
+use tiny_skia::Pixmap;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Fullscreen, Window, WindowAttributes, WindowId, WindowLevel};
 
-// ── Portable constants (verbatim from hyprland.rs) ──────────────────────────
+use super::CursorState;
+use crate::painter::{DrawSkia, LoadingSpinner, Soundwave, SpriteSkia};
+
+// ── Portable constants (mirrors hyprland.rs) ────────────────────────────────
 // Time for cursor lag to halve. 91.7ms reproduces the previous 500Hz × 0.015
 // feel under a delta-time formulation, so the cursor is equally snappy at
 // 60Hz, 144Hz, or 500Hz tick rates.
 const SMOOTHING_HALF_LIFE: f64 = 0.0917;
-const Y_OFFSET: i32 = -50;
-const X_OFFSET: i32 = 10;
+const Y_OFFSET: i32 = -70;
+const X_OFFSET: i32 = 20;
 const POINT_DURATION: Duration = Duration::from_secs(3);
-const CURSOR_DISPLAY_SIZE: f32 = 18.0;
+const CURSOR_DISPLAY_SIZE: f64 = 18.0;
 
 const CURSOR_PNG: &[u8] = include_bytes!("../../assets/cursor.png");
 
-// ── Portable thread-safe channel ────────────────────────────────────────────
+// ── Portable thread-safe channels ───────────────────────────────────────────
 static CURSOR_SENDER: OnceLock<Sender<(i32, i32)>> = OnceLock::new();
+static STATE_SENDER: OnceLock<Sender<CursorState>> = OnceLock::new();
+
+/// Push a state change to the cursor overlay. Callable from any thread.
+/// No-op if `cursor()` hasn't been initialized yet.
+pub fn set_state(state: CursorState) {
+    if let Some(sender) = STATE_SENDER.get() {
+        let _ = sender.send(state);
+    }
+}
 
 /// Ask the cursor to fly to (x, y) and sit there for ~3 seconds, then resume
 /// following the mouse. Callable from any thread. No-op if `cursor()` hasn't
@@ -79,21 +90,23 @@ struct CursorApp {
     attrs: WindowAttributes,
     window: Option<Arc<Window>>,
     surface: Option<Surface<Arc<Window>, Arc<Window>>>,
-    /// Native-size sprite, decoded once at startup.
-    sprite: Pixmap,
-    /// Scale factor from native sprite size → CURSOR_DISPLAY_SIZE.
-    sprite_scale: f32,
     /// Fullscreen canvas we draw into each frame, then copy to softbuffer.
     canvas: Option<Pixmap>,
+    /// What we're drawing right now. Swapped on CursorState transitions.
+    drawable: Box<dyn DrawSkia>,
     receiver: Receiver<(i32, i32)>,
+    state_receiver: Receiver<CursorState>,
     cursor_x: f64,
     cursor_y: f64,
     override_target: Option<(i32, i32, Instant)>,
     last_tick: Option<Instant>,
-    /// Bounding box of where the sprite was drawn on the previous frame, so
-    /// we know which pixels to clear before drawing the new one. `None` means
-    /// no sprite was drawn last frame (or the canvas was just allocated).
+    /// Bounding box of where the drawable was painted on the previous frame,
+    /// so we know which pixels to clear before drawing the new one. `None`
+    /// means nothing was drawn last frame (or the canvas was just allocated).
     last_sprite_rect: Option<DirtyRect>,
+    /// Tracks the previous hotkey state so we can detect press/release edges
+    /// and send the matching CursorState transitions.
+    was_recording: bool,
     /// Frames rendered since `fps_log_start`. Reset every time we log.
     frame_count: u32,
     /// Start of the current 1-second FPS-counting window.
@@ -164,6 +177,29 @@ impl CursorApp {
         let canvas_w = canvas.width();
         let canvas_h = canvas.height();
 
+        // Hotkey edge detection: mirrors hyprland's on_press/on_release wiring.
+        // Pushed onto the same state channel that voice.rs / external callers
+        // use, so the swap logic below handles all sources uniformly.
+        let recording = crate::hotkey::is_recording();
+        if recording && !self.was_recording {
+            set_state(CursorState::Listening);
+        }
+        if !recording && self.was_recording {
+            set_state(CursorState::Loading);
+        }
+        self.was_recording = recording;
+
+        // Drain state changes; the latest one wins.
+        while let Ok(state) = self.state_receiver.try_recv() {
+            self.drawable = match state {
+                CursorState::Idle => {
+                    Box::new(SpriteSkia::from_png(CURSOR_PNG, CURSOR_DISPLAY_SIZE))
+                }
+                CursorState::Listening => Box::new(Soundwave::new()),
+                CursorState::Loading => Box::new(LoadingSpinner::new()),
+            };
+        }
+
         // Run one tick to advance position.
         let next = tick(
             &self.receiver,
@@ -173,15 +209,18 @@ impl CursorApp {
             &mut self.last_tick,
         );
 
-        // Compute the sprite's bounding box on the canvas for this frame (if
-        // anything will be drawn). 2px of padding absorbs bilinear bleed.
-        let sprite_pix_w = (self.sprite.width() as f32 * self.sprite_scale).ceil() as i32;
-        let sprite_pix_h = (self.sprite.height() as f32 * self.sprite_scale).ceil() as i32;
+        // Compute the drawable's bounding box for this frame. (x, y) is the
+        // visual center (matching hyprland's Drawable convention), so the box
+        // is [x - w/2, x + w/2] × [y - h/2, y + h/2]. 2px of padding absorbs
+        // antialias bleed on the edges.
+        let (dw, dh) = self.drawable.size();
+        let half_w = (dw / 2.0).ceil() as i32 + 2;
+        let half_h = (dh / 2.0).ceil() as i32 + 2;
         let new_rect = next.map(|(x, y)| DirtyRect {
-            x0: x.floor() as i32 - 2,
-            y0: y.floor() as i32 - 2,
-            x1: x.ceil() as i32 + sprite_pix_w + 2,
-            y1: y.ceil() as i32 + sprite_pix_h + 2,
+            x0: x.floor() as i32 - half_w,
+            y0: y.floor() as i32 - half_h,
+            x1: x.ceil() as i32 + half_w,
+            y1: y.ceil() as i32 + half_h,
         });
 
         // Dirty region = union of last-frame sprite + this-frame sprite, or
@@ -215,22 +254,10 @@ impl CursorApp {
                     data[row + row_start..row + row_end].fill(0);
                 }
 
-                // Draw the sprite at the new position. tiny-skia handles
-                // clipping if it extends past the canvas edge.
+                // Draw the active drawable. tiny-skia handles clipping if it
+                // extends past the canvas edge.
                 if let Some((x, y)) = next {
-                    let transform = Transform::from_scale(self.sprite_scale, self.sprite_scale)
-                        .post_translate(x as f32, y as f32);
-                    canvas.draw_pixmap(
-                        0,
-                        0,
-                        self.sprite.as_ref(),
-                        &PixmapPaint {
-                            quality: FilterQuality::Bilinear,
-                            ..Default::default()
-                        },
-                        transform,
-                        None,
-                    );
+                    self.drawable.draw_skia(canvas, x, y);
                 }
 
                 // Convert ONLY the dirty region from canvas RGBA bytes into
@@ -284,8 +311,11 @@ pub fn cursor(initial_x: i32, initial_y: i32) -> ! {
     let (sender, receiver) = channel::<(i32, i32)>();
     let _ = CURSOR_SENDER.set(sender);
 
-    let sprite = Pixmap::decode_png(CURSOR_PNG).expect("decode cursor.png");
-    let sprite_scale = CURSOR_DISPLAY_SIZE / sprite.width() as f32;
+    let (state_sender, state_receiver) = channel::<CursorState>();
+    let _ = STATE_SENDER.set(state_sender);
+
+    let initial_drawable: Box<dyn DrawSkia> =
+        Box::new(SpriteSkia::from_png(CURSOR_PNG, CURSOR_DISPLAY_SIZE));
 
     let attrs = Window::default_attributes()
         .with_transparent(true)
@@ -300,15 +330,16 @@ pub fn cursor(initial_x: i32, initial_y: i32) -> ! {
         attrs,
         window: None,
         surface: None,
-        sprite,
-        sprite_scale,
         canvas: None,
+        drawable: initial_drawable,
         receiver,
+        state_receiver,
         cursor_x: initial_x as f64,
         cursor_y: initial_y as f64,
         override_target: None,
         last_tick: None,
         last_sprite_rect: None,
+        was_recording: false,
         frame_count: 0,
         fps_log_start: None,
     };
@@ -318,7 +349,8 @@ pub fn cursor(initial_x: i32, initial_y: i32) -> ! {
 }
 
 /// Drains pending point_at commands, picks a target (override or mouse),
-/// runs the smoothing step, and returns the next (x, y) to render.
+/// runs the smoothing step, and returns the next (x, y) to render as the
+/// drawable's visual center.
 fn tick(
     receiver: &Receiver<(i32, i32)>,
     cursor_x: &mut f64,
