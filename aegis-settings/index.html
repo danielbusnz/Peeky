@@ -23,15 +23,12 @@
       .window {
         box-sizing: border-box;
         height: 100%;
-        background: rgba(255, 255, 255, 0.01);
-        border: 1px solid rgba(255, 255, 255, 0.5);
+        background: #1a1a1a;
+        border: none;
         border-radius: 12px;
         display: flex;
         flex-direction: column;
-        box-shadow:
-          inset 0 1px 0 rgba(255, 255, 255, 0.35),
-          inset 0 -1px 0 rgba(0, 0, 0, 0.25),
-          0 6px 20px rgba(0, 0, 0, 0.35);
+        box-shadow: none;
       }
 
       .screen {
@@ -44,30 +41,75 @@
       #screen-welcome {
         align-items: center;
         justify-content: center;
+        position: relative;
       }
 
-      .cursor-halo-outer {
-        width: 300px;
-        height: 300px;
+      @keyframes breathing {
+        0%, 100% { transform: scale(0.9); }
+        50%      { transform: scale(1.15); }
+      }
+
+      @keyframes breathing-slow {
+        0%, 100% { transform: scale(0.97); }
+        50%      { transform: scale(1.03); }
+      }
+
+      #outer-halo {
+        width: 280px;
+        height: 280px;
         border-radius: 50%;
         background: rgba(255, 140, 0, 0.05);
-        display: grid;
-        place-items: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: breathing-slow 5s ease-in-out infinite;
       }
 
-      .cursor-halo {
-        width: 200px;
-        height: 200px;
+      #breathing-button {
+        width: 180px;
+        height: 180px;
+        padding: 0;
+        border: 1px solid rgba(255, 140, 0, 0.1);
+        animation: breathing 5s ease-in-out infinite;
+        background: rgba(255, 140, 0, 0.1);
         border-radius: 50%;
-        background: rgba(255, 140, 0, 0.05);
-        display: grid;
-        place-items: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
 
-      #screen-welcome img {
+      @keyframes breathing-cursor {
+        0%, 100% { transform: scale(0.95); }
+        50%      { transform: scale(1.08); }
+      }
+
+      #cursor-button {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
         width: 96px;
         height: 96px;
-        image-rendering: pixelated;
+        background: transparent;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        appearance: none;
+        -webkit-appearance: none;
+        outline: none;
+        transition: transform 150ms ease-out;
+      }
+
+      #cursor-button:hover {
+        transform: translate(-50%, -50%) scale(1.2);
+      }
+
+      #cursor-button img {
+        width: 100%;
+        height: 100%;
+        animation: breathing-cursor 5s ease-in-out infinite;
+        pointer-events: none;
+        display: block;
       }
 
       .integrations {
@@ -103,11 +145,12 @@
   <body>
     <div class="window" data-tauri-drag-region>
       <section id="screen-welcome" class="screen">
-        <div class="cursor-halo-outer">
-          <div class="cursor-halo">
-            <img src="icons/cursor.png" alt="" />
-          </div>
+        <div id="outer-halo">
+          <div id="breathing-button"></div>
         </div>
+        <button id="cursor-button" aria-label="Start Aegis">
+          <img src="icons/cursor.svg" alt="" />
+        </button>
       </section>
 
       <section id="screen-settings" class="screen" hidden>
@@ -136,6 +179,12 @@
         });
       }
       // Call show("settings") from the console to preview the settings view.
+
+      document.getElementById("cursor-button").addEventListener("click", () => {
+        console.log("cursor clicked");
+        // TODO: invoke a Tauri command to launch the aegis binary in demo mode.
+        show("settings");
+      });
 
       document.querySelectorAll(".integration").forEach((btn) => {
         btn.addEventListener("click", () => {
