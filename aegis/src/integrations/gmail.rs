@@ -1,4 +1,5 @@
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt as _;
 use std::sync::OnceLock;
 
@@ -220,6 +221,10 @@ async fn init_auth() -> Result<&'static GmailAuth, String> {
     .await
     .map_err(|e| format!("[integration:gmail] auth build failed: {e}"))?;
 
+    // Lock the token file down to owner-read-only on Unix. On Windows the
+    // analogue is ACLs and the per-user AppData dir is already private to
+    // the current user, so we leave the file's default permissions alone.
+    #[cfg(unix)]
     if token_path.exists() {
         let _ = std::fs::set_permissions(&token_path, std::fs::Permissions::from_mode(0o600));
     }
