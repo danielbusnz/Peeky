@@ -7,10 +7,12 @@ mod chat;
 mod classifier;
 mod find_action;
 mod integration;
+mod memory;
 mod parsing;
 mod prompt;
 
 pub use classifier::Intent;
+pub use memory::MemoryStore;
 
 /// A side-effecting action Claude requested via one of the tools in
 /// `run_agent_loop`. The streaming parser surfaces these in real time so the
