@@ -17,19 +17,22 @@ pub fn keyword_classify(transcript: &str) -> Option<Intent> {
     let lower = transcript.trim().to_lowercase();
     let padded = format!(" {} ", lower);
 
-    // Order matters: more specific patterns first. Memory has very
-    // distinctive phrasing ("remember my X"), so it's hard to confuse
-    // with anything else. Integration has unambiguous service names.
-    // FindAction's pointing verbs are clear. Chat is the last resort
-    // for very common conversational openers.
+    // Order matters. Memory has the most distinctive phrasing
+    // ("remember my X" / "what's my Y"), no overlap risk. FindAction
+    // runs BEFORE Integration because location/click verbs are
+    // stronger signals than a bare service name appearing somewhere
+    // in the utterance: "where's my YouTube button" must route to
+    // FindAction (point at the button), NOT Integration (play a video).
+    // Integration matches plain service commands ("play X on Spotify",
+    // "check my email") that don't have a locator verb up front.
     if matches_memory(&padded, &lower) {
         return Some(Intent::Memory);
     }
-    if matches_integration(&padded, &lower) {
-        return Some(Intent::Integration);
-    }
     if matches_find_action(&padded, &lower) {
         return Some(Intent::FindAction);
+    }
+    if matches_integration(&padded, &lower) {
+        return Some(Intent::Integration);
     }
     if matches_chat(&padded, &lower) {
         return Some(Intent::Chat);
@@ -268,6 +271,31 @@ mod tests {
         assert_eq!(keyword_classify("can you help me with something"), None);
         assert_eq!(keyword_classify("I need to do a thing"), None);
         assert_eq!(keyword_classify(""), None);
+    }
+
+    #[test]
+    fn find_action_beats_integration_on_locator_verbs() {
+        // Real-world case: user asks "where's my YouTube button?" — they
+        // want the cursor to point at the button, NOT for YouTube to
+        // start playing a video. "Where's" is a stronger signal than
+        // "YouTube" being mentioned anywhere in the utterance.
+        assert_eq!(
+            keyword_classify("Where's my YouTube button?"),
+            Some(Intent::FindAction)
+        );
+        assert_eq!(
+            keyword_classify("where is the spotify icon"),
+            Some(Intent::FindAction)
+        );
+        assert_eq!(
+            keyword_classify("click the github tab"),
+            Some(Intent::FindAction)
+        );
+        // Bare service commands stay Integration as expected.
+        assert_eq!(
+            keyword_classify("play despacito on spotify"),
+            Some(Intent::Integration)
+        );
     }
 
     #[test]
