@@ -3,8 +3,11 @@
 //! loop, tool parsing, and system prompt live in submodules.
 
 mod agent_loop;
+mod classifier;
 mod parsing;
 mod prompt;
+
+pub use classifier::Intent;
 
 /// A side-effecting action Claude requested via one of the tools in
 /// `run_agent_loop`. The streaming parser surfaces these in real time so the
