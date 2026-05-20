@@ -19,6 +19,10 @@ jobs:
             libxkbcommon-dev \
             libwayland-dev \
             libasound2-dev \
+            libglib2.0-dev \
+            libxcb1-dev \
+            libxrandr-dev \
+            libxss-dev \
             pkg-config
 
       - uses: dtolnay/rust-toolchain@stable
