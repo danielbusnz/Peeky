@@ -1,6 +1,9 @@
 #[path = "../screenshot/mod.rs"]
 mod screenshot;
 
+#[path = "../tuning.rs"]
+mod tuning;
+
 #[path = "../providers/mod.rs"]
 mod providers;
 

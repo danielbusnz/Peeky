@@ -277,10 +277,7 @@ impl SttDeepgram {
 /// stuck.
 const POST_RELEASE_TIMEOUT_MS: u64 = 1200;
 
-/// After a non-empty is_final arrives, wait this long for additional
-/// is_final segments before considering Deepgram quiet. Deepgram splits
-/// longer utterances across segments; this catches the tail.
-const QUIESCENCE_MS: u64 = 200;
+use crate::tuning::STT_QUIESCENCE_MS as QUIESCENCE_MS;
 
 /// What happened when we processed a frame.
 enum FrameOutcome {

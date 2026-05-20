@@ -567,7 +567,7 @@ fn find_sentence_end(buf: &str) -> Option<usize> {
 /// for the full sentence. After the first send the caller switches back to
 /// `find_sentence_end` so the rest of the response keeps natural prosody.
 fn find_first_flush_point(buf: &str) -> Option<usize> {
-    const MIN_LEN: usize = 12;
+    use crate::tuning::TTS_FIRST_FLUSH_MIN_CHARS as MIN_LEN;
     let bytes = buf.as_bytes();
     for i in 0..bytes.len() {
         if matches!(bytes[i], b'.' | b'!' | b'?') {

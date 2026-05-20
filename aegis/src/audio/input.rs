@@ -12,19 +12,7 @@ use tokio::sync::mpsc::UnboundedSender;
 /// cpal callback. Range is 0.0 (silence) to ~1.0 (clipping).
 pub static AUDIO_LEVEL: AtomicU32 = AtomicU32::new(0);
 
-/// How much audio to keep in the pre-roll buffer. The cpal callback fills
-/// this ring buffer continuously while idle. On hotkey press, the contents
-/// are flushed into the forwarding channel BEFORE live audio starts, so
-/// the user's first syllable (typically spoken while still pressing the
-/// key) is captured.
-const PREROLL_MS: u64 = 800;
-
-/// How long to keep forwarding audio after the hotkey is released.
-/// Users typically release AS they finish the last word, and cpal delivers
-/// in 10-50ms chunks, so dropping the sender immediately clips the final
-/// syllable. Deepgram also needs some trailing context to commit the last
-/// word confidently. This window covers both.
-const POST_RELEASE_GRACE_MS: u64 = 800;
+use crate::tuning::{AUDIO_POST_RELEASE_GRACE_MS, AUDIO_PREROLL_MS};
 
 /// Cold mic handle: device + cached config. Picked at startup on the main
 /// thread so device-enumeration errors surface before any hotkey is held.
@@ -84,7 +72,7 @@ impl Mic {
         let output_channels: u16 = 1;
 
         let preroll_max_samples =
-            (self.sample_rate as usize) * (output_channels as usize) * (PREROLL_MS as usize) / 1000;
+            (self.sample_rate as usize) * (output_channels as usize) * (AUDIO_PREROLL_MS as usize) / 1000;
         let state = Arc::new(Mutex::new(MicState {
             current_tx: None,
             preroll: Preroll::new(preroll_max_samples),
@@ -170,7 +158,7 @@ impl Mic {
         stream.play().expect("failed to start stream");
         eprintln!(
             "[audio] cpal stream warmed up, {}ms pre-roll buffer active ({}ch {:?} → 1ch mono i16)",
-            PREROLL_MS, input_channels, sample_format
+            AUDIO_PREROLL_MS, input_channels, sample_format
         );
 
         LiveMic {
@@ -288,12 +276,12 @@ impl LiveMic {
         while crate::hotkey::is_recording() {
             thread::sleep(Duration::from_millis(1));
         }
-        // See POST_RELEASE_GRACE_MS docs for the why.
-        thread::sleep(Duration::from_millis(POST_RELEASE_GRACE_MS));
+        // See AUDIO_POST_RELEASE_GRACE_MS docs for the why.
+        thread::sleep(Duration::from_millis(AUDIO_POST_RELEASE_GRACE_MS));
         self.state.lock().unwrap().current_tx = None;
         eprintln!(
             "[audio] forwarding stopped ({}ms post-release grace included)",
-            POST_RELEASE_GRACE_MS
+            AUDIO_POST_RELEASE_GRACE_MS
         );
     }
 }

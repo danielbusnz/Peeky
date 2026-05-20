@@ -47,9 +47,10 @@ impl Claude {
         D: FnMut(&str, &serde_json::Value) -> Option<String>,
         T: FnMut(&str),
     {
-        const MAX_STEPS: usize = 10;
-        const SETTLE_MS: u64 = 600;
-        const KEEP_RECENT_SCREENSHOTS: usize = 3;
+        use crate::tuning::{
+            AGENT_KEEP_RECENT_SCREENSHOTS as KEEP_RECENT_SCREENSHOTS,
+            AGENT_MAX_STEPS as MAX_STEPS, AGENT_SETTLE_MS as SETTLE_MS,
+        };
 
         let (declared_w, declared_h) = pick_declared_resolution(window_width, window_height);
 

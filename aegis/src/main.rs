@@ -10,6 +10,7 @@ mod mouse_position;
 mod painter;
 mod providers;
 mod screenshot;
+mod tuning;
 mod voice_session;
 mod orchestrator;
 
