@@ -1,3 +1,16 @@
+//! Gmail integration. OAuth 2.0 with locally-cached refresh tokens, so
+//! the first run opens a browser for auth and every subsequent process
+//! reuses the cached token. Tools cover search, read, send, draft,
+//! unread-count, mark-read, archive.
+//!
+//! Setup the user does once:
+//! ```text
+//! AEGIS_GMAIL_CLIENT_ID=...
+//! AEGIS_GMAIL_CLIENT_SECRET=...
+//! ```
+//! placed in `.env`. First `cargo run` opens a browser and writes the
+//! refresh token to `~/.config/aegis/gmail_token.json` (mode 0600 on Unix).
+
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt as _;
@@ -5,6 +18,9 @@ use std::sync::OnceLock;
 
 const GMAIL_BASE: &str = "https://gmail.googleapis.com/gmail/v1/users/me";
 
+/// OAuth scopes the user grants. `modify` covers archive/mark-read,
+/// `send`/`compose` cover outbound. Read-only is included so a future
+/// user who only wants triage can downscope.
 const SCOPES: &[&str] = &[
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.modify",
@@ -12,6 +28,9 @@ const SCOPES: &[&str] = &[
     "https://www.googleapis.com/auth/gmail.send",
 ];
 
+/// True iff both OAuth env vars are set. Hides Gmail tools from Claude's
+/// tools array when false so the agent doesn't call something that would
+/// fail at runtime.
 pub fn is_available() -> bool {
     dotenvy::dotenv().ok();
     let id = std::env::var("AEGIS_GMAIL_CLIENT_ID").unwrap_or_default();
@@ -19,6 +38,7 @@ pub fn is_available() -> bool {
     !id.is_empty() && !secret.is_empty()
 }
 
+/// Tool schemas this integration adds to Claude's tools array.
 pub fn tools() -> Vec<serde_json::Value> {
     vec![
         serde_json::json!({
@@ -118,6 +138,9 @@ pub fn tools() -> Vec<serde_json::Value> {
     ]
 }
 
+/// Returns `Some(json)` if this integration owned the tool, `None`
+/// otherwise. `json` is the Gmail API response (or `{"error": "..."}`).
+/// Blocks the caller; each command runs through the cached tokio runtime.
 pub fn dispatch(name: &str, input: &serde_json::Value) -> Option<String> {
     match name {
         "gmail_search" => Some(block(cmd_search(input))),

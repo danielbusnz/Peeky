@@ -108,6 +108,9 @@ impl MemoryStore {
     }
 }
 
+/// Read the JSONL store and build the latest-wins view. Missing file is
+/// not an error (returns empty). Malformed lines are silently skipped so
+/// a single corrupt entry can't kill the whole session.
 fn load_facts(path: &PathBuf) -> std::io::Result<Vec<(String, String)>> {
     let content = match std::fs::read_to_string(path) {
         Ok(s) => s,

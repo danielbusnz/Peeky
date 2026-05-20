@@ -287,18 +287,15 @@ impl Claude {
                                 } else if delta_type == Some("text_delta")
                                     && let Some(t) = event["delta"]["text"].as_str() {
                                         text_content.push_str(t);
-                                        // Always forward to the caller. The
-                                        // orchestrator gates speech via
-                                        // wants_description(transcript), so
-                                        // action queries already drop these
-                                        // deltas one layer up.
+                                        // The orchestrator pipes each delta
+                                        // through StreamHelper for
+                                        // sentence-boundary detection before
+                                        // pushing to TTS.
                                         on_text_delta(t);
                                     }
                             }
                             Some("message_stop") | Some("ping") => {
-                                // Expected, no-op. Listed so the catch-all
-                                // below can surface anything NEW we're not
-                                // handling yet.
+                                // Expected events with no action required.
                             }
                             Some("content_block_stop") => {
                                 if let (Some(name), Some(id)) =
