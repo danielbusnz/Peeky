@@ -29,6 +29,8 @@ mod screenshot;
 mod tuning;
 #[path = "../providers/mod.rs"]
 mod providers;
+#[path = "../intent.rs"]
+mod intent;
 
 use providers::claude::{Claude, Intent};
 use providers::stt_deepgram::SttDeepgram;
@@ -220,24 +222,34 @@ fn run_once(
         };
     }
 
-    // ── stage 2: classifier ──
+    // ── stage 2: classifier (hybrid — same path as orchestrator) ──
     let t_classify = Instant::now();
-    let intent = match rt.block_on(claude.classify_intent(&transcript)) {
-        Ok(i) => i,
-        Err(e) => {
-            eprintln!("[classify] error: {e}");
-            return RunResult {
-                transcript: Some(transcript),
-                intent: None,
-                stt: stt_tail,
-                classify: None,
-                find_action: None,
-                total: None,
-                fired: false,
+    let (intent, classifier_path) = match intent::keyword_classify(&transcript) {
+        Some(i) => (Some(i), "keyword"),
+        None => {
+            let llm = match rt.block_on(claude.classify_intent(&transcript)) {
+                Ok(i) => i,
+                Err(e) => {
+                    eprintln!("[classify] error: {e}");
+                    return RunResult {
+                        transcript: Some(transcript),
+                        intent: None,
+                        stt: stt_tail,
+                        classify: None,
+                        find_action: None,
+                        total: None,
+                        fired: false,
+                    };
+                }
             };
+            (llm, "llm")
         }
     };
     let classify_dur = t_classify.elapsed();
+    eprintln!(
+        "[classifier] path={} → {:?} ({:?})",
+        classifier_path, intent, classify_dur
+    );
 
     // ── stage 3: find_action (only if intent says so) ──
     let (find_dur, fired) = match intent {
