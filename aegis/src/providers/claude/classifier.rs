@@ -202,7 +202,7 @@ does it talk about X\", \"where can I find X\". Also: \"click X\", \
 \"show me X\", \"find X\", \"point at X\", \"point to X\", \"press X\", \
 \"select X\", \"type X\", \"scroll up/down\", \"navigate to X\". \
 Default to find_action whenever the request is about LOCATING or \
-INTERACTING with content the user can already see — even if the \
+INTERACTING with content the user can already see, even if the \
 phrasing is conversational like \"where does it say...\" or \"can you \
 show me where...\".\n\
 - integration: user wants to use a connected service (Gmail, Spotify, \
@@ -223,7 +223,7 @@ request clearly contains 2+ chained actions; otherwise prefer \
 find_action or integration.\n\
 \n\
 Be decisive. If the request fits more than one category, pick the most \
-specific one. Always call the tool — never refuse to classify."
+specific one. Always call the tool. Never refuse to classify."
 }
 
 #[cfg(test)]

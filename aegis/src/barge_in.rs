@@ -7,21 +7,17 @@ use crate::hotkey;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
-/// Spawns a background thread that watches for the user pressing the hotkey
-/// AGAIN (after the current turn's release), and cancels a shared
-/// CancellationToken when it happens. Async code can race against the
-/// token's `.cancelled()` future to abort their in-flight work.
-///
-/// On drop, cancels the token to signal the watchdog thread to exit. By
-/// the time BargeIn drops, all tasks observing the token have completed,
-/// so the cleanup cancel doesn't affect them. Construct AFTER the hotkey
-/// has been released (RECORDING is false); the watchdog interprets the
-/// next true→false→true cycle as a new press.
+/// Holds a `CancellationToken` that fires when the user presses the hotkey
+/// during the current voice turn. Share clones to all tasks that should
+/// abort on barge-in via `.cancelled()`.
 pub struct BargeIn {
     cancel: CancellationToken,
 }
 
 impl BargeIn {
+    /// Spawns the watchdog thread. Construct AFTER the hotkey has been
+    /// released. Otherwise the watchdog sees the still-pressed state and
+    /// fires immediately. Fires once, then the thread exits.
     pub fn start() -> Self {
         let cancel = CancellationToken::new();
         let cancel_w = cancel.clone();
@@ -31,20 +27,24 @@ impl BargeIn {
                     cancel_w.cancel();
                     return;
                 }
+                // 1ms keeps barge-in latency below user-perceptual floor
+                // without burning a measurable CPU slice.
                 std::thread::sleep(Duration::from_millis(1));
             }
         });
         BargeIn { cancel }
     }
 
-    /// Owned clone of the cancellation token. Each spawned task takes one
-    /// and awaits `.cancelled()` to learn about barge-in.
+    /// Owned clone, suitable to `move` into a spawned task.
     pub fn token(&self) -> CancellationToken {
         self.cancel.clone()
     }
 }
 
 impl Drop for BargeIn {
+    /// Cancels the token to signal the watchdog thread to exit. Safe
+    /// because all task observers should have finished by the time
+    /// BargeIn drops at the end of a voice turn.
     fn drop(&mut self) {
         self.cancel.cancel();
     }

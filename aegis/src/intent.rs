@@ -1,6 +1,6 @@
 //! Fast-path keyword intent classifier. Returns Some(Intent) when the
 //! transcript matches a strong, unambiguous pattern. Returns None for
-//! anything ambiguous — the caller falls through to the LLM classifier.
+//! anything ambiguous. The caller falls through to the LLM classifier.
 //!
 //! Design choice: prefer false negatives over false positives. A miss
 //! (None) costs ~700ms (LLM call) but the routing is still correct. A
@@ -41,7 +41,7 @@ pub fn keyword_classify(transcript: &str) -> Option<Intent> {
 }
 
 /// Memory: "remember my X is Y" / "what's my Z" / "do you remember".
-/// Note "what's my..." vs "what's your..." — the former is Memory,
+/// Note "what's my..." vs "what's your...": the former is Memory,
 /// the latter is Chat. Order in keyword_classify keeps them disjoint.
 fn matches_memory(padded: &str, lower: &str) -> bool {
     if lower.starts_with("remember ")
@@ -51,7 +51,7 @@ fn matches_memory(padded: &str, lower: &str) -> bool {
         return true;
     }
     // Recall phrasings. Use padded to avoid false positives like "what's
-    // my friend's number" — keep these narrow.
+    // my friend's number". Keep these narrow.
     if lower.starts_with("what's my ")
         || lower.starts_with("what is my ")
         || lower.starts_with("do you remember ")
@@ -146,7 +146,7 @@ fn matches_find_action(padded: &str, lower: &str) -> bool {
     if starts.iter().any(|p| lower.starts_with(p)) {
         return true;
     }
-    // UI-element references — very strong visual signal.
+    // UI-element references. Very strong visual signal.
     let ui_refs = [
         " the button",
         " the icon",
@@ -163,7 +163,7 @@ fn matches_find_action(padded: &str, lower: &str) -> bool {
 }
 
 /// Chat: common conversational openers about Claude itself or general
-/// information. Keep narrow — Chat is the LLM's default for ambiguous
+/// information. Keep narrow; Chat is the LLM's default for ambiguous
 /// queries, so we only short-circuit the very common patterns here.
 fn matches_chat(_padded: &str, lower: &str) -> bool {
     let starts = [
@@ -275,7 +275,7 @@ mod tests {
 
     #[test]
     fn find_action_beats_integration_on_locator_verbs() {
-        // Real-world case: user asks "where's my YouTube button?" — they
+        // Real-world case: user asks "where's my YouTube button?". They
         // want the cursor to point at the button, NOT for YouTube to
         // start playing a video. "Where's" is a stronger signal than
         // "YouTube" being mentioned anywhere in the utterance.

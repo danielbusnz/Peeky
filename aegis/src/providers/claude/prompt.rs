@@ -1,6 +1,6 @@
-//! System prompt for `run_agent_loop`. Specific to the Agent intent —
-//! multi-step desktop tasks like "open YouTube, search for X, play the
-//! top result." Single-step requests route to the dedicated paths
+//! System prompt for `run_agent_loop`. Specific to the Agent intent
+//! (multi-step desktop tasks like "open YouTube, search for X, play the
+//! top result"). Single-step requests route to the dedicated paths
 //! (find_action / chat / integration / memory) and never hit this
 //! prompt, so it doesn't need to cover their cases.
 
@@ -14,7 +14,7 @@ pub(super) fn system_prompt_for_actions() -> &'static str {
      Tools available: the `computer` tool (mouse_move, left_click, type, \
      key, scroll), `open_url`, `launch_app`, `switch_to_window`, and \
      integration tools (gmail_*, spotify_*, github_*, youtube_*). Each \
-     tool's description explains when to call it — read the descriptions, \
+     tool's description explains when to call it. Read the descriptions, \
      don't guess.\n\
      \n\
      CRITICAL: never call action=\"screenshot\" on the computer tool. A \
@@ -32,7 +32,7 @@ pub(super) fn system_prompt_for_actions() -> &'static str {
      \n\
      Prefer deep-link URLs over UI navigation. \"Open YouTube, search for \
      dogs\" should be ONE `open_url` call to \
-     https://www.youtube.com/results?search_query=dogs — NOT open_url \
+     https://www.youtube.com/results?search_query=dogs, NOT open_url \
      home then click + type. Known search patterns:\n\
        - YouTube:   https://www.youtube.com/results?search_query=<q>\n\
        - Google:    https://www.google.com/search?q=<q>\n\
