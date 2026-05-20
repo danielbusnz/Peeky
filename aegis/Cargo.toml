@@ -84,6 +84,10 @@ name = "test_stt_bench"
 required-features = ["hyprland"]
 
 [[bin]]
+name = "test_find_action_bench"
+required-features = ["hyprland"]
+
+[[bin]]
 name = "test_vision"
 required-features = ["hyprland"]
 

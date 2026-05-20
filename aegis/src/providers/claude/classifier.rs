@@ -196,10 +196,17 @@ the user's transcript and pick ONE category by calling the `classify` \
 tool. Never respond with plain text.\n\
 \n\
 Categories:\n\
-- find_action: user wants the cursor to move or click something visible \
-on their screen RIGHT NOW. Phrases like \"where is X\", \"click X\", \
-\"show me X\", \"find X\", \"point at X\", \"press X\", \"select X\", \
-\"type X\", \"scroll up/down\".\n\
+- find_action: user wants the cursor to move to, or interact with, \
+something visible on their screen RIGHT NOW. ANY \"where\" question \
+about visible content counts (the cursor goes there): \"where is X\", \
+\"where does it say X\", \"where on the page is X\", \"where on screen \
+does it talk about X\", \"where can I find X\". Also: \"click X\", \
+\"show me X\", \"find X\", \"point at X\", \"point to X\", \"press X\", \
+\"select X\", \"type X\", \"scroll up/down\", \"navigate to X\". \
+Default to find_action whenever the request is about LOCATING or \
+INTERACTING with content the user can already see — even if the \
+phrasing is conversational like \"where does it say...\" or \"can you \
+show me where...\".\n\
 - integration: user wants to use a connected service (Gmail, Spotify, \
 GitHub, YouTube) without looking at the screen. Phrases like \"play \
 <song>\", \"pause\", \"skip\", \"check my email\", \"what's my unread \

@@ -10,6 +10,7 @@ use crate::ai_cursor;
 use crate::audio;
 use crate::barge_in::BargeIn;
 use crate::hotkey;
+use crate::intent::keyword_classify;
 use crate::providers::claude::{Claude, Intent};
 use crate::providers::stt_deepgram::SttDeepgram;
 use crate::providers::tts_cartesia::TtsCartesia;
@@ -106,19 +107,22 @@ fn run_one_turn(
         return Ok(());
     }
 
-    // Fire classifier in parallel with the screenshot join. By the time we
-    // need to branch we'll have both. Classifier is a single small Haiku
-    // call (~250-400ms after cache warms); screenshot is usually already
-    // done by now, so this is overlapping with whatever still needs to
-    // finish.
-    let classifier_task = {
+    // Hybrid classification: try the local keyword classifier first
+    // (sub-millisecond). If it returns Some, we skip the LLM round-trip
+    // entirely. If it returns None, fall through to the LLM classifier
+    // (~700ms) — spawned in parallel with the screenshot join so the
+    // wait at least overlaps with the screenshot resize.
+    let keyword_intent = keyword_classify(&transcript);
+    let classifier_task = if keyword_intent.is_some() {
+        None
+    } else {
         let claude = claude.clone();
         let transcript_for_classifier = transcript.clone();
-        rt.spawn(async move {
+        Some(rt.spawn(async move {
             claude
                 .classify_intent(&transcript_for_classifier)
                 .await
-        })
+        }))
     };
 
     let t_ss_join = std::time::Instant::now();
@@ -138,12 +142,31 @@ fn run_one_turn(
         eprintln!("[timing] screenshot ready → {:?}", release_t.elapsed());
     }
 
-    let intent_result = rt
-        .block_on(classifier_task)
-        .map_err(|e| -> Box<dyn std::error::Error> {
-            format!("classifier task panicked: {e}").into()
-        })?
-        .map_err(|e| -> Box<dyn std::error::Error> { e.to_string().into() })?;
+    let intent_result = match (keyword_intent, classifier_task) {
+        (Some(i), _) => {
+            eprintln!(
+                "[classifier] keyword match → {:?} at {:?} (LLM skipped)",
+                i,
+                release_t.elapsed()
+            );
+            Some(i)
+        }
+        (None, Some(task)) => {
+            let llm_intent = rt
+                .block_on(task)
+                .map_err(|e| -> Box<dyn std::error::Error> {
+                    format!("classifier task panicked: {e}").into()
+                })?
+                .map_err(|e| -> Box<dyn std::error::Error> { e.to_string().into() })?;
+            eprintln!(
+                "[classifier] LLM fallback → {:?} at {:?}",
+                llm_intent,
+                release_t.elapsed()
+            );
+            llm_intent
+        }
+        (None, None) => None, // unreachable in practice — guard anyway
+    };
     eprintln!(
         "[timing] classifier ready → {:?}: {:?}",
         release_t.elapsed(),
