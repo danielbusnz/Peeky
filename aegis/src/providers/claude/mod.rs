@@ -3,6 +3,7 @@
 //! loop, tool parsing, and system prompt live in submodules.
 
 mod agent_loop;
+mod chat;
 mod classifier;
 mod find_action;
 mod parsing;
