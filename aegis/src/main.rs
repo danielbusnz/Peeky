@@ -1,18 +1,18 @@
 mod actions;
+mod ai_cursor;
 mod audio;
 mod barge_in;
-mod ai_cursor;
 mod hotkey;
 mod integrations;
 mod intent;
 mod mouse_position;
+mod orchestrator;
 #[cfg(any(feature = "hyprland", feature = "winit-window"))]
 mod painter;
 mod providers;
 mod screenshot;
 mod tuning;
 mod voice_session;
-mod orchestrator;
 
 fn main() {
     // Shared reqwest::Client. Internal Arc means clones reuse the same
