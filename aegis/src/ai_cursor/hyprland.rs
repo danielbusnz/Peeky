@@ -1,3 +1,13 @@
+//! Hyprland cursor overlay. A GTK4 layer-shell window draws aegis's
+//! sprite on top of every other window, click-through so the user's
+//! input still reaches the app underneath. The window covers the whole
+//! monitor; the sprite gets drawn at sub-pixel coords inside.
+//!
+//! Two state sources update the sprite each tick: the live system mouse
+//! position (default behavior) and explicit `point_at` overrides from
+//! Claude (cursor flies to a coordinate, sits for ~3s, then resumes
+//! following the mouse).
+
 use gtk::gdk::Display;
 use gtk::prelude::*;
 use gtk::{Application, ApplicationWindow, CssProvider, glib};
@@ -22,10 +32,17 @@ const Y_OFFSET: i32 = -70;
 const X_OFFSET: i32 = 20;
 const POINT_DURATION: Duration = Duration::from_secs(3);
 
+/// Channel for `point_at` calls. Initialized inside `cursor()` so any
+/// thread can ask the GTK thread to fly the sprite without sharing a
+/// `!Send` GTK reference.
 static CURSOR_SENDER: OnceLock<Sender<(i32, i32)>> = OnceLock::new();
 
+/// Channel for cursor-state transitions (Idle/Listening/Loading).
+/// Same shape as CURSOR_SENDER and same reason.
 static STATE_SENDER: OnceLock<Sender<CursorState>> = OnceLock::new();
 
+/// Push a CursorState transition onto the GTK thread. Callable from any
+/// thread. No-op until `cursor()` has installed the receiver.
 pub fn set_state(state: CursorState) {
     if let Some(sender) = STATE_SENDER.get() {
         let _ = sender.send(state);
@@ -41,6 +58,9 @@ pub fn point_at(x: i32, y: i32) {
     }
 }
 
+/// Initialize and run the cursor overlay. Blocks the calling thread for
+/// the rest of the process (GTK's main loop). `(x, y)` is the initial
+/// sprite position in absolute screen pixels.
 pub fn cursor(x: i32, y: i32) -> glib::ExitCode {
     let (sender, receiver) = channel();
     let _ = CURSOR_SENDER.set(sender);
@@ -77,6 +97,8 @@ pub fn cursor(x: i32, y: i32) -> glib::ExitCode {
     app.run()
 }
 
+/// Make the window background fully transparent so only the sprite is
+/// visible. The default GTK background would obscure everything below.
 fn install_css(_app: &Application) {
     let provider = CssProvider::new();
     provider.load_from_data("window { background: transparent; }");
@@ -100,6 +122,9 @@ fn build_window(app: &Application) -> ApplicationWindow {
     window
 }
 
+/// Set an empty input region on the layer-shell surface so pointer
+/// events pass through to whatever is underneath. Without this the
+/// overlay would steal every click.
 fn make_click_through(window: &ApplicationWindow) {
     window.connect_realize(|window| {
         if let Some(surface) = window.surface() {
@@ -109,6 +134,11 @@ fn make_click_through(window: &ApplicationWindow) {
     });
 }
 
+/// Install the per-tick callback that advances the sprite toward its
+/// target. Runs at TICK_MS cadence on the GTK thread. Reads cursor
+/// position via Hyprland IPC and applies an exponential-smoothing
+/// interpolation; the cursor visibly follows the mouse with a small
+/// delay tuned by SMOOTHING_HALF_LIFE.
 fn start_tracking(
     painter: Painter,
     initial_x: i32,

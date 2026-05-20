@@ -326,6 +326,11 @@ fn run_one_turn(
 
 // ────── per-intent dispatchers ──────
 
+/// Dispatch the FindAction path. One Claude call with the screenshot;
+/// the action callback fires when Claude's tool input finishes streaming,
+/// kicking off the cursor/click/type/scroll immediately. `early_exit`
+/// is set so we don't spend extra Claude turns after feedback already
+/// reached the user.
 #[allow(clippy::too_many_arguments)]
 async fn run_find_action(
     claude: &Claude,
@@ -372,6 +377,9 @@ async fn run_find_action(
     }
 }
 
+/// Dispatch the Chat path. No tools, no screen; pure conversational
+/// streaming. Text deltas land in the sentence channel which the TTS
+/// task pulls from.
 async fn run_chat(
     claude: &Claude,
     transcript: &str,
@@ -404,6 +412,9 @@ async fn run_chat(
     }
 }
 
+/// Dispatch the Integration path. Two Claude calls (pick tool, then
+/// compose summary) with `crate::integrations::dispatch` running in
+/// between to actually hit the service API.
 async fn run_integration(
     claude: &Claude,
     transcript: &str,
@@ -446,6 +457,9 @@ async fn run_integration(
     }
 }
 
+/// Dispatch the Memory path. Routes to the local JSONL store via
+/// `Claude::memory`; the response is a templated reply (not a streamed
+/// second Claude call) so it's the fastest path after find_action.
 async fn run_memory(
     claude: &Claude,
     transcript: &str,
@@ -474,6 +488,10 @@ async fn run_memory(
     }
 }
 
+/// Dispatch the Agent path. Multi-step agent loop with iterative
+/// screenshots between steps. Each tool call fires its action via
+/// `dispatch_action`, then a fresh screenshot is captured for the next
+/// step. Bounded by AGENT_MAX_STEPS in tuning.rs.
 #[allow(clippy::too_many_arguments)]
 async fn run_agent(
     claude: &Claude,
@@ -630,6 +648,9 @@ impl StreamHelper {
         }
     }
 
+    /// Append a streamed text fragment from Claude and emit any complete
+    /// sentences to the TTS channel. Logs first-response and
+    /// first-sentence timestamps the first time each fires.
     fn push_delta(&mut self, delta: &str) {
         if !self.first_response_logged {
             eprintln!(
@@ -658,6 +679,8 @@ impl StreamHelper {
         }
     }
 
+    /// Send any leftover buffered text after Claude's stream ends. Used
+    /// when the final assistant message doesn't end in `.!?`.
     fn flush_tail(&mut self) {
         let tail = self.buf.trim().to_string();
         if !tail.is_empty() {
