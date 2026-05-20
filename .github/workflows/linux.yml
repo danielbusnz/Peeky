@@ -25,6 +25,8 @@ jobs:
             libxkbcommon-dev \
             libwayland-dev \
             libasound2-dev \
+            libgbm-dev \
+            libegl-dev \
             libxcb1-dev \
             libxcb-shm0-dev \
             libxcb-render0-dev \
