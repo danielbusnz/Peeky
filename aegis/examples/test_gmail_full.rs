@@ -6,7 +6,7 @@
 //
 // Run: cargo run --bin test_gmail_full
 
-#[path = "../integrations/gmail.rs"]
+#[path = "../src/integrations/gmail.rs"]
 mod gmail;
 
 use serde_json::Value;

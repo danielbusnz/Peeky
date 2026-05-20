@@ -19,15 +19,15 @@
 // Visual check on Windows: while holding Insert, the cursor sprite should
 // be visible AND clicks should pass through to the app underneath.
 
-#[path = "../ai_cursor/mod.rs"]
+#[path = "../src/ai_cursor/mod.rs"]
 mod ai_cursor;
-#[path = "../hotkey/mod.rs"]
+#[path = "../src/hotkey/mod.rs"]
 mod hotkey;
-#[path = "../mouse_position/mod.rs"]
+#[path = "../src/mouse_position/mod.rs"]
 mod mouse_position;
-#[path = "../painter.rs"]
+#[path = "../src/painter.rs"]
 mod painter;
-#[path = "../screenshot/mod.rs"]
+#[path = "../src/screenshot/mod.rs"]
 mod screenshot;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};

@@ -1,12 +1,12 @@
 #![allow(dead_code)]
 
-#[path = "../screenshot/mod.rs"]
+#[path = "../src/screenshot/mod.rs"]
 mod screenshot;
 
-#[path = "../tuning.rs"]
+#[path = "../src/tuning.rs"]
 mod tuning;
 
-#[path = "../providers/mod.rs"]
+#[path = "../src/providers/mod.rs"]
 mod providers;
 
 use tokio_util::sync::CancellationToken;

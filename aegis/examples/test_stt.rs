@@ -17,15 +17,15 @@
 //   * Slow startup (first chunk delay should be ~0ms with pre-roll)
 //   * Deepgram lag (first interim should arrive 100-300ms after first chunk)
 
-#[path = "../audio/mod.rs"]
+#[path = "../src/audio/mod.rs"]
 mod audio;
-#[path = "../hotkey/mod.rs"]
+#[path = "../src/hotkey/mod.rs"]
 mod hotkey;
-#[path = "../screenshot/mod.rs"]
+#[path = "../src/screenshot/mod.rs"]
 mod screenshot;
-#[path = "../tuning.rs"]
+#[path = "../src/tuning.rs"]
 mod tuning;
-#[path = "../providers/mod.rs"]
+#[path = "../src/providers/mod.rs"]
 mod providers;
 
 use providers::stt_deepgram::SttDeepgram;

@@ -1,7 +1,7 @@
 // Smoke test for the github integration tools.
 // Run: cargo run --bin test_github
 
-#[path = "../integrations/github.rs"]
+#[path = "../src/integrations/github.rs"]
 mod github;
 
 use serde_json::Value;

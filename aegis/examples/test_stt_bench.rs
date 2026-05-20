@@ -22,11 +22,11 @@
 //! Recording a sample (24kHz mono, 16-bit signed little-endian):
 //!   arecord -f S16_LE -c 1 -r 24000 -d 4 sample.wav
 
-#[path = "../screenshot/mod.rs"]
+#[path = "../src/screenshot/mod.rs"]
 mod screenshot;
-#[path = "../tuning.rs"]
+#[path = "../src/tuning.rs"]
 mod tuning;
-#[path = "../providers/mod.rs"]
+#[path = "../src/providers/mod.rs"]
 mod providers;
 
 use providers::stt_deepgram::SttDeepgram;

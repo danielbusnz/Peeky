@@ -67,38 +67,42 @@ name = "aegis"
 # (cursor::, hotkey::, mouse::, screenshot::) so any feature combo that
 # provides those — hyprland or winit-window+crossplatform — works.
 
-[[bin]]
+# Diagnostic / demo programs live in examples/, not src/bin/, because they
+# aren't part of the production app. Each one exercises a specific slice
+# of the pipeline (STT, classifier+find_action, cursor overlay, etc.) and
+# is run with `cargo run --example <name>`.
+[[example]]
 name = "test_hotkey"
 required-features = ["hyprland"]
 
-[[bin]]
+[[example]]
 name = "test_point"
 required-features = ["hyprland"]
 
-[[bin]]
+[[example]]
 name = "test_stt"
 required-features = ["hyprland"]
 
-[[bin]]
+[[example]]
 name = "test_stt_bench"
 required-features = ["hyprland"]
 
-[[bin]]
+[[example]]
 name = "test_find_action_bench"
 required-features = ["hyprland"]
 
-[[bin]]
+[[example]]
 name = "test_vision"
 required-features = ["hyprland"]
 
-[[bin]]
+[[example]]
 name = "test_win"
 required-features = ["winit-window"]
 
-[[bin]]
+[[example]]
 name = "test_soundwave"
 required-features = ["hyprland"]
 
-[[bin]]
+[[example]]
 name = "test_loading"
 required-features = ["hyprland"]

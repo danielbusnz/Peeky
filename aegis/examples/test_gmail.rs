@@ -6,7 +6,7 @@
 // captures the loopback redirect, and writes ~/.config/aegis/gmail_token.json.
 // Subsequent invocations reuse the cached refresh token.
 
-#[path = "../integrations/gmail.rs"]
+#[path = "../src/integrations/gmail.rs"]
 mod gmail;
 
 fn main() {
