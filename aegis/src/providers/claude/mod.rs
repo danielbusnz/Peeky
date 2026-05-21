@@ -6,6 +6,7 @@ mod agent_loop;
 mod chat;
 mod classifier;
 mod find_action;
+mod history;
 mod integration;
 mod memory;
 mod parsing;
@@ -19,6 +20,8 @@ mod prompt;
 pub use classifier::Intent;
 #[allow(unused_imports)]
 pub use memory::MemoryStore;
+#[allow(unused_imports)]
+pub use history::HistoryStore;
 
 /// A side-effecting action Claude requested via one of the tools in
 /// `run_agent_loop`. The streaming parser surfaces these in real time so the
