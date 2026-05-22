@@ -1,0 +1,135 @@
+# Builds release binaries for Linux and Windows when a `v*.*.*` tag is
+# pushed, then drafts a GitHub Release with the artifacts attached.
+# Mirrors the system deps and feature flags from linux.yml / windows.yml.
+#
+# Drafts are intentional: the maintainer reviews the auto-generated notes
+# before publishing. To rebuild an existing tag, use workflow_dispatch.
+
+name: release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to (re)build, e.g. v0.1.0'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-dev \
+            libpipewire-0.3-dev \
+            libxkbcommon-dev \
+            libwayland-dev \
+            libasound2-dev \
+            libgbm-dev \
+            libegl-dev \
+            libxcb1-dev \
+            libxcb-shm0-dev \
+            libxcb-render0-dev \
+            libxcb-randr0-dev \
+            libxcb-xfixes0-dev \
+            libxrandr-dev \
+            libxss-dev \
+            pkg-config
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build (release, crossplatform)
+        run: |
+          cargo build --release -p aegis \
+            --no-default-features \
+            --features winit-window,crossplatform \
+            --bin aegis
+
+      - name: Package artifact
+        run: |
+          mkdir -p dist
+          cp target/release/aegis dist/aegis-linux-x86_64
+          (cd dist && tar -czf aegis-linux-x86_64.tar.gz aegis-linux-x86_64)
+          (cd dist && sha256sum aegis-linux-x86_64.tar.gz > aegis-linux-x86_64.tar.gz.sha256)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aegis-linux
+          path: |
+            dist/aegis-linux-x86_64.tar.gz
+            dist/aegis-linux-x86_64.tar.gz.sha256
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build (release, winit-window)
+        run: cargo build --release --no-default-features --features winit-window --bin aegis
+
+      - name: Package artifact
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item target/release/aegis.exe dist/aegis-windows-x86_64.exe
+          Compress-Archive -Path dist/aegis-windows-x86_64.exe -DestinationPath dist/aegis-windows-x86_64.zip
+          $hash = (Get-FileHash dist/aegis-windows-x86_64.zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  aegis-windows-x86_64.zip" | Out-File -Encoding ascii dist/aegis-windows-x86_64.zip.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aegis-windows
+          path: |
+            dist/aegis-windows-x86_64.zip
+            dist/aegis-windows-x86_64.zip.sha256
+
+  release:
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: aegis-linux
+          path: dist/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: aegis-windows
+          path: dist/
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "ref=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.ref }}
+          draft: true
+          generate_release_notes: true
+          files: |
+            dist/aegis-linux-x86_64.tar.gz
+            dist/aegis-linux-x86_64.tar.gz.sha256
+            dist/aegis-windows-x86_64.zip
+            dist/aegis-windows-x86_64.zip.sha256
