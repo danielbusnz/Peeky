@@ -132,12 +132,11 @@ fn main() {
                 tauri::WebviewUrl::App(ONBOARDING_URL.into()),
             )
             .title("Aegis")
-            .inner_size(600.0, 350.0)
+            .inner_size(700.0, 350.0)
             .resizable(false)
             .decorations(false)
             .always_on_top(true)
             .skip_taskbar(true)
-            .transparent(true)
             .visible(false)
             .focused(false)
             .build()?;

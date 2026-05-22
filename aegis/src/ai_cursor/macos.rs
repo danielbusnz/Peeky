@@ -13,16 +13,36 @@ use tiny_skia::Pixmap;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;
 
-/// Size the window to fill the primary monitor without entering fullscreen.
+/// Size the window to fill the entire virtual desktop (all monitors).
 /// On macOS, `Fullscreen::Borderless` puts the window in its own Space and
 /// forces it opaque, killing the transparency we set via `with_transparent(true)`.
+/// By spanning all monitors, the cursor overlay follows across displays.
 pub fn configure_window_size(event_loop: &ActiveEventLoop, window: &Window) {
-    if let Some(monitor) = event_loop.primary_monitor() {
-        let size = monitor.size();
-        let pos = monitor.position();
-        let _ = window.request_inner_size(size);
-        window.set_outer_position(pos);
+    let monitors: Vec<_> = event_loop.available_monitors().collect();
+    if monitors.is_empty() {
+        return;
     }
+
+    // Calculate the bounding box of all monitors
+    let mut min_x = i32::MAX;
+    let mut min_y = i32::MAX;
+    let mut max_x = i32::MIN;
+    let mut max_y = i32::MIN;
+
+    for monitor in &monitors {
+        let pos = monitor.position();
+        let size = monitor.size();
+        min_x = min_x.min(pos.x);
+        min_y = min_y.min(pos.y);
+        max_x = max_x.max(pos.x + size.width as i32);
+        max_y = max_y.max(pos.y + size.height as i32);
+    }
+
+    let width = (max_x - min_x) as u32;
+    let height = (max_y - min_y) as u32;
+
+    let _ = window.request_inner_size(winit::dpi::PhysicalSize::new(width, height));
+    window.set_outer_position(winit::dpi::PhysicalPosition::new(min_x, min_y));
 }
 
 /// Scale logical cursor coordinates to physical pixels for Retina displays.
@@ -66,25 +86,37 @@ pub unsafe fn configure_window_transparency(window: &Arc<Window>) {
     let clear_color: *mut AnyObject = msg_send![ns_color_class, clearColor];
     let _: () = msg_send![ns_window, setBackgroundColor: clear_color];
 
-    // Also set ignoresMouseEvents so clicks pass through
+    // Click-through: mouse events pass through to apps below
     let _: () = msg_send![ns_window, setIgnoresMouseEvents: Bool::YES];
 
-    // Lift above NSFloatingWindowLevel (3) so the cursor sits on top of
-    // the Tauri launcher's onboarding window, which uses always-on-top
-    // (= floating level). NSStatusWindowLevel = 25, the same level
-    // macOS uses for menu bar items and tooltips.
-    let _: () = msg_send![ns_window, setLevel: 25_i64];
+    // Use screenSaver level (1000) - same as Clicky. With proper LSUIElement
+    // in Info.plist, this is sufficient for fullscreen overlay.
+    const NS_SCREEN_SAVER_WINDOW_LEVEL: i64 = 1000;
+    let _: () = msg_send![ns_window, setLevel: NS_SCREEN_SAVER_WINDOW_LEVEL];
 
-    // Make the cursor visible everywhere, not just on the Space it was
-    // created in. Two flags ORed together:
+    // Prevent the window from hiding when app loses focus.
+    let _: () = msg_send![ns_window, setHidesOnDeactivate: Bool::NO];
+
+    // Disable shadow for a cleaner overlay appearance
+    let _: () = msg_send![ns_window, setHasShadow: Bool::NO];
+
+    // Collection behavior for fullscreen overlay:
     //   NSWindowCollectionBehaviorCanJoinAllSpaces      (1 << 0 = 1)
+    //   NSWindowCollectionBehaviorStationary            (1 << 4 = 16)
     //   NSWindowCollectionBehaviorFullScreenAuxiliary   (1 << 8 = 256)
-    // CanJoinAllSpaces: the window follows the user across virtual
-    //   desktops instead of being bound to the one it spawned in.
-    // FullScreenAuxiliary: lets the window draw over apps that have
-    //   gone into native fullscreen mode (Mission Control space).
-    let collection_behavior: u64 = 1 | 256;
+    //   NSWindowCollectionBehaviorIgnoresCycle          (1 << 6 = 64)
+    //
+    // IgnoresCycle prevents the window from being cycled to via Cmd+`
+    let collection_behavior: u64 = 1 | 16 | 64 | 256;
     let _: () = msg_send![ns_window, setCollectionBehavior: collection_behavior];
+
+    // Prevent window from being released when closed
+    let _: () = msg_send![ns_window, setReleasedWhenClosed: Bool::NO];
+
+    // Force the window to front
+    let _: () = msg_send![ns_window, orderFrontRegardless];
+
+    eprintln!("[macos] window configured for fullscreen overlay");
 }
 
 // ────────────────────────────────────────────────────────────────────────

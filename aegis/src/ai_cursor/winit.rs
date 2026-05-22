@@ -13,7 +13,7 @@ use tiny_skia::Pixmap;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::window::{Window, WindowAttributes, WindowId, WindowLevel};
+use winit::window::{Window, WindowAttributes, WindowId};
 
 use super::CursorState;
 use super::common::{
@@ -257,10 +257,14 @@ pub fn cursor(initial_x: i32, initial_y: i32) -> ! {
 
     // Common attributes with platform-specific fullscreen handling.
     // macOS skips fullscreen (kills transparency) and sizes manually in resumed().
+    // NOTE: We don't set WindowLevel here because on macOS we configure
+    // NSWindow.level directly via objc messaging in configure_window_transparency
+    // to use screenSaver level (1000) which works better with fullscreen apps.
     let attrs = Window::default_attributes()
         .with_transparent(true)
-        .with_decorations(false)
-        .with_window_level(WindowLevel::AlwaysOnTop);
+        .with_decorations(false);
+    #[cfg(not(target_os = "macos"))]
+    let attrs = attrs.with_window_level(WindowLevel::AlwaysOnTop);
     let attrs = platform::apply_window_attrs(attrs);
 
     let event_loop = EventLoop::new().expect("EventLoop::new failed");
