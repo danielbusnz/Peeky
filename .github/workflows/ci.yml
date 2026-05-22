@@ -1,6 +1,11 @@
-# Build, format-check, and test on every push to main and every PR.
-# Runs both feature combos (default hyprland, and winit-window+crossplatform)
-# to catch breakage in either path before merge.
+# Fast feedback: rustfmt + type-check + unit tests on every push to main
+# and every PR. Builds the cross-platform feature combo because the
+# Hyprland-specific deps (gtk4-layer-shell, etc.) aren't packaged for
+# generic Ubuntu runners.
+#
+# Companion workflows:
+#   - linux.yml builds a release binary for Linux winit-window
+#   - windows.yml builds release binaries for Windows
 
 name: ci
 
@@ -12,8 +17,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # Don't compile with debug symbols on CI. Faster, slightly less useful
-  # output if a test actually panics, which it shouldn't.
   CARGO_PROFILE_TEST_DEBUG: "0"
 
 jobs:
@@ -29,22 +32,28 @@ jobs:
         with:
           components: rustfmt
 
-      # System libraries needed by the optional cargo features. The default
-      # hyprland feature pulls in GTK4 + layer-shell + JACK audio. The
-      # winit-window+crossplatform combo pulls in wayland/xcb. We install
-      # the union so a single runner can build both combos.
+      # crossplatform pulls in GTK3 on Linux via global-hotkey,
+      # plus xcb/x11/wayland deps for xcap + winit + softbuffer.
+      # Mirrors linux.yml's dep list so CI compiles cleanly.
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            libgtk-4-dev \
-            libgtk4-layer-shell-dev \
-            libjack-jackd2-dev \
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-dev \
+            libpipewire-0.3-dev \
             libxkbcommon-dev \
             libwayland-dev \
-            libxcb-shape0-dev \
+            libasound2-dev \
+            libgbm-dev \
+            libegl-dev \
+            libxcb1-dev \
+            libxcb-shm0-dev \
+            libxcb-render0-dev \
+            libxcb-randr0-dev \
             libxcb-xfixes0-dev \
-            libdbus-1-dev
+            libxrandr-dev \
+            libxss-dev \
+            pkg-config
 
       - name: Cache cargo registry + target
         uses: Swatinem/rust-cache@v2
@@ -52,11 +61,8 @@ jobs:
       - name: Format check
         run: cargo fmt --all -- --check
 
-      - name: Check (default = hyprland)
-        run: cargo check --bin aegis
-
       - name: Check (winit-window + crossplatform)
-        run: cargo check --bin aegis --no-default-features --features winit-window,crossplatform
+        run: cargo check -p aegis --no-default-features --features winit-window,crossplatform
 
       - name: Test
-        run: cargo test --bin aegis
+        run: cargo test -p aegis --no-default-features --features winit-window,crossplatform --bin aegis
