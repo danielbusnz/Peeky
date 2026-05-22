@@ -115,8 +115,62 @@ jobs:
             dist/aegis-windows-x86_64.zip
             dist/aegis-windows-x86_64.zip.sha256
 
+  build-macos:
+    # macos-latest is Apple Silicon (arm64). Intel Macs would need a
+    # separate macos-13 job. Skipping for now: most new Macs are arm64,
+    # and we can add x86_64 later if anyone asks for it.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2.0.0" --locked
+
+      - name: Build aegis (release, winit-window + crossplatform)
+        run: |
+          cargo build --release -p aegis \
+            --no-default-features \
+            --features winit-window,crossplatform \
+            --bin aegis
+
+      # Tauri's build.rs in launcher/src-tauri copies the aegis binary
+      # with the right target-triple suffix, then `cargo tauri build`
+      # bundles it as a sidecar inside Aegis Settings.app and produces
+      # a .dmg installer.
+      - name: Build launcher .app + .dmg
+        working-directory: launcher
+        run: cargo tauri build
+
+      - name: Package artifact
+        run: |
+          mkdir -p dist
+          # Filename includes version + arch and varies as we bump version,
+          # so glob rather than hardcode.
+          DMG=$(find launcher/src-tauri/target/release/bundle/dmg -name '*.dmg' | head -1)
+          if [ -z "$DMG" ]; then
+            echo "no .dmg produced; bundle output:"
+            find launcher/src-tauri/target/release/bundle -type f | head -50
+            exit 1
+          fi
+          cp "$DMG" dist/aegis-macos-aarch64.dmg
+          (cd dist && shasum -a 256 aegis-macos-aarch64.dmg > aegis-macos-aarch64.dmg.sha256)
+
+      - name: Attest macOS artifact
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/aegis-macos-aarch64.dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aegis-macos
+          path: |
+            dist/aegis-macos-aarch64.dmg
+            dist/aegis-macos-aarch64.dmg.sha256
+
   release:
-    needs: [build-linux, build-windows]
+    needs: [build-linux, build-windows, build-macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -129,6 +183,11 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: aegis-windows
+          path: dist/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: aegis-macos
           path: dist/
 
       - name: Resolve tag
@@ -150,3 +209,5 @@ jobs:
             dist/aegis-linux-x86_64.tar.gz.sha256
             dist/aegis-windows-x86_64.zip
             dist/aegis-windows-x86_64.zip.sha256
+            dist/aegis-macos-aarch64.dmg
+            dist/aegis-macos-aarch64.dmg.sha256
