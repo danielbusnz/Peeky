@@ -52,17 +52,17 @@ fn main() {
     );
 
     // If we got at least one issue back, pick the first one and view it.
-    if let Some(arr) = issues.as_array() {
-        if let Some(first) = arr.first() {
-            let repo = first["repository"]["nameWithOwner"].as_str().unwrap_or("");
-            let number = first["number"].as_i64().unwrap_or(0);
-            if !repo.is_empty() && number > 0 {
-                step(3, &format!("gh_issue_view ({repo}#{number})"));
-                dispatch(
-                    "gh_issue_view",
-                    serde_json::json!({ "repo": repo, "number": number }),
-                );
-            }
+    if let Some(arr) = issues.as_array()
+        && let Some(first) = arr.first()
+    {
+        let repo = first["repository"]["nameWithOwner"].as_str().unwrap_or("");
+        let number = first["number"].as_i64().unwrap_or(0);
+        if !repo.is_empty() && number > 0 {
+            step(3, &format!("gh_issue_view ({repo}#{number})"));
+            dispatch(
+                "gh_issue_view",
+                serde_json::json!({ "repo": repo, "number": number }),
+            );
         }
     }
 

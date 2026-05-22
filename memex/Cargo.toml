@@ -2,7 +2,8 @@
 name = "memex"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
+license = "MIT"
 description = "Personal data layer. Background daemon that ingests the user's data (Gmail, chat history, code, etc.) into a local store and exposes it over a localhost HTTP API for clients like aegis to query semantically or via SQL."
 
 [[bin]]

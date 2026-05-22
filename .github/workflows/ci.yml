@@ -70,7 +70,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rust: [stable, beta, "1.85"]
+        rust: [stable, beta, "1.88"]
     runs-on: ubuntu-latest
     # Only the stable cell gates merging. Beta and MSRV are advisory:
     # they surface upstream changes (new lints, std-lib bumps, dep MSRV

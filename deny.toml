@@ -15,7 +15,12 @@ no-default-features = false
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "warn"
-ignore = []
+ignore = [
+    # unic-ucd-version 0.9.0 is unmaintained. Pulled in transitively through
+    # tauri -> tauri-utils -> urlpattern -> unic-ucd-ident. No upgrade is
+    # available; clear when tauri drops the unic chain upstream.
+    "RUSTSEC-2025-0098",
+]
 
 [licenses]
 # Permissive set we're willing to ship. Add deliberately, not reflexively.
