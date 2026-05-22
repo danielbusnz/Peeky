@@ -141,6 +141,50 @@ impl ApplicationHandler for CursorApp {
         let context = Context::new(window.clone()).expect("softbuffer Context");
         let surface = Surface::new(&context, window.clone()).expect("softbuffer Surface");
 
+        // On macOS, force every layer in the window's hierarchy non-opaque.
+        // softbuffer adds its own CALayer during Surface::new which defaults
+        // to opaque; without this the entire screen renders black even
+        // though the window is set to transparent. See winit.rs comment in
+        // resumed() for the broader context.
+        #[cfg(target_os = "macos")]
+        unsafe {
+            use objc2::msg_send;
+            use objc2::runtime::{AnyObject, Bool};
+            use winit::platform::macos::WindowExtMacOS;
+
+            let ns_window = window.ns_window() as *mut AnyObject;
+            if !ns_window.is_null() {
+                // NSWindow: setOpaque:NO and backgroundColor = [NSColor clearColor]
+                let _: () = msg_send![ns_window, setOpaque: Bool::NO];
+                let ns_color_class = objc2::class!(NSColor);
+                let clear_color: *mut AnyObject = msg_send![ns_color_class, clearColor];
+                let _: () = msg_send![ns_window, setBackgroundColor: clear_color];
+
+                // contentView: ensure layer-backed and the root layer is non-opaque
+                let content_view: *mut AnyObject = msg_send![ns_window, contentView];
+                if !content_view.is_null() {
+                    let _: () = msg_send![content_view, setWantsLayer: Bool::YES];
+                    let layer: *mut AnyObject = msg_send![content_view, layer];
+                    if !layer.is_null() {
+                        let _: () = msg_send![layer, setOpaque: Bool::NO];
+
+                        // Walk softbuffer's sublayers (added by Surface::new
+                        // above) and force each non-opaque too.
+                        let sublayers: *mut AnyObject = msg_send![layer, sublayers];
+                        if !sublayers.is_null() {
+                            let count: usize = msg_send![sublayers, count];
+                            for i in 0..count {
+                                let sub: *mut AnyObject = msg_send![sublayers, objectAtIndex: i];
+                                if !sub.is_null() {
+                                    let _: () = msg_send![sub, setOpaque: Bool::NO];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         self.surface = Some(surface);
         self.window = Some(window);
     }
