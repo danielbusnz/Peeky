@@ -37,6 +37,10 @@ document.getElementById("cursor-button").addEventListener("click", async () => {
         await next.setPosition(new PhysicalPosition(cx, cy));
 
         await next.show();
+        // Focus the onboarding window so the keydown listener in
+        // onboarding.js sees the Insert (or Ctrl+Space) press and
+        // closes itself on first hotkey use.
+        await next.setFocus();
         await welcome.close();
     } catch (err) {
         console.error("[click] transition failed:", err);
