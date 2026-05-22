@@ -3,7 +3,12 @@
 
 /// Visual state of the overlay cursor. The painter reads this to choose
 /// what to render; the orchestrator writes it as voice turns progress.
+///
+/// `Idle` is only constructed from the hyprland feature path; the winit
+/// build path matches on it but never assigns it. The `allow(dead_code)`
+/// is for the latter so the variant stays in the public enum.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum CursorState {
     /// Default. Cursor follows the system mouse, no soundwave.
     Idle,

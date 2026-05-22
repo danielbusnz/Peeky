@@ -1,8 +1,5 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use image::ImageReader;
 use image::codecs::jpeg::JpegEncoder;
-use image::imageops::FilterType;
-use std::io::Cursor;
 
 /// Returns the geometry (x, y, width, height) of the primary monitor.
 /// Cross-platform fallback: there's no consistent "active workspace" concept
@@ -23,6 +20,11 @@ pub fn active_workspace_geometry() -> Result<(i32, i32, u32, u32), Box<dyn std::
 
 /// Captures a screen region via xcap, encodes as JPEG q85, returns base64
 /// plus the captured dimensions.
+///
+/// Only the demo binary calls this directly; the aegis hot path uses
+/// `capture_resized_for_claude`. Kept here so the demo and the main
+/// pipeline share one screenshot module.
+#[allow(dead_code)]
 pub fn capture_for_claude(
     x: i32,
     y: i32,
@@ -106,25 +108,4 @@ pub fn pick_declared_resolution(window_width: i64, window_height: i64) -> (u32, 
         }
     }
     (best.0, best.1)
-}
-
-/// Decode an existing base64 JPEG, resize to exactly the declared dimensions
-/// with Triangle filtering, and re-encode as JPEG q85.
-pub fn resize_jpeg_for_computer_use(
-    src_b64: &str,
-    target_w: u32,
-    target_h: u32,
-) -> Result<String, Box<dyn std::error::Error>> {
-    let bytes = BASE64.decode(src_b64.as_bytes())?;
-    let img = ImageReader::new(Cursor::new(bytes))
-        .with_guessed_format()?
-        .decode()?;
-    let resized = img.resize_exact(target_w, target_h, FilterType::Triangle);
-
-    let mut out: Vec<u8> = Vec::new();
-    {
-        let encoder = JpegEncoder::new_with_quality(&mut out, 85);
-        resized.write_with_encoder(encoder)?;
-    }
-    Ok(BASE64.encode(&out))
 }

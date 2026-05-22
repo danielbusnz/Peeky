@@ -19,6 +19,10 @@ use crate::voice_session::VoiceSession;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
+/// Output of the pre-turn screenshot task: (x, y, w, h, base64 JPEG).
+/// Named so the JoinHandle signature stops tripping clippy::type_complexity.
+type ScreenshotResult = Result<(i32, i32, u32, u32, String), String>;
+
 #[cfg(feature = "hyprland")]
 fn set_cursor_idle() {
     crate::ai_cursor::set_state(crate::ai_cursor::CursorState::Idle);
@@ -38,20 +42,16 @@ pub fn run_loop(mic: audio::Mic, stt: SttDeepgram, claude: Claude, cartesia: Tts
         // turns won't need it (chat, integration, memory) but we don't know
         // that until the classifier returns. Capturing eagerly keeps the
         // hot paths fast; the cost when unused is just thrown-away pixels.
-        let screenshot_task =
-            session
-                .rt
-                .spawn_blocking(|| -> Result<(i32, i32, u32, u32, String), String> {
-                    let (x, y, w, h) =
-                        screenshot::active_workspace_geometry().map_err(|e| e.to_string())?;
-                    let (declared_w, declared_h) =
-                        screenshot::pick_declared_resolution(w as i64, h as i64);
-                    let resized_b64 = screenshot::capture_resized_for_claude(
-                        x, y, w as i32, h as i32, declared_w, declared_h,
-                    )
-                    .map_err(|e| e.to_string())?;
-                    Ok((x, y, w, h, resized_b64))
-                });
+        let screenshot_task = session.rt.spawn_blocking(|| -> ScreenshotResult {
+            let (x, y, w, h) =
+                screenshot::active_workspace_geometry().map_err(|e| e.to_string())?;
+            let (declared_w, declared_h) = screenshot::pick_declared_resolution(w as i64, h as i64);
+            let resized_b64 = screenshot::capture_resized_for_claude(
+                x, y, w as i32, h as i32, declared_w, declared_h,
+            )
+            .map_err(|e| e.to_string())?;
+            Ok((x, y, w, h, resized_b64))
+        });
 
         if let Err(e) = run_one_turn(&session, press_t, screenshot_task) {
             eprintln!("voice turn failed: {}", e);
@@ -62,7 +62,7 @@ pub fn run_loop(mic: audio::Mic, stt: SttDeepgram, claude: Claude, cartesia: Tts
 fn run_one_turn(
     session: &VoiceSession,
     press_t: std::time::Instant,
-    screenshot_task: tokio::task::JoinHandle<Result<(i32, i32, u32, u32, String), String>>,
+    screenshot_task: tokio::task::JoinHandle<ScreenshotResult>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let rt = &session.rt;
     let mic = &session.mic;

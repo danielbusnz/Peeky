@@ -8,7 +8,7 @@
 //!
 //! Platforms: Windows, macOS, Linux X11. Hyprland/Wayland uses unix_signals.rs.
 
-use global_hotkey::hotkey::{Code, HotKey, Modifiers};
+use global_hotkey::hotkey::{Code, HotKey};
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -31,11 +31,11 @@ fn build_hotkey() -> HotKey {
 /// so it lives for the program's lifetime; we only need the receiver
 /// from then on.
 pub fn init() -> std::io::Result<()> {
-    let manager = GlobalHotKeyManager::new()
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("manager: {}", e)))?;
+    let manager =
+        GlobalHotKeyManager::new().map_err(|e| std::io::Error::other(format!("manager: {}", e)))?;
     manager
         .register(build_hotkey())
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("register: {}", e)))?;
+        .map_err(|e| std::io::Error::other(format!("register: {}", e)))?;
     Box::leak(Box::new(manager));
     eprintln!("[hotkey] registered (global)");
     Ok(())

@@ -27,7 +27,8 @@ struct Report {
 /// Run every integration's health probe in parallel and print a table.
 /// Call once at startup; takes ~the slowest probe's wall time.
 pub fn check_and_print() {
-    let probes: Vec<(&'static str, fn() -> Status)> = vec![
+    type ProbeFn = fn() -> Status;
+    let probes: Vec<(&'static str, ProbeFn)> = vec![
         ("github", probe_github),
         ("gmail", probe_gmail),
         ("spotify", probe_spotify),

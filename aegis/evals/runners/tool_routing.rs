@@ -56,8 +56,8 @@ fn main() {
     println!("cases:      {}", cases.len());
     println!();
     println!(
-        "{:<3} {:<24} {:<13} {:<13} {:>7}  {}",
-        "", "id", "expected", "actual", "ms", "transcript"
+        "{:<3} {:<24} {:<13} {:<13} {:>7}  transcript",
+        "", "id", "expected", "actual", "ms"
     );
 
     let mut results: Vec<RunResult> = Vec::with_capacity(cases.len());

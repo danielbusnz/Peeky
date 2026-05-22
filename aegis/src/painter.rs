@@ -64,7 +64,7 @@ impl Soundwave {
         let envelope = (0.3 + current_audio_level() * 2.0).min(1.0);
 
         let mut out = [(0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64); N_BARS];
-        for i in 0..N_BARS {
+        for (i, slot) in out.iter_mut().enumerate() {
             let u = i as f64 / (N_BARS - 1) as f64;
             let scrolled = u + t * SCROLL_SPEED;
             let mut raw = 0.0_f64;
@@ -77,7 +77,7 @@ impl Soundwave {
             let bar_h = (MIN_HEIGHT + (MAX_HEIGHT - MIN_HEIGHT) * unit * envelope) * shape;
             let bx = origin_x + i as f64 * (BAR_WIDTH + BAR_GAP);
             let by = -bar_h / 2.0;
-            out[i] = (bx, by, BAR_WIDTH, bar_h);
+            *slot = (bx, by, BAR_WIDTH, bar_h);
         }
         out
     }
@@ -115,13 +115,13 @@ impl LoadingSpinner {
         let t = self.start.elapsed().as_secs_f64();
         let head = (t * SPINNER_ROTATION_HZ * SPINNER_N_BARS as f64) % SPINNER_N_BARS as f64;
         let mut out = [(0.0_f64, 0.0_f64); SPINNER_N_BARS];
-        for i in 0..SPINNER_N_BARS {
+        for (i, slot) in out.iter_mut().enumerate() {
             let dist = (head - i as f64).rem_euclid(SPINNER_N_BARS as f64);
             let alpha = SPINNER_ALPHA_FLOOR
                 + (1.0 - SPINNER_ALPHA_FLOOR) * (1.0 - dist / (SPINNER_N_BARS - 1) as f64);
             let angle = (i as f64 / SPINNER_N_BARS as f64) * std::f64::consts::TAU
                 - std::f64::consts::FRAC_PI_2;
-            out[i] = (angle, alpha);
+            *slot = (angle, alpha);
         }
         out
     }
@@ -421,8 +421,10 @@ mod skia_backend {
 
     impl DrawSkia for LoadingSpinner {
         fn draw_skia(&self, pixmap: &mut Pixmap, x: f64, y: f64) {
-            let mut paint = Paint::default();
-            paint.anti_alias = true;
+            let mut paint = Paint {
+                anti_alias: true,
+                ..Default::default()
+            };
 
             // One unit bar at (SPINNER_INNER_RADIUS, -SPINNER_BAR_WIDTH/2) in
             // local space, before rotation. Build it once and re-transform per bar.
@@ -467,7 +469,7 @@ mod skia_backend {
             return None;
         }
         let r = r.min(w / 2.0).min(h / 2.0);
-        const KAPPA: f32 = 0.5522847498;
+        const KAPPA: f32 = 0.552_284_8;
         let c = r * KAPPA;
         let mut pb = PathBuilder::new();
         pb.move_to(x + r, y);
