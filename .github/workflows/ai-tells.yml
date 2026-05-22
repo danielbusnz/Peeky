@@ -1,0 +1,91 @@
+# Flag issues and PRs that look AI-generated. Label only, no close.
+#
+# Two signals:
+#   1. Trap phrase: `acknowledged: drafted by AI` (planted in the issue
+#      templates as an instruction directed at AI assistants). LLMs that
+#      read the template tend to follow the instruction; humans skip it.
+#      Strong signal => `ai-confessed` label.
+#   2. Lexical signals: em/en dash usage or any emoji. Weaker signal,
+#      higher false-positive rate => `possibly-ai` label.
+#
+# Bypass:
+#   - author_association is OWNER, MEMBER, or COLLABORATOR
+#   - the item already has the `approved` label when scanned
+#
+# Maintainer triages from the labels. No comment posted, no close. The
+# contributor is unaware of the flag, so a sophisticated evader doesn't
+# learn what signals we use.
+
+name: ai-tells
+
+on:
+  issues:
+    types: [opened]
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scan and label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const item = context.payload.issue || context.payload.pull_request;
+            const number = item.number;
+            const author = item.user.login;
+            const assoc = item.author_association;
+
+            // Maintainers and collaborators are never flagged.
+            if (['OWNER', 'MEMBER', 'COLLABORATOR'].includes(assoc)) {
+              core.info(`Skipping ${number}: author_association=${assoc}`);
+              return;
+            }
+
+            // Honor a pre-applied bypass label.
+            const labels = (item.labels || []).map(l =>
+              typeof l === 'string' ? l : l.name
+            );
+            if (labels.includes('approved')) {
+              core.info(`Skipping ${number}: has 'approved' label`);
+              return;
+            }
+
+            const text = `${item.title || ''}\n${item.body || ''}`;
+
+            // Strong signal: the trap phrase planted in the issue
+            // templates. Case-insensitive, tolerant of whitespace.
+            const trapHit = /acknowledged\s*:\s*drafted by ai/i.test(text);
+
+            // Weak signal: U+2014 em dash, U+2013 en dash, or any emoji.
+            // Plain ASCII hyphens and Markdown table separators are not
+            // affected.
+            const emDashCount = (text.match(/[—–]/g) || []).length;
+            const emojiCount = (text.match(/\p{Extended_Pictographic}/gu) || []).length;
+            const lexicalHit = emDashCount > 0 || emojiCount > 0;
+
+            if (!trapHit && !lexicalHit) {
+              core.info(`Skipping ${number}: no AI tells found`);
+              return;
+            }
+
+            const toApply = [];
+            if (trapHit) toApply.push('ai-confessed');
+            if (lexicalHit && !trapHit) toApply.push('possibly-ai');
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: number,
+              labels: toApply,
+            });
+
+            core.info(
+              `Labeled #${number} from ${author}: ${toApply.join(', ')} ` +
+                `(trap=${trapHit}, emdashes=${emDashCount}, emojis=${emojiCount})`
+            );
