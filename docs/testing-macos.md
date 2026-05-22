@@ -4,8 +4,17 @@ First-run guide for grabbing the latest CI artifact and seeing whether
 aegis actually runs on a Mac. This doc tracks what we know works, what
 to expect, and what to report back when something breaks.
 
-Status: CI builds and tests pass on macOS as of commit `4ce60eb`.
-Runtime is unverified. This is the first manual test.
+Status as of commit `c21315a` (2026-05-22):
+
+- CI builds and tests pass on macOS.
+- Retina scale-factor bug is fixed: the cursor sprite renders at the
+  correct position.
+- Transparency is now wgpu-backed (softbuffer 0.4 hardcodes
+  `CGImageAlphaInfo::NoneSkipFirst` which strips alpha on macOS; wgpu's
+  `CompositeAlphaMode::PostMultiplied` honors per-pixel alpha).
+- Runtime is partially verified. Black-screen issue is expected to be
+  fixed by the wgpu swap; first end-to-end voice turn on macOS is still
+  the next thing to verify.
 
 ## Prerequisites
 
@@ -20,14 +29,16 @@ Runtime is unverified. This is the first manual test.
 
 ```bash
 mkdir -p ~/aegis-test && cd ~/aegis-test
-gh run download 26306486601 \
+gh run download 26310905925 \
   --repo danielbusnz-lgtm/Aegis \
   --name aegis-macos
 chmod +x aegis
 ```
 
-Run ID `26306486601` is the first green macos-build. For a fresh run,
-check `gh run list --workflow=macos.yml --limit 1` and use that ID.
+Run ID `26310905925` is the first green macos-build with the wgpu
+renderer. For a fresh run, check `gh run list --workflow=macos.yml
+--limit 1` and use that ID, or use the "Refreshing the artifact"
+script at the bottom of this doc.
 
 Alternative if you don't want gh: download from the run page in a
 browser. The artifact is at the bottom of the run page under
@@ -109,16 +120,26 @@ or the chord is already taken by something else.
 ### Overlay rendering
 
 The cursor should swell into a soundwave when you hold the hotkey. On
-macOS this uses winit + softbuffer + tiny-skia, which is the most
-fragile path in the codebase right now. Possible issues:
+macOS the renderer is winit + wgpu + tiny-skia (the wgpu path is
+documented in `aegis/src/ai_cursor/macos.rs` and `renderer.rs`).
+Previously verified:
 
-- Overlay doesn't appear at all
-- Overlay appears in the wrong location (Retina scale-factor bug)
-- Overlay appears but blocks mouse clicks (we haven't set
-  `ignoresMouseEvents: true` yet)
-- Overlay flickers or tears
+- Position: correct after the Retina scale-factor fix.
+- Transparency: should now show the desktop through the overlay window
+  rather than rendering as opaque black.
 
-Note what you see.
+Still possible / not yet tested:
+
+- Overlay blocks mouse clicks (we haven't set `ignoresMouseEvents: true`
+  on the NSWindow yet).
+- Sprite anti-aliased edges look slightly darker than intended (we're
+  feeding premultiplied RGBA into wgpu's PostMultiplied alpha mode for
+  v1; small visual artifact at the rounded edges).
+- Flicker or tearing.
+
+If transparency still fails (entire screen still goes black), the
+black-screen issue is deeper than expected and we'll need to look at
+wgpu surface configuration.
 
 ### Try a voice turn
 
@@ -159,8 +180,8 @@ Paste those into a session with me and we'll fix whatever surfaces.
 
 ## Known gaps before this is shippable to end users
 
-These are tracked separately and not the goal of this first manual
-test. Listing them so you know what we're NOT testing:
+These are tracked separately and not the goal of this manual test.
+Listing them so you know what we're NOT testing:
 
 - No `.app` bundle yet. We're running a raw Mach-O binary.
 - No code signing or notarization.
@@ -168,12 +189,21 @@ test. Listing them so you know what we're NOT testing:
   refuse to launch without these).
 - `actions.rs` ydotool shell-out won't work; needs to be swapped for
   enigo or CGEvent.
-- Overlay window isn't configured as click-through transparent.
+- Overlay window isn't `setIgnoresMouseEvents:YES`, so it may block
+  clicks.
+- Premultiplied vs postmultiplied alpha mismatch in the wgpu renderer
+  may make sprite edges slightly darker than intended.
 - No first-run UX explaining the permission grants.
 
-Phase 1 is "does the binary launch and do anything useful." Once we
-know that, the rest of the gaps get prioritized by what actually
-matters.
+What's already addressed:
+
+- Retina position scaling: fixed.
+- macOS transparency at the renderer level: addressed by swapping
+  softbuffer for wgpu. Pending runtime verification.
+
+Phase 1 is "does the binary launch and put a working transparent overlay
+on screen with a working voice turn." Once we know that, the rest of
+the gaps get prioritized by what actually matters.
 
 ## Refreshing the artifact
 
