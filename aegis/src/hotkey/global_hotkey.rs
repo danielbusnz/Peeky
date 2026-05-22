@@ -8,9 +8,9 @@
 //!
 //! Platforms: Windows, macOS, Linux X11. Hyprland/Wayland uses unix_signals.rs.
 
-use global_hotkey::hotkey::{Code, HotKey};
 #[cfg(target_os = "macos")]
 use global_hotkey::hotkey::Modifiers;
+use global_hotkey::hotkey::{Code, HotKey};
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
 use std::sync::atomic::{AtomicBool, Ordering};
 
