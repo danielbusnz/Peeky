@@ -310,9 +310,47 @@ pub fn init_input_executor() {
     });
 }
 
-/// Fakes a scroll via repeated arrow-key presses. Wayland has no
-/// portable "scroll at point" without raw evdev; arrow keys work in
-/// browsers, terminals, file managers, and most native apps.
+// =============================================================================
+// Platform-specific input injection implementations
+// =============================================================================
+
+// --- macOS: uses native CoreGraphics for scroll (no external tools) ---
+#[cfg(target_os = "macos")]
+fn exec_scroll(direction: &str, amount: u32) {
+    use objc2_core_graphics::{CGEvent, CGEventTapLocation};
+
+    // Map direction to macOS key code (arrow keys)
+    let key_code: u16 = match direction.to_lowercase().as_str() {
+        "down" => 125,  // down arrow
+        "up" => 126,    // up arrow
+        "left" => 123,  // left arrow
+        "right" => 124, // right arrow
+        other => {
+            eprintln!(
+                "[action:scroll] unknown direction '{}', defaulting to down",
+                other
+            );
+            125
+        }
+    };
+    // 3 presses per wheel-click, capped at 30 to prevent hanging
+    let presses = (amount.saturating_mul(3)).clamp(1, 30);
+
+    for _ in 0..presses {
+        // Key down
+        if let Some(down) = CGEvent::new_keyboard_event(None, key_code, true) {
+            CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&down));
+        }
+        // Key up
+        if let Some(up) = CGEvent::new_keyboard_event(None, key_code, false) {
+            CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&up));
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
+// --- Linux: uses ydotool ---
+#[cfg(not(target_os = "macos"))]
 fn exec_scroll(direction: &str, amount: u32) {
     let scancode: u16 = match direction.to_lowercase().as_str() {
         "down" => 108,
@@ -343,7 +381,48 @@ fn exec_scroll(direction: &str, amount: u32) {
     }
 }
 
-/// Moves the OS cursor to absolute screen pixel (x, y) and clicks.
+// --- macOS: uses native CoreGraphics for mouse click (no external tools) ---
+#[cfg(target_os = "macos")]
+fn exec_click(x: i64, y: i64) {
+    use objc2_core_foundation::CGPoint;
+    use objc2_core_graphics::{
+        CGEvent, CGEventTapLocation, CGEventType, CGMouseButton, CGWarpMouseCursorPosition,
+    };
+
+    let point = CGPoint {
+        x: x as f64,
+        y: y as f64,
+    };
+
+    // Move cursor to position
+    CGWarpMouseCursorPosition(point);
+
+    // Small delay for cursor position to settle
+    thread::sleep(Duration::from_millis(30));
+
+    // Create and post mouse down event
+    if let Some(down_event) = CGEvent::new_mouse_event(
+        None,
+        CGEventType::LeftMouseDown,
+        point,
+        CGMouseButton::Left,
+    ) {
+        CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&down_event));
+    }
+
+    // Create and post mouse up event
+    if let Some(up_event) = CGEvent::new_mouse_event(
+        None,
+        CGEventType::LeftMouseUp,
+        point,
+        CGMouseButton::Left,
+    ) {
+        CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&up_event));
+    }
+}
+
+// --- Linux: uses ydotool ---
+#[cfg(not(target_os = "macos"))]
 fn exec_click(x: i64, y: i64) {
     let move_status = Command::new("ydotool")
         .args([
@@ -368,7 +447,50 @@ fn exec_click(x: i64, y: i64) {
     }
 }
 
-/// Types `text` into the focused field. Trailing `\n` submits (Enter).
+// --- macOS: uses native CoreGraphics for typing (no external tools) ---
+#[cfg(target_os = "macos")]
+fn exec_type(text: &str) {
+    use objc2_core_graphics::{CGEvent, CGEventTapLocation};
+
+    // Wait for focus to settle after a preceding click
+    thread::sleep(Duration::from_millis(80));
+
+    // Check if text ends with newline (submit)
+    let (text_to_type, needs_enter) = if text.ends_with('\n') {
+        (&text[..text.len() - 1], true)
+    } else {
+        (text, false)
+    };
+
+    // Create a keyboard event and set unicode string
+    if let Some(event) = CGEvent::new_keyboard_event(None, 0, true) {
+        // Convert text to UTF-16 for CoreGraphics
+        let utf16: Vec<u16> = text_to_type.encode_utf16().collect();
+        unsafe {
+            CGEvent::keyboard_set_unicode_string(
+                Some(&event),
+                utf16.len() as u64,
+                utf16.as_ptr(),
+            );
+        }
+        CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&event));
+    }
+
+    // Press Enter if text ended with newline
+    if needs_enter {
+        thread::sleep(Duration::from_millis(30));
+        // Key code 36 = Return on macOS
+        if let Some(down) = CGEvent::new_keyboard_event(None, 36, true) {
+            CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&down));
+        }
+        if let Some(up) = CGEvent::new_keyboard_event(None, 36, false) {
+            CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&up));
+        }
+    }
+}
+
+// --- Linux: uses ydotool ---
+#[cfg(not(target_os = "macos"))]
 fn exec_type(text: &str) {
     // Covers GTK/Qt focus-handling delay after a preceding click;
     // without it the first few keystrokes get dropped.
@@ -379,8 +501,84 @@ fn exec_type(text: &str) {
     }
 }
 
-/// Press a key combo. `combo` is split on `+`; unrecognized parts get
-/// dropped (logged).
+// --- macOS: uses native CoreGraphics for key combinations (no external tools) ---
+#[cfg(target_os = "macos")]
+fn exec_key(combo: &str) {
+    use objc2_core_graphics::{CGEvent, CGEventFlags, CGEventTapLocation};
+
+    let parts: Vec<&str> = combo.split('+').map(|s| s.trim()).collect();
+
+    // Collect modifiers and the main key
+    let mut flags = CGEventFlags::empty();
+    let mut main_key: Option<&str> = None;
+
+    for part in parts {
+        let lower = part.to_lowercase();
+        match lower.as_str() {
+            "ctrl" | "control" | "leftctrl" => flags |= CGEventFlags::MaskControl,
+            "shift" | "leftshift" | "rightshift" => flags |= CGEventFlags::MaskShift,
+            "alt" | "option" | "leftalt" | "rightalt" => flags |= CGEventFlags::MaskAlternate,
+            "super" | "meta" | "win" | "cmd" | "command" => flags |= CGEventFlags::MaskCommand,
+            _ => main_key = Some(part),
+        }
+    }
+
+    let Some(key) = main_key else {
+        eprintln!("[action:key] no main key in combo '{}'", combo);
+        return;
+    };
+
+    // Map key name to macOS key code
+    let key_code: u16 = match key.to_lowercase().as_str() {
+        "esc" | "escape" => 53,
+        "tab" => 48,
+        "enter" | "return" => 36,
+        "backspace" => 51,
+        "delete" | "del" => 117,
+        "space" => 49,
+        "up" | "arrowup" => 126,
+        "down" | "arrowdown" => 125,
+        "left" | "arrowleft" => 123,
+        "right" | "arrowright" => 124,
+        "home" => 115,
+        "end" => 119,
+        "pageup" | "page_up" => 116,
+        "pagedown" | "page_down" => 121,
+        "f1" => 122, "f2" => 120, "f3" => 99, "f4" => 118,
+        "f5" => 96, "f6" => 97, "f7" => 98, "f8" => 100,
+        "f9" => 101, "f10" => 109, "f11" => 103, "f12" => 111,
+        // Letters a-z (macOS key codes)
+        "a" => 0, "b" => 11, "c" => 8, "d" => 2, "e" => 14,
+        "f" => 3, "g" => 5, "h" => 4, "i" => 34, "j" => 38,
+        "k" => 40, "l" => 37, "m" => 46, "n" => 45, "o" => 31,
+        "p" => 35, "q" => 12, "r" => 15, "s" => 1, "t" => 17,
+        "u" => 32, "v" => 9, "w" => 13, "x" => 7, "y" => 16, "z" => 6,
+        // Numbers 0-9
+        "0" => 29, "1" => 18, "2" => 19, "3" => 20, "4" => 21,
+        "5" => 23, "6" => 22, "7" => 26, "8" => 28, "9" => 25,
+        _ => {
+            eprintln!("[action:key] unrecognized key '{}' in combo '{}'", key, combo);
+            return;
+        }
+    };
+
+    thread::sleep(Duration::from_millis(50));
+
+    // Key down with modifiers
+    if let Some(down) = CGEvent::new_keyboard_event(None, key_code, true) {
+        CGEvent::set_flags(Some(&down), flags);
+        CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&down));
+    }
+
+    // Key up with modifiers
+    if let Some(up) = CGEvent::new_keyboard_event(None, key_code, false) {
+        CGEvent::set_flags(Some(&up), flags);
+        CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&up));
+    }
+}
+
+// --- Linux: uses ydotool ---
+#[cfg(not(target_os = "macos"))]
 fn exec_key(combo: &str) {
     let scancodes: Vec<u16> = combo
         .split('+')
@@ -414,6 +612,8 @@ fn exec_key(combo: &str) {
 /// Covers the keys aegis-style voice commands actually emit: navigation,
 /// modifiers, letters, digits. Anything not in this table returns None
 /// and gets logged as unrecognized.
+/// Only used on Linux (ydotool implementation).
+#[cfg(not(target_os = "macos"))]
 fn key_name_to_scancode(name: &str) -> Option<u16> {
     let lower = name.to_lowercase();
     match lower.as_str() {
@@ -504,9 +704,31 @@ fn key_name_to_scancode(name: &str) -> Option<u16> {
     }
 }
 
-/// Startup probe: warn if ydotool isn't installed or the daemon isn't
-/// reachable, so the user knows clicks will silently no-op. Doesn't fail
-/// startup. Pointing/opening/launching still work without it.
+/// Startup probe: check if input injection is available on this platform.
+/// macOS: checks for Accessibility permissions via CoreGraphics
+/// Linux: checks for ydotool daemon
+/// Doesn't fail startup. Pointing/opening/launching still work without it.
+#[cfg(target_os = "macos")]
+pub fn check_input_injection_available() {
+    use objc2_core_graphics::CGEvent;
+
+    // Try to create a test event - this will fail if Accessibility is denied
+    match CGEvent::new_keyboard_event(None, 0, true) {
+        Some(_) => {
+            eprintln!("[startup] CoreGraphics input available. click actions will fire real input");
+        }
+        None => {
+            eprintln!(
+                "[startup] WARNING: CoreGraphics event creation failed. Click actions will move the\n\
+                 \toverlay but NOT inject a real click. To enable:\n\
+                 \t  System Preferences → Privacy & Security → Accessibility\n\
+                 \t  Add and enable your terminal app (Terminal, iTerm2, etc.)"
+            );
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
 pub fn check_input_injection_available() {
     match Command::new("ydotool").arg("--version").output() {
         Ok(o) if o.status.success() => {

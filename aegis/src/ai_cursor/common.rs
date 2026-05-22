@@ -12,7 +12,16 @@ use super::CursorState;
 // feel under a delta-time formulation, so the cursor is equally snappy at
 // 60Hz, 144Hz, or 500Hz tick rates.
 pub const SMOOTHING_HALF_LIFE: f64 = 0.0917;
+// macOS: smaller Y offset since the cursor feels closer to the pointer
+#[cfg(target_os = "macos")]
+pub const Y_OFFSET: i32 = -20;
+#[cfg(target_os = "macos")]
+pub const X_OFFSET: i32 = 20;
+
+// Linux/Windows: larger Y offset
+#[cfg(not(target_os = "macos"))]
 pub const Y_OFFSET: i32 = -70;
+#[cfg(not(target_os = "macos"))]
 pub const X_OFFSET: i32 = 20;
 pub const POINT_DURATION: Duration = Duration::from_secs(3);
 pub const CURSOR_DISPLAY_SIZE: f64 = 18.0;

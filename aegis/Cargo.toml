@@ -63,8 +63,11 @@ rustls = { version = "0.23", default-features = false, features = ["ring"] }
 # for the cursor overlay's pixel presentation. wgpu's CompositeAlphaMode::
 # PostMultiplied honors per-pixel alpha against the desktop. objc2 +
 # raw-window-handle remain for any residual NSWindow plumbing.
+# objc2-core-graphics provides native CGEvent APIs for input injection.
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
+objc2-core-foundation = "0.3"
+objc2-core-graphics = "0.3"
 raw-window-handle = "0.6"
 wgpu = "22"
 bytemuck = "1"
@@ -150,3 +153,12 @@ path = "demos/demo_gmail_full.rs"
 [[bin]]
 name = "demo_github"
 path = "demos/demo_github.rs"
+
+[[bin]]
+name = "demo_macos_test"
+path = "demos/demo_macos_test.rs"
+required-features = ["crossplatform"]
+
+[[bin]]
+name = "demo_macos_input"
+path = "demos/demo_macos_input.rs"
