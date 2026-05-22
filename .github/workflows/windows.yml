@@ -22,8 +22,8 @@ jobs:
       - name: Build aegis (main bin)
         run: cargo build --no-default-features --features winit-window --bin aegis
 
-      - name: Build cross-platform test_win
-        run: cargo build --no-default-features --features winit-window --bin test_win
+      - name: Build cross-platform demo_win
+        run: cargo build --no-default-features --features winit-window --bin demo_win
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4
@@ -31,4 +31,4 @@ jobs:
           name: aegis-windows
           path: |
             target/debug/aegis.exe
-            target/debug/test_win.exe
+            target/debug/demo_win.exe
