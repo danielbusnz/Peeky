@@ -1,0 +1,39 @@
+# Build and test aegis on macOS. The winit-window + crossplatform
+# feature combo is the only set supported on Mac; hyprland is Linux only.
+#
+# First pass: we want to know whether this compiles at all. The codebase
+# currently shells out to ydotool for input injection, which is Linux only
+# but invoked at runtime, so compilation should still succeed. Anything
+# else that doesn't compile on macOS will surface here.
+
+name: macos-build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Type-check aegis (winit-window + crossplatform)
+        run: cargo check -p aegis --no-default-features --features winit-window,crossplatform --all-targets
+
+      - name: Test aegis
+        run: cargo test -p aegis --no-default-features --features winit-window,crossplatform --bin aegis
+
+      - name: Build aegis bin
+        run: cargo build -p aegis --no-default-features --features winit-window,crossplatform --bin aegis
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aegis-macos
+          path: target/debug/aegis
