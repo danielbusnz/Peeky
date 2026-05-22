@@ -16,8 +16,11 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Type-check all targets
-        run: cargo check --all-targets --no-default-features --features winit-window
+      # Scope to the aegis crate. The launcher (Tauri) needs an icon.ico
+      # we don't have committed yet; until it does, including it here
+      # breaks the windows build.
+      - name: Type-check aegis
+        run: cargo check -p aegis --all-targets --no-default-features --features winit-window
 
       - name: Build aegis (main bin)
         run: cargo build --no-default-features --features winit-window --bin aegis
