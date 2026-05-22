@@ -1,0 +1,64 @@
+# Dependabot configuration for aegis.
+#
+# Three ecosystems live in this repo:
+#   - cargo: the Rust workspace at the repo root.
+#   - github-actions: workflows under .github/workflows/.
+#   - npm: the Cloudflare Worker proxy under proxy/.
+#
+# Weekly cadence keeps the noise down. Updates are grouped per ecosystem
+# so a typical week opens one PR per ecosystem instead of several. Commit
+# prefix matches the repo's lowercase tag style (`deps: …`).
+
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: deps
+    groups:
+      cargo-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+      - rust
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: deps
+    groups:
+      actions:
+        update-types:
+          - minor
+          - patch
+          - major
+    labels:
+      - dependencies
+      - ci
+
+  - package-ecosystem: npm
+    directory: /proxy
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: deps
+    groups:
+      proxy-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+      - proxy
