@@ -14,7 +14,7 @@ pub const AUDIO_PREROLL_MS: u64 = 0;
 /// How long to keep forwarding audio to Deepgram after release.
 /// ↑ more reliable last-syllable capture. adds latency.
 /// ↓ faster EOS to Deepgram. risks clipping the final word.
-pub const AUDIO_POST_RELEASE_GRACE_MS: u64 = 800;
+pub const AUDIO_POST_RELEASE_GRACE_MS: u64 = 0;
 
 // ────── STT ──────
 
