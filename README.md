@@ -9,6 +9,7 @@
   <img alt="License" src="https://img.shields.io/badge/License-MIT-blue">
   <img alt="Platform" src="https://img.shields.io/badge/Linux%20%7C%20Hyprland-black?logo=linux&logoColor=white">
   <img alt="Status" src="https://img.shields.io/badge/Status-WIP-yellow">
+  <img alt="CI" src="https://github.com/danielbusnz-lgtm/Aegis/actions/workflows/ci.yml/badge.svg">
 </p>
 
 <p align="center">

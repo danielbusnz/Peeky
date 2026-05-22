@@ -1,0 +1,62 @@
+# Build, format-check, and test on every push to main and every PR.
+# Runs both feature combos (default hyprland, and winit-window+crossplatform)
+# to catch breakage in either path before merge.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  # Don't compile with debug symbols on CI. Faster, slightly less useful
+  # output if a test actually panics, which it shouldn't.
+  CARGO_PROFILE_TEST_DEBUG: "0"
+
+jobs:
+  build:
+    name: build + test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      # System libraries needed by the optional cargo features. The default
+      # hyprland feature pulls in GTK4 + layer-shell + JACK audio. The
+      # winit-window+crossplatform combo pulls in wayland/xcb. We install
+      # the union so a single runner can build both combos.
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-4-dev \
+            libgtk4-layer-shell-dev \
+            libjack-jackd2-dev \
+            libxkbcommon-dev \
+            libwayland-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libdbus-1-dev
+
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Check (default = hyprland)
+        run: cargo check --bin aegis
+
+      - name: Check (winit-window + crossplatform)
+        run: cargo check --bin aegis --no-default-features --features winit-window,crossplatform
+
+      - name: Test
+        run: cargo test --bin aegis
