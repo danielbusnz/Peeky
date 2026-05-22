@@ -13,33 +13,61 @@ const ONBOARDING_URL: &str = "onboarding/index.html";
 /// Launch the actual aegis cursor + voice agent as a child process.
 ///
 /// Path lookup order:
-/// 1. `../../target/{debug,release}/aegis`: workspace dev layout, the case
-///    when `cargo tauri dev` runs from `launcher/` and the launcher binary
-///    has cwd of `launcher/src-tauri/`.
-/// 2. `target/{debug,release}/aegis`: workspace root cwd (e.g. someone
-///    launches the launcher binary directly from `/Projects/aegis/`).
-/// 3. `./aegis`: sibling-of-binary layout, used by shipped `.app` bundles
-///    where both launcher and aegis live in `Contents/MacOS/`.
+/// 1. Sibling of the launcher executable. In a shipped `.app`/`.msi`
+///    bundle, Tauri's `externalBin` config drops the aegis binary next
+///    to the launcher in `Contents/MacOS/` (macOS) or alongside the
+///    launcher exe (Windows/Linux). This is the production path.
+/// 2. `../../target/{debug,release}/aegis`: workspace dev layout, used
+///    by `cargo tauri dev` where the launcher's cwd is
+///    `launcher/src-tauri/`.
+/// 3. `target/{debug,release}/aegis`: workspace root cwd, used if the
+///    launcher is launched directly from the project root.
 #[tauri::command]
 fn spawn_aegis() -> Result<(), String> {
-    let candidates = [
-        "../../target/debug/aegis",
-        "../../target/release/aegis",
-        "target/debug/aegis",
-        "target/release/aegis",
-        "./aegis",
-    ];
-    for path in candidates {
-        if std::path::Path::new(path).exists() {
+    use std::path::PathBuf;
+
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    // Sibling-of-launcher: works for shipped bundles where Tauri's
+    // externalBin places the aegis sidecar in the same dir as the
+    // launcher's own executable.
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            candidates.push(dir.join("aegis"));
+            #[cfg(windows)]
+            candidates.push(dir.join("aegis.exe"));
+        }
+    }
+
+    // Dev paths: when running via cargo tauri dev or directly from
+    // the workspace.
+    candidates.extend(
+        [
+            "../../target/debug/aegis",
+            "../../target/release/aegis",
+            "target/debug/aegis",
+            "target/release/aegis",
+        ]
+        .iter()
+        .map(PathBuf::from),
+    );
+
+    for path in &candidates {
+        if path.exists() {
             if let Ok(_child) = Command::new(path).spawn() {
                 return Ok(());
             }
         }
     }
+
+    let tried = candidates
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
     Err(format!(
-        "aegis binary not found. Tried: {}. Build it with \
-         `cargo build -p aegis --no-default-features --features winit-window,crossplatform` first.",
-        candidates.join(", ")
+        "aegis binary not found. Tried: {tried}. Build it with \
+         `cargo build --release -p aegis --no-default-features --features winit-window,crossplatform` first."
     ))
 }
 

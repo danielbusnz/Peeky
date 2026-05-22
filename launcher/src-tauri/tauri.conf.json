@@ -53,6 +53,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "externalBin": [
+      "binaries/aegis"
+    ],
     "macOS": {
       "minimumSystemVersion": "10.13"
     }

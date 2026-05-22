@@ -13,9 +13,16 @@ fn main() {
                     println!("   Monitor {}: {}x{} (primary: {})", i, w, h, primary);
                 }
             }
-            if let Some(m) = monitors.into_iter().find(|m| m.is_primary().unwrap_or(false)) {
+            if let Some(m) = monitors
+                .into_iter()
+                .find(|m| m.is_primary().unwrap_or(false))
+            {
                 match m.capture_image() {
-                    Ok(img) => println!("   SUCCESS: Captured {}x{} screenshot", img.width(), img.height()),
+                    Ok(img) => println!(
+                        "   SUCCESS: Captured {}x{} screenshot",
+                        img.width(),
+                        img.height()
+                    ),
                     Err(e) => println!("   FAILED: {}", e),
                 }
             }
@@ -47,12 +54,18 @@ fn main() {
             .output()
             .map(|o| o.status.success())
             .unwrap_or(false);
-        println!("   {}: {} ({})", tool, if exists { "AVAILABLE" } else { "missing" }, note);
+        println!(
+            "   {}: {} ({})",
+            tool,
+            if exists { "AVAILABLE" } else { "missing" },
+            note
+        );
     }
 
     // Test 4: Check if we can use osascript for clicks
     println!("\n4. Testing osascript click capability...");
-    let test_script = r#"tell application "System Events" to get name of first process whose frontmost is true"#;
+    let test_script =
+        r#"tell application "System Events" to get name of first process whose frontmost is true"#;
     match std::process::Command::new("osascript")
         .args(["-e", test_script])
         .output()

@@ -401,22 +401,16 @@ fn exec_click(x: i64, y: i64) {
     thread::sleep(Duration::from_millis(30));
 
     // Create and post mouse down event
-    if let Some(down_event) = CGEvent::new_mouse_event(
-        None,
-        CGEventType::LeftMouseDown,
-        point,
-        CGMouseButton::Left,
-    ) {
+    if let Some(down_event) =
+        CGEvent::new_mouse_event(None, CGEventType::LeftMouseDown, point, CGMouseButton::Left)
+    {
         CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&down_event));
     }
 
     // Create and post mouse up event
-    if let Some(up_event) = CGEvent::new_mouse_event(
-        None,
-        CGEventType::LeftMouseUp,
-        point,
-        CGMouseButton::Left,
-    ) {
+    if let Some(up_event) =
+        CGEvent::new_mouse_event(None, CGEventType::LeftMouseUp, point, CGMouseButton::Left)
+    {
         CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&up_event));
     }
 }
@@ -467,11 +461,7 @@ fn exec_type(text: &str) {
         // Convert text to UTF-16 for CoreGraphics
         let utf16: Vec<u16> = text_to_type.encode_utf16().collect();
         unsafe {
-            CGEvent::keyboard_set_unicode_string(
-                Some(&event),
-                utf16.len() as u64,
-                utf16.as_ptr(),
-            );
+            CGEvent::keyboard_set_unicode_string(Some(&event), utf16.len() as u64, utf16.as_ptr());
         }
         CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&event));
     }
@@ -544,20 +534,61 @@ fn exec_key(combo: &str) {
         "end" => 119,
         "pageup" | "page_up" => 116,
         "pagedown" | "page_down" => 121,
-        "f1" => 122, "f2" => 120, "f3" => 99, "f4" => 118,
-        "f5" => 96, "f6" => 97, "f7" => 98, "f8" => 100,
-        "f9" => 101, "f10" => 109, "f11" => 103, "f12" => 111,
+        "f1" => 122,
+        "f2" => 120,
+        "f3" => 99,
+        "f4" => 118,
+        "f5" => 96,
+        "f6" => 97,
+        "f7" => 98,
+        "f8" => 100,
+        "f9" => 101,
+        "f10" => 109,
+        "f11" => 103,
+        "f12" => 111,
         // Letters a-z (macOS key codes)
-        "a" => 0, "b" => 11, "c" => 8, "d" => 2, "e" => 14,
-        "f" => 3, "g" => 5, "h" => 4, "i" => 34, "j" => 38,
-        "k" => 40, "l" => 37, "m" => 46, "n" => 45, "o" => 31,
-        "p" => 35, "q" => 12, "r" => 15, "s" => 1, "t" => 17,
-        "u" => 32, "v" => 9, "w" => 13, "x" => 7, "y" => 16, "z" => 6,
+        "a" => 0,
+        "b" => 11,
+        "c" => 8,
+        "d" => 2,
+        "e" => 14,
+        "f" => 3,
+        "g" => 5,
+        "h" => 4,
+        "i" => 34,
+        "j" => 38,
+        "k" => 40,
+        "l" => 37,
+        "m" => 46,
+        "n" => 45,
+        "o" => 31,
+        "p" => 35,
+        "q" => 12,
+        "r" => 15,
+        "s" => 1,
+        "t" => 17,
+        "u" => 32,
+        "v" => 9,
+        "w" => 13,
+        "x" => 7,
+        "y" => 16,
+        "z" => 6,
         // Numbers 0-9
-        "0" => 29, "1" => 18, "2" => 19, "3" => 20, "4" => 21,
-        "5" => 23, "6" => 22, "7" => 26, "8" => 28, "9" => 25,
+        "0" => 29,
+        "1" => 18,
+        "2" => 19,
+        "3" => 20,
+        "4" => 21,
+        "5" => 23,
+        "6" => 22,
+        "7" => 26,
+        "8" => 28,
+        "9" => 25,
         _ => {
-            eprintln!("[action:key] unrecognized key '{}' in combo '{}'", key, combo);
+            eprintln!(
+                "[action:key] unrecognized key '{}' in combo '{}'",
+                key, combo
+            );
             return;
         }
     };
