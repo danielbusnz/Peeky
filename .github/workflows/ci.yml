@@ -64,11 +64,8 @@ jobs:
       - name: Check (winit-window + crossplatform)
         run: cargo check -p aegis --no-default-features --features winit-window,crossplatform
 
-      # Advisory for now: lints surface in CI logs but don't fail the build.
-      # Flip to `-- -D warnings` once the existing lints in painter.rs and
-      # friends are cleaned up.
       - name: Clippy
-        run: cargo clippy -p aegis --no-default-features --features winit-window,crossplatform --all-targets
+        run: cargo clippy -p aegis --no-default-features --features winit-window,crossplatform --all-targets -- -D warnings
 
       - name: Test
         run: cargo test -p aegis --no-default-features --features winit-window,crossplatform --bin aegis
