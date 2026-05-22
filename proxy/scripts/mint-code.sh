@@ -76,8 +76,14 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 cd "${SCRIPT_DIR}/.."
 
 # wrangler 4 syntax. KV namespace is resolved from wrangler.toml binding name.
-# Use npx so this works without a global wrangler install.
-npx wrangler kv key put ${LOCAL_FLAG} \
+# Use npx so this works without a global wrangler install. Pass an explicit
+# --local or --remote so wrangler doesn't prompt and default to "no" in a
+# non-interactive shell (which silently writes to nothing useful).
+REMOTE_FLAG=""
+if [[ -z "$LOCAL_FLAG" ]]; then
+    REMOTE_FLAG="--remote"
+fi
+npx wrangler kv key put ${LOCAL_FLAG} ${REMOTE_FLAG} \
     --binding=USAGE_KV \
     "invite:${CODE}" \
     "${PAYLOAD}" >/dev/null
