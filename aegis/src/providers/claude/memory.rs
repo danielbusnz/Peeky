@@ -126,8 +126,12 @@ fn load_facts(path: &PathBuf) -> std::io::Result<Vec<(String, String)>> {
         let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
             continue;
         };
-        let Some(key) = v["key"].as_str() else { continue };
-        let Some(value) = v["value"].as_str() else { continue };
+        let Some(key) = v["key"].as_str() else {
+            continue;
+        };
+        let Some(value) = v["value"].as_str() else {
+            continue;
+        };
         let key = key.trim().to_lowercase();
         let value = value.trim().to_string();
         if let Some(slot) = map.iter_mut().find(|(k, _)| k == &key) {
@@ -258,9 +262,8 @@ impl Claude {
                         Some("content_block_start") => {
                             if event["content_block"]["type"].as_str() == Some("tool_use") {
                                 if tool_name.is_none() {
-                                    tool_name = event["content_block"]["name"]
-                                        .as_str()
-                                        .map(str::to_string);
+                                    tool_name =
+                                        event["content_block"]["name"].as_str().map(str::to_string);
                                 }
                                 in_tool = true;
                                 tool_json_buffer.clear();
@@ -271,9 +274,10 @@ impl Claude {
                         Some("content_block_delta") => {
                             if in_tool
                                 && event["delta"]["type"].as_str() == Some("input_json_delta")
-                                && let Some(j) = event["delta"]["partial_json"].as_str() {
-                                    tool_json_buffer.push_str(j);
-                                }
+                                && let Some(j) = event["delta"]["partial_json"].as_str()
+                            {
+                                tool_json_buffer.push_str(j);
+                            }
                         }
                         _ => {}
                     }
@@ -302,12 +306,14 @@ impl Claude {
                     on_text_delta(reply);
                     return Ok(reply.to_string());
                 }
-                store
-                    .store_fact(&key, &value)
-                    .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
-                        e.to_string().into()
-                    })?;
-                let reply = format!("Got it. I'll remember your {} is {}.", key.replace('_', " "), value);
+                store.store_fact(&key, &value).map_err(
+                    |e| -> Box<dyn std::error::Error + Send + Sync> { e.to_string().into() },
+                )?;
+                let reply = format!(
+                    "Got it. I'll remember your {} is {}.",
+                    key.replace('_', " "),
+                    value
+                );
                 on_text_delta(&reply);
                 Ok(reply)
             }
@@ -377,10 +383,7 @@ mod tests {
 
     #[test]
     fn store_and_recall_roundtrip() {
-        let tmp = std::env::temp_dir().join(format!(
-            "aegis-mem-test-{}.jsonl",
-            std::process::id()
-        ));
+        let tmp = std::env::temp_dir().join(format!("aegis-mem-test-{}.jsonl", std::process::id()));
         let _ = std::fs::remove_file(&tmp);
         let store = MemoryStore::open(tmp.clone()).expect("open");
         store.store_fact("name", "Dan").unwrap();
@@ -407,10 +410,8 @@ mod tests {
 
     #[test]
     fn empty_store_returns_none() {
-        let tmp = std::env::temp_dir().join(format!(
-            "aegis-mem-empty-{}.jsonl",
-            std::process::id()
-        ));
+        let tmp =
+            std::env::temp_dir().join(format!("aegis-mem-empty-{}.jsonl", std::process::id()));
         let _ = std::fs::remove_file(&tmp);
         let store = MemoryStore::open(tmp.clone()).expect("open");
         assert!(store.as_prompt_block().is_none());
