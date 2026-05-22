@@ -30,7 +30,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt
+          components: rustfmt, clippy
 
       # crossplatform pulls in GTK3 on Linux via global-hotkey,
       # plus xcb/x11/wayland deps for xcap + winit + softbuffer.
@@ -63,6 +63,12 @@ jobs:
 
       - name: Check (winit-window + crossplatform)
         run: cargo check -p aegis --no-default-features --features winit-window,crossplatform
+
+      # Advisory for now: lints surface in CI logs but don't fail the build.
+      # Flip to `-- -D warnings` once the existing lints in painter.rs and
+      # friends are cleaned up.
+      - name: Clippy
+        run: cargo clippy -p aegis --no-default-features --features winit-window,crossplatform --all-targets
 
       - name: Test
         run: cargo test -p aegis --no-default-features --features winit-window,crossplatform --bin aegis
