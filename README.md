@@ -2,6 +2,10 @@
   <img alt="aegis cursor" src="launcher/src/welcome/cursor.svg" width="128">
 </p>
 
+> New issues and PRs from new contributors are auto-closed by default. Maintainers review auto-closed issues daily. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+---
+
 <h1 align="center">Aegis</h1>
 
 <p align="center">
@@ -98,6 +102,10 @@ AEGIS_CARTESIA_DIRECT=1
 ```
 
 Each `_DIRECT=1` opts that provider out of the proxy. Mix and match.
+
+## Acknowledgements
+
+Inspired by [farzaa/clicky](https://github.com/farzaa/clicky) and [earendil-works/pi](https://github.com/earendil-works/pi).
 
 ## License
 
