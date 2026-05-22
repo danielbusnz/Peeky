@@ -62,9 +62,7 @@ impl Claude {
 
         let t_pick = std::time::Instant::now();
         let pick_response = self
-            .http
-            .post(&self.endpoint)
-            .header(&self.auth.0, &self.auth.1)
+            .apply_auth(self.http.post(&self.endpoint))
             .header("anthropic-version", "2023-06-01")
             .header("content-type", "application/json")
             .json(&pick_body)
@@ -193,9 +191,7 @@ impl Claude {
 
         let t_summary = std::time::Instant::now();
         let summary_response = self
-            .http
-            .post(&self.endpoint)
-            .header(&self.auth.0, &self.auth.1)
+            .apply_auth(self.http.post(&self.endpoint))
             .header("anthropic-version", "2023-06-01")
             .header("content-type", "application/json")
             .json(&summary_body)

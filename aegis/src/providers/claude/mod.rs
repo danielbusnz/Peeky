@@ -73,6 +73,11 @@ pub struct Claude {
     /// when routed through the proxy, or ("x-api-key", anthropic_key) in
     /// direct mode.
     pub auth: (String, String),
+    /// True when this Claude is routed through the proxy. Controls whether
+    /// we look for an invite code on each request. Direct mode skips the
+    /// lookup since Anthropic ignores unknown headers and there's no point
+    /// in the file read.
+    pub via_proxy: bool,
 }
 
 /// Default endpoint for the hosted proxy. Override at compile time by setting
@@ -81,15 +86,29 @@ const PROXY_URL: &str = "https://aegis-proxy.danielbusnz.workers.dev/v1/anthropi
 const DIRECT_URL: &str = "https://api.anthropic.com/v1/messages";
 
 impl Claude {
+    /// Adds the auth header (always) and the invite code header (when set
+    /// and in proxy mode). Reads the invite code from disk on every call so
+    /// onboarding-time changes take effect on the very next request without
+    /// restarting aegis. File read is ~100us cold and free hot; cheap given
+    /// it's hit a handful of times per voice turn.
+    pub fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        let req = req.header(&self.auth.0, &self.auth.1);
+        if !self.via_proxy {
+            return req;
+        }
+        match super::invite_code::load() {
+            Some(code) => req.header("x-aegis-invite-code", code),
+            None => req,
+        }
+    }
+
     /// Open the HTTPS connection to our endpoint so the first real voice
     /// turn doesn't pay TLS handshake cost. Fires a deliberately-malformed
     /// request that fast-fails on the server; the TCP+TLS handshake leaves
     /// a warm connection in reqwest's pool. Response is discarded.
     pub async fn warm(&self) {
         let _ = self
-            .http
-            .post(&self.endpoint)
-            .header(&self.auth.0, &self.auth.1)
+            .apply_auth(self.http.post(&self.endpoint))
             .header("anthropic-version", "2023-06-01")
             .header("content-type", "application/json")
             .body("{}")
@@ -118,6 +137,7 @@ impl Claude {
                 http,
                 endpoint: DIRECT_URL.to_string(),
                 auth: ("x-api-key".to_string(), api_key),
+                via_proxy: false,
             });
         }
 
@@ -126,6 +146,7 @@ impl Claude {
             http,
             endpoint: PROXY_URL.to_string(),
             auth: ("x-aegis-device-id".to_string(), device_id),
+            via_proxy: true,
         })
     }
 }

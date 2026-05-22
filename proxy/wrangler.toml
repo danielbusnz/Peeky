@@ -2,18 +2,24 @@ name = "aegis-proxy"
 main = "src/index.ts"
 compatibility_date = "2026-05-15"
 
-# Default daily caps (per device, UTC day). Override here without redeploying
-# code — `wrangler deploy` picks up changes.
+# Trial tier: lifetime turn cap per device. Bumped on every endpoint call.
+# 18 = 6 voice queries at 3 calls per query (STT, Claude, TTS). Marketing
+# language is "6 free tries" where a try = one voice query.
 #
-# Sizing notes:
-#   Anthropic: each voice turn sends two screenshots @ ~1.3-1.5k tokens each
-#     plus system prompt + transcript ≈ 3.5k input tokens, ~200-300 output
-#     tokens. 100k input / 20k output ≈ 30 turns/day.
+# Demo tier: fallback daily caps used when an invite code's payload omits a
+# field. Live code values always come from the invite KV entry itself, set
+# by scripts/mint-code.sh.
+#
+# Sizing notes for demo defaults:
+#   Anthropic: each voice turn sends two screenshots at ~1.3-1.5k tokens each
+#     plus system prompt + transcript, around 3.5k input tokens and 200-300
+#     output. 100k input / 20k output is roughly 30 turns/day.
 #   Deepgram: each token gates one streaming STT session. 50 sessions/day is
-#     ~50 voice queries (one per turn). At ~10s of audio each, ~$0.04/day cap.
-#   Cartesia: each token gates one or more TTS sessions. Allow a few extra
-#     because the client may need to refresh during longer conversations.
+#     roughly 50 voice queries. At ~10s of audio each, ~$0.04/day cap.
+#   Cartesia: each token gates one or more TTS sessions. A few extra in case
+#     the client refreshes mid-conversation.
 [vars]
+TRIAL_TURNS_CAP = "18"
 DAILY_INPUT_TOKEN_CAP = "100000"
 DAILY_OUTPUT_TOKEN_CAP = "20000"
 DAILY_DEEPGRAM_TOKEN_CAP = "50"

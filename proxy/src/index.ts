@@ -4,12 +4,21 @@
 // Why it exists:
 //   The desktop app ships without API keys so non-technical users can install
 //   it and have it just work. The Worker holds all three secret keys, caps
-//   per-device daily usage from a KV store, and streams/forwards responses.
+//   per-device usage from a KV store, and streams/forwards responses.
+//
+// Two tiers, selected per request:
+//   trial — no invite code. Lifetime turn counter, capped by TRIAL_TURNS_CAP.
+//           Default 18 turns = 6 voice queries at 3 calls/query (STT, Claude,
+//           TTS). Cap is per-device, soft-resets after 30 days of inactivity
+//           when the KV entry expires.
+//   demo  — request carries `x-aegis-invite-code`. Code's KV payload supplies
+//           per-day token caps and a max-devices binding. Used for recruiter
+//           demos and anyone we hand-grant extended access.
 //
 // Routes:
-//   POST /v1/anthropic/messages   — full HTTP SSE proxy to Claude Messages API
-//   POST /v1/deepgram/token       — mint short-lived Deepgram JWT for STT WS
-//   POST /v1/cartesia/token       — mint short-lived Cartesia access token for TTS WS
+//   POST /v1/anthropic/messages   HTTP SSE proxy to Claude Messages API
+//   POST /v1/deepgram/token       mint short-lived Deepgram JWT for STT WS
+//   POST /v1/cartesia/token       mint short-lived Cartesia access token for TTS WS
 //
 // Why mixed patterns:
 //   Anthropic is HTTP request/response with streaming SSE. We forward bytes
@@ -29,9 +38,16 @@ export interface Env {
     DEEPGRAM_API_KEY: string;
     /** Cartesia API key. Set via `wrangler secret put CARTESIA_API_KEY`. */
     CARTESIA_API_KEY: string;
-    /** KV namespace storing `usage:{deviceId}:{yyyy-mm-dd}` -> usage object. */
+    /**
+     * Shared namespace for both usage counters and invite codes. Keys:
+     *   usage:trial:{deviceId}                  -> TrialUsage (30d TTL)
+     *   usage:demo:{code}:{deviceId}:{date}     -> Usage (48h TTL)
+     *   invite:{CODE}                           -> InviteCode (no TTL, managed by hand)
+     */
     USAGE_KV: KVNamespace;
-    /** Daily caps (decimal strings, tunable via wrangler.toml without redeploy). */
+    /** Lifetime turn cap for trial-tier devices. Decimal string. */
+    TRIAL_TURNS_CAP: string;
+    /** Daily caps for demo-tier devices when the invite code omits a field. */
     DAILY_INPUT_TOKEN_CAP: string;
     DAILY_OUTPUT_TOKEN_CAP: string;
     DAILY_DEEPGRAM_TOKEN_CAP: string;
@@ -49,12 +65,39 @@ type Usage = {
     cartesia_tokens: number;
 };
 
+type TrialUsage = {
+    /** Any-endpoint calls this device has made. Compared to TRIAL_TURNS_CAP. */
+    turns: number;
+};
+
+type DemoCaps = {
+    daily_input_tokens: number;
+    daily_output_tokens: number;
+    daily_deepgram_tokens: number;
+    daily_cartesia_tokens: number;
+};
+
+type InviteCode = DemoCaps & {
+    /** ISO 8601. Codes past this date are rejected. */
+    expires_at: string;
+    /** Hard ceiling on `devices_seen.length`. */
+    max_devices: number;
+    /** Device IDs that have used this code. Append-only. */
+    devices_seen: string[];
+};
+
+type Tier =
+    | { kind: "trial"; turnsCap: number }
+    | { kind: "demo"; code: string; caps: DemoCaps };
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CODE_RE = /^[A-Z0-9][A-Z0-9-]{6,62}[A-Z0-9]$/;
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const DEEPGRAM_TOKEN_URL = "https://api.deepgram.com/v1/auth/grant";
 const CARTESIA_TOKEN_URL = "https://api.cartesia.ai/access-token";
 const CARTESIA_API_VERSION = "2026-03-01";
-const KV_TTL_SECONDS = 48 * 60 * 60; // two days, lets yesterday roll off
+const DEMO_KV_TTL_SECONDS = 48 * 60 * 60;
+const TRIAL_KV_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 // How long upstream tokens live. Long enough for the client to open a WS,
 // short enough that a stolen token is useless quickly.
@@ -88,9 +131,8 @@ export default {
 // ────────────────────────────────────────────────────────────────────────────
 
 /**
- * Full HTTP proxy for Anthropic's Messages API. Streams the SSE response back
- * unchanged and tees a copy into a background task that tallies token usage
- * into KV.
+ * Full HTTP proxy for Anthropic's Messages API. Trial tier bumps the turn
+ * counter pre-flight; demo tier tallies token usage from a teed SSE copy.
  */
 async function handleAnthropic(
     request: Request,
@@ -99,6 +141,9 @@ async function handleAnthropic(
 ): Promise<Response> {
     const deviceId = requireDeviceId(request);
     if (deviceId instanceof Response) return deviceId;
+
+    const tier = await resolveTier(request, env, deviceId);
+    if (tier instanceof Response) return tier;
 
     const rawBody = await request.text();
     let parsed: { stream?: boolean };
@@ -111,21 +156,42 @@ async function handleAnthropic(
         return cors(jsonResponse(400, { error: "stream: true required" }));
     }
 
-    const kvKey = usageKey(deviceId);
-    const usage = await readUsage(env.USAGE_KV, kvKey);
-    const inputCap = parseCap(env.DAILY_INPUT_TOKEN_CAP, 100_000);
-    const outputCap = parseCap(env.DAILY_OUTPUT_TOKEN_CAP, 20_000);
-
-    if (usage.input >= inputCap || usage.output >= outputCap) {
-        return cors(
-            jsonResponse(429, {
-                error: "daily_cap_exceeded",
-                message: "Daily free tier cap reached. Try again tomorrow.",
-                provider: "anthropic",
-                usage,
-                caps: { input: inputCap, output: outputCap },
-            }),
-        );
+    // Pre-flight cap check. Trial pays a turn up front; demo pays tokens after
+    // the SSE stream reports usage.
+    if (tier.kind === "trial") {
+        const consumed = await consumeTrialTurn(env.USAGE_KV, deviceId, tier.turnsCap);
+        if (!consumed) {
+            return cors(
+                jsonResponse(429, {
+                    error: "trial_exhausted",
+                    message:
+                        "Free trial spent. Use your own API keys (BYOK) or contact us for an invite code.",
+                    provider: "anthropic",
+                    tier: "trial",
+                }),
+            );
+        }
+    } else {
+        const kvKey = demoUsageKey(tier.code, deviceId);
+        const usage = await readUsage(env.USAGE_KV, kvKey);
+        if (
+            usage.input >= tier.caps.daily_input_tokens ||
+            usage.output >= tier.caps.daily_output_tokens
+        ) {
+            return cors(
+                jsonResponse(429, {
+                    error: "daily_cap_exceeded",
+                    message: "Daily cap for this invite code reached. Try again tomorrow.",
+                    provider: "anthropic",
+                    tier: "demo",
+                    usage,
+                    caps: {
+                        input: tier.caps.daily_input_tokens,
+                        output: tier.caps.daily_output_tokens,
+                    },
+                }),
+            );
+        }
     }
 
     const upstreamHeaders: Record<string, string> = {
@@ -151,11 +217,22 @@ async function handleAnthropic(
         );
     }
 
-    const [toClient, toTally] = upstream.body.tee();
-    ctx.waitUntil(tallyAnthropicUsage(toTally, env.USAGE_KV, kvKey));
+    // Only demo tier needs token accounting. Trial already paid its turn.
+    if (tier.kind === "demo") {
+        const [toClient, toTally] = upstream.body.tee();
+        ctx.waitUntil(
+            tallyAnthropicUsage(toTally, env.USAGE_KV, demoUsageKey(tier.code, deviceId)),
+        );
+        return cors(
+            new Response(toClient, {
+                status: 200,
+                headers: passthroughHeaders(upstream.headers),
+            }),
+        );
+    }
 
     return cors(
-        new Response(toClient, {
+        new Response(upstream.body, {
             status: 200,
             headers: passthroughHeaders(upstream.headers),
         }),
@@ -174,19 +251,36 @@ async function handleDeepgramToken(
     const deviceId = requireDeviceId(request);
     if (deviceId instanceof Response) return deviceId;
 
-    const kvKey = usageKey(deviceId);
-    const usage = await readUsage(env.USAGE_KV, kvKey);
-    const cap = parseCap(env.DAILY_DEEPGRAM_TOKEN_CAP, 50);
+    const tier = await resolveTier(request, env, deviceId);
+    if (tier instanceof Response) return tier;
 
-    if (usage.deepgram_tokens >= cap) {
-        return cors(
-            jsonResponse(429, {
-                error: "daily_cap_exceeded",
-                message: "Daily STT session cap reached. Try again tomorrow.",
-                provider: "deepgram",
-                usage: { used: usage.deepgram_tokens, cap },
-            }),
-        );
+    if (tier.kind === "trial") {
+        const consumed = await consumeTrialTurn(env.USAGE_KV, deviceId, tier.turnsCap);
+        if (!consumed) {
+            return cors(
+                jsonResponse(429, {
+                    error: "trial_exhausted",
+                    message:
+                        "Free trial spent. Use your own API keys (BYOK) or contact us for an invite code.",
+                    provider: "deepgram",
+                    tier: "trial",
+                }),
+            );
+        }
+    } else {
+        const kvKey = demoUsageKey(tier.code, deviceId);
+        const usage = await readUsage(env.USAGE_KV, kvKey);
+        if (usage.deepgram_tokens >= tier.caps.daily_deepgram_tokens) {
+            return cors(
+                jsonResponse(429, {
+                    error: "daily_cap_exceeded",
+                    message: "Daily STT session cap reached. Try again tomorrow.",
+                    provider: "deepgram",
+                    tier: "demo",
+                    usage: { used: usage.deepgram_tokens, cap: tier.caps.daily_deepgram_tokens },
+                }),
+            );
+        }
     }
 
     const upstream = await fetch(DEEPGRAM_TOKEN_URL, {
@@ -211,9 +305,11 @@ async function handleDeepgramToken(
 
     const grant = (await upstream.json()) as { access_token: string; expires_in: number };
 
-    // Bump the issuance counter. Read-modify-write; brief race window is
-    // acceptable for soft caps.
-    ctx.waitUntil(bumpCounter(env.USAGE_KV, kvKey, "deepgram_tokens"));
+    if (tier.kind === "demo") {
+        ctx.waitUntil(
+            bumpCounter(env.USAGE_KV, demoUsageKey(tier.code, deviceId), "deepgram_tokens"),
+        );
+    }
 
     return cors(
         jsonResponse(200, {
@@ -236,19 +332,36 @@ async function handleCartesiaToken(
     const deviceId = requireDeviceId(request);
     if (deviceId instanceof Response) return deviceId;
 
-    const kvKey = usageKey(deviceId);
-    const usage = await readUsage(env.USAGE_KV, kvKey);
-    const cap = parseCap(env.DAILY_CARTESIA_TOKEN_CAP, 100);
+    const tier = await resolveTier(request, env, deviceId);
+    if (tier instanceof Response) return tier;
 
-    if (usage.cartesia_tokens >= cap) {
-        return cors(
-            jsonResponse(429, {
-                error: "daily_cap_exceeded",
-                message: "Daily TTS session cap reached. Try again tomorrow.",
-                provider: "cartesia",
-                usage: { used: usage.cartesia_tokens, cap },
-            }),
-        );
+    if (tier.kind === "trial") {
+        const consumed = await consumeTrialTurn(env.USAGE_KV, deviceId, tier.turnsCap);
+        if (!consumed) {
+            return cors(
+                jsonResponse(429, {
+                    error: "trial_exhausted",
+                    message:
+                        "Free trial spent. Use your own API keys (BYOK) or contact us for an invite code.",
+                    provider: "cartesia",
+                    tier: "trial",
+                }),
+            );
+        }
+    } else {
+        const kvKey = demoUsageKey(tier.code, deviceId);
+        const usage = await readUsage(env.USAGE_KV, kvKey);
+        if (usage.cartesia_tokens >= tier.caps.daily_cartesia_tokens) {
+            return cors(
+                jsonResponse(429, {
+                    error: "daily_cap_exceeded",
+                    message: "Daily TTS session cap reached. Try again tomorrow.",
+                    provider: "cartesia",
+                    tier: "demo",
+                    usage: { used: usage.cartesia_tokens, cap: tier.caps.daily_cartesia_tokens },
+                }),
+            );
+        }
     }
 
     const upstream = await fetch(CARTESIA_TOKEN_URL, {
@@ -277,7 +390,11 @@ async function handleCartesiaToken(
 
     const grant = (await upstream.json()) as { token: string };
 
-    ctx.waitUntil(bumpCounter(env.USAGE_KV, kvKey, "cartesia_tokens"));
+    if (tier.kind === "demo") {
+        ctx.waitUntil(
+            bumpCounter(env.USAGE_KV, demoUsageKey(tier.code, deviceId), "cartesia_tokens"),
+        );
+    }
 
     return cors(
         jsonResponse(200, {
@@ -285,6 +402,94 @@ async function handleCartesiaToken(
             expires_in: CARTESIA_TOKEN_TTL_SECONDS,
         }),
     );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Tier resolution + invite codes
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Inspects the request for `x-aegis-invite-code`. If absent, returns the trial
+ * tier with the configured cap. If present, validates the code, enforces
+ * expiry + device binding, and returns the demo tier. Returns an error
+ * Response on any validation failure so callers can early-return.
+ */
+async function resolveTier(
+    request: Request,
+    env: Env,
+    deviceId: string,
+): Promise<Tier | Response> {
+    const code = request.headers.get("x-aegis-invite-code");
+    if (!code) {
+        return { kind: "trial", turnsCap: parseCap(env.TRIAL_TURNS_CAP, 18) };
+    }
+
+    const normalized = code.trim().toUpperCase();
+    if (!CODE_RE.test(normalized)) {
+        return cors(jsonResponse(400, { error: "invalid invite code format" }));
+    }
+
+    const raw = await env.USAGE_KV.get(`invite:${normalized}`);
+    if (!raw) {
+        return cors(jsonResponse(403, { error: "invite_code_unknown" }));
+    }
+
+    let invite: InviteCode;
+    try {
+        invite = JSON.parse(raw) as InviteCode;
+    } catch {
+        console.error(`[invite] malformed payload for ${normalized}`);
+        return cors(jsonResponse(500, { error: "invite_code_corrupt" }));
+    }
+
+    if (Date.parse(invite.expires_at) <= Date.now()) {
+        return cors(jsonResponse(403, { error: "invite_code_expired" }));
+    }
+
+    // Bind device-id to code on first sighting. RMW with a small race window
+    // that may briefly let one extra device through; acceptable for the trust
+    // level of invite codes.
+    if (!invite.devices_seen.includes(deviceId)) {
+        if (invite.devices_seen.length >= invite.max_devices) {
+            return cors(
+                jsonResponse(403, {
+                    error: "invite_code_device_limit",
+                    message: `This code is limited to ${invite.max_devices} device(s).`,
+                }),
+            );
+        }
+        invite.devices_seen.push(deviceId);
+        await env.USAGE_KV.put(`invite:${normalized}`, JSON.stringify(invite));
+    }
+
+    return {
+        kind: "demo",
+        code: normalized,
+        caps: {
+            daily_input_tokens: invite.daily_input_tokens,
+            daily_output_tokens: invite.daily_output_tokens,
+            daily_deepgram_tokens: invite.daily_deepgram_tokens,
+            daily_cartesia_tokens: invite.daily_cartesia_tokens,
+        },
+    };
+}
+
+/**
+ * Trial-tier read-modify-write: returns true and bumps the counter if the
+ * device has turns left, false otherwise. Small race window where two
+ * concurrent requests both succeed at the same cap boundary is acceptable.
+ */
+async function consumeTrialTurn(
+    kv: KVNamespace,
+    deviceId: string,
+    cap: number,
+): Promise<boolean> {
+    const key = trialUsageKey(deviceId);
+    const existing = await readTrialUsage(kv, key);
+    if (existing.turns >= cap) return false;
+    existing.turns += 1;
+    await kv.put(key, JSON.stringify(existing), { expirationTtl: TRIAL_KV_TTL_SECONDS });
+    return true;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -307,8 +512,12 @@ function requireDeviceId(request: Request): string | Response {
     return deviceId;
 }
 
-function usageKey(deviceId: string): string {
-    return `usage:${deviceId}:${utcDateKey(new Date())}`;
+function demoUsageKey(code: string, deviceId: string): string {
+    return `usage:demo:${code}:${deviceId}:${utcDateKey(new Date())}`;
+}
+
+function trialUsageKey(deviceId: string): string {
+    return `usage:trial:${deviceId}`;
 }
 
 function utcDateKey(d: Date): string {
@@ -338,6 +547,17 @@ async function readUsage(kv: KVNamespace, key: string): Promise<Usage> {
     }
 }
 
+async function readTrialUsage(kv: KVNamespace, key: string): Promise<TrialUsage> {
+    const raw = await kv.get(key);
+    if (!raw) return { turns: 0 };
+    try {
+        const parsed = JSON.parse(raw) as Partial<TrialUsage>;
+        return { turns: typeof parsed.turns === "number" ? parsed.turns : 0 };
+    } catch {
+        return { turns: 0 };
+    }
+}
+
 function emptyUsage(): Usage {
     return { input: 0, output: 0, deepgram_tokens: 0, cartesia_tokens: 0 };
 }
@@ -349,7 +569,7 @@ async function bumpCounter(
 ): Promise<void> {
     const existing = await readUsage(kv, key);
     existing[field] += 1;
-    await kv.put(key, JSON.stringify(existing), { expirationTtl: KV_TTL_SECONDS });
+    await kv.put(key, JSON.stringify(existing), { expirationTtl: DEMO_KV_TTL_SECONDS });
 }
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -365,7 +585,7 @@ function cors(res: Response): Response {
     headers.set("access-control-allow-methods", "POST, OPTIONS");
     headers.set(
         "access-control-allow-headers",
-        "content-type, anthropic-version, anthropic-beta, x-aegis-device-id",
+        "content-type, anthropic-version, anthropic-beta, x-aegis-device-id, x-aegis-invite-code",
     );
     return new Response(res.body, { status: res.status, headers });
 }
@@ -435,5 +655,5 @@ async function tallyAnthropicUsage(
         input: existing.input + input,
         output: existing.output + output,
     };
-    await kv.put(kvKey, JSON.stringify(total), { expirationTtl: KV_TTL_SECONDS });
+    await kv.put(kvKey, JSON.stringify(total), { expirationTtl: DEMO_KV_TTL_SECONDS });
 }

@@ -43,6 +43,45 @@ fn spawn_aegis() -> Result<(), String> {
     ))
 }
 
+/// Local format check. Mirrors the proxy's CODE_RE so we fail on obvious
+/// junk before the proxy ever sees it. The proxy is the source of truth
+/// for expiry, device limits, and unknown codes.
+fn validate_code(code: &str) -> Result<(), &'static str> {
+    let bytes = code.as_bytes();
+    if !(8..=64).contains(&bytes.len()) {
+        return Err("invalid invite code format");
+    }
+    let valid_chars = bytes
+        .iter()
+        .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || *b == b'-');
+    if !valid_chars {
+        return Err("invalid invite code format");
+    }
+    if bytes.first() == Some(&b'-') || bytes.last() == Some(&b'-') {
+        return Err("invalid invite code format");
+    }
+    Ok(())
+}
+
+/// Validate and persist an invite code to the same config dir aegis reads
+/// from at startup (see aegis/src/providers/invite_code.rs). The empty
+/// string clears the code.
+#[tauri::command]
+fn save_invite_code(code: String) -> Result<(), String> {
+    let trimmed = code.trim();
+    if !trimmed.is_empty() {
+        validate_code(trimmed).map_err(str::to_string)?;
+    }
+
+    let dir = dirs::config_dir()
+        .ok_or("no config dir on this platform")?
+        .join("aegis");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("create_dir_all: {e}"))?;
+    let path = dir.join("invite_code");
+    std::fs::write(&path, trimmed).map_err(|e| format!("write: {e}"))?;
+    Ok(())
+}
+
 fn main() {
     // webkit2gtk's DMABUF renderer crashes against Hyprland and several
     // other Wayland compositors with "Error 71 (Protocol error)". Disabling
@@ -54,7 +93,7 @@ fn main() {
     }
 
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![spawn_aegis])
+        .invoke_handler(tauri::generate_handler![spawn_aegis, save_invite_code])
         .setup(|app| {
             // Onboarding window is created here (not in tauri.conf.json) so
             // we can pick the URL at compile time per target OS. welcome.js
@@ -78,4 +117,46 @@ fn main() {
         })
         .run(tauri::generate_context!())
         .expect("error running launcher");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_code;
+
+    #[test]
+    fn accepts_typical_recruiter_code() {
+        assert!(validate_code("RECRUITER-ACME-7K2X").is_ok());
+    }
+
+    #[test]
+    fn accepts_minimum_length() {
+        assert!(validate_code("ABCDEFGH").is_ok());
+    }
+
+    #[test]
+    fn rejects_too_short() {
+        assert!(validate_code("ABC").is_err());
+    }
+
+    #[test]
+    fn rejects_too_long() {
+        assert!(validate_code(&"A".repeat(65)).is_err());
+    }
+
+    #[test]
+    fn rejects_lowercase() {
+        assert!(validate_code("recruiter-acme").is_err());
+    }
+
+    #[test]
+    fn rejects_special_chars() {
+        assert!(validate_code("RECRUITER!ACME").is_err());
+        assert!(validate_code("RECRUITER ACME").is_err());
+    }
+
+    #[test]
+    fn rejects_leading_or_trailing_dash() {
+        assert!(validate_code("-RECRUITER-ACME").is_err());
+        assert!(validate_code("RECRUITER-ACME-").is_err());
+    }
 }

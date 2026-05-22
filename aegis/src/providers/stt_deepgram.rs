@@ -89,12 +89,16 @@ impl SttDeepgram {
                 token_url,
                 device_id,
             } => {
-                let resp = self
+                // Re-read the invite code on every mint so the onboarding
+                // window can change it without an aegis restart.
+                let mut req = self
                     .http
                     .post(token_url)
-                    .header("x-aegis-device-id", device_id)
-                    .send()
-                    .await?;
+                    .header("x-aegis-device-id", device_id);
+                if let Some(code) = super::invite_code::load() {
+                    req = req.header("x-aegis-invite-code", code);
+                }
+                let resp = req.send().await?;
                 if !resp.status().is_success() {
                     let status = resp.status();
                     let body = resp.text().await.unwrap_or_default();

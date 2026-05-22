@@ -59,9 +59,7 @@ impl Claude {
 
         let t_send = std::time::Instant::now();
         let response = self
-            .http
-            .post(&self.endpoint)
-            .header(&self.auth.0, &self.auth.1)
+            .apply_auth(self.http.post(&self.endpoint))
             .header("anthropic-version", "2023-06-01")
             .header("content-type", "application/json")
             .json(&body)
