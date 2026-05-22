@@ -113,7 +113,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and [AGENTS.m
 
 ## Acknowledgements
 
-Inspired by [farzaa/clicky](https://github.com/farzaa/clicky) and [earendil-works/pi](https://github.com/earendil-works/pi).
+Inspired by [farzaa/clicky](https://github.com/farzaa/clicky), [earendil-works/pi](https://github.com/earendil-works/pi), and [mem0ai/mem0](https://github.com/mem0ai/mem0).
 
 ## License
 
