@@ -6,7 +6,7 @@ This guide exists to save both sides time.
 
 **You must understand your code.** If you cannot explain what your changes do and how they interact with the rest of the system, your PR will be closed.
 
-Using AI to write code is fine. Submitting AI-generated slop without understanding it is not.
+Using AI to write code is tolerated. Submitting AI-generated slop without understanding it is not.
 
 If you use an agent, run it from the `aegis` root directory so it picks up `AGENTS.md` automatically. Your agent must follow the rules and guidelines in that file.
 
