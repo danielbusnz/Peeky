@@ -18,6 +18,10 @@ on:
 
 permissions:
   contents: write
+  # Required for actions/attest-build-provenance to mint an OIDC token
+  # and store a sigstore-signed SLSA provenance attestation.
+  id-token: write
+  attestations: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -65,6 +69,14 @@ jobs:
           (cd dist && tar -czf aegis-linux-x86_64.tar.gz aegis-linux-x86_64)
           (cd dist && sha256sum aegis-linux-x86_64.tar.gz > aegis-linux-x86_64.tar.gz.sha256)
 
+      # SLSA build provenance: signed attestation linking the artifact to
+      # this exact workflow run and commit. Verifiable with
+      # `gh attestation verify aegis-linux-x86_64.tar.gz --repo danielbusnz-lgtm/Aegis`.
+      - name: Attest Linux artifact
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/aegis-linux-x86_64.tar.gz
+
       - uses: actions/upload-artifact@v4
         with:
           name: aegis-linux
@@ -90,6 +102,11 @@ jobs:
           Compress-Archive -Path dist/aegis-windows-x86_64.exe -DestinationPath dist/aegis-windows-x86_64.zip
           $hash = (Get-FileHash dist/aegis-windows-x86_64.zip -Algorithm SHA256).Hash.ToLower()
           "$hash  aegis-windows-x86_64.zip" | Out-File -Encoding ascii dist/aegis-windows-x86_64.zip.sha256
+
+      - name: Attest Windows artifact
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/aegis-windows-x86_64.zip
 
       - uses: actions/upload-artifact@v4
         with:
