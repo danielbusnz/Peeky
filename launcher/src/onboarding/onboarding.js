@@ -11,6 +11,9 @@ function dismiss() {
 // Click the visual key.
 document.getElementById("dismiss-button").addEventListener("click", dismiss);
 
+// Top-right X to close without going through the hotkey flow.
+document.getElementById("close-button").addEventListener("click", dismiss);
+
 // Or press the actual hotkey. Insert on Linux/Windows, Ctrl+Space on macOS.
 // Both branches are safe on every platform: Macs don't have an Insert key
 // and Linux users won't normally press Ctrl+Space in this window.

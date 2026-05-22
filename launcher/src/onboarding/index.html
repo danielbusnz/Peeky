@@ -6,7 +6,8 @@
     <title>Aegis</title>
     <script src="https://cdn.tailwindcss.com"></script>
   </head>
-  <body class="h-full" data-tauri-drag-region>
+  <body class="h-full relative" data-tauri-drag-region>
+    <button type="button" id="close-button" aria-label="Close" class="absolute top-3 right-3 z-10 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-lg leading-none text-gray-500 transition-colors hover:bg-white/5 hover:text-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff8c00]/60">×</button>
     <div class="flex min-h-full flex-col items-center justify-center gap-4 px-6 py-8">
       <p class="text-2xl text-gray-400">
         Use
