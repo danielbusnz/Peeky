@@ -200,7 +200,11 @@ impl CursorApp {
             };
         }
 
-        // Run one tick to advance position.
+        // Run one tick to advance position. The mouse_position crate
+        // returns logical points on macOS but physical pixels on X11, so
+        // we scale only on macOS. The canvas is sized in physical pixels
+        // (window.inner_size() returns physical), so without this the
+        // sprite renders in the upper-left quadrant on Retina displays.
         let next = tick(
             &self.receiver,
             &mut self.cursor_x,
@@ -208,6 +212,11 @@ impl CursorApp {
             &mut self.override_target,
             &mut self.last_tick,
         );
+        #[cfg(target_os = "macos")]
+        let next = next.map(|(x, y)| {
+            let sf = window.scale_factor();
+            (x * sf, y * sf)
+        });
 
         // Compute the drawable's bounding box for this frame. (x, y) is the
         // visual center (matching hyprland's Drawable convention), so the box
