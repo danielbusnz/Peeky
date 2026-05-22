@@ -1,11 +1,16 @@
-# Fast feedback: rustfmt + type-check + unit tests on every push to main
-# and every PR. Builds the cross-platform feature combo because the
-# Hyprland-specific deps (gtk4-layer-shell, etc.) aren't packaged for
-# generic Ubuntu runners.
+# Fast feedback on every push to main and every PR.
+#
+# Two jobs:
+#   - lint:  rustfmt + clippy on stable. Required gate.
+#   - build: type-check + test across a Rust matrix (stable, beta, MSRV).
+#            Only the stable cell gates merging; beta and MSRV are
+#            advisory so future toolchain regressions surface early
+#            without blocking work.
 #
 # Companion workflows:
 #   - linux.yml builds a release binary for Linux winit-window
 #   - windows.yml builds release binaries for Windows
+#   - release.yml ships signed artifacts on tag push
 
 name: ci
 
@@ -20,21 +25,16 @@ env:
   CARGO_PROFILE_TEST_DEBUG: "0"
 
 jobs:
-  build:
-    name: build + test
+  lint:
+    name: lint
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
 
-      # crossplatform pulls in GTK3 on Linux via global-hotkey,
-      # plus xcb/x11/wayland deps for xcap + winit + softbuffer.
-      # Mirrors linux.yml's dep list so CI compiles cleanly.
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -55,17 +55,60 @@ jobs:
             libxss-dev \
             pkg-config
 
-      - name: Cache cargo registry + target
-        uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: lint
 
       - name: Format check
         run: cargo fmt --all -- --check
 
-      - name: Check (winit-window + crossplatform)
-        run: cargo check -p aegis --no-default-features --features winit-window,crossplatform
-
       - name: Clippy
         run: cargo clippy -p aegis --no-default-features --features winit-window,crossplatform --all-targets -- -D warnings
+
+  build:
+    name: build + test (${{ matrix.rust }})
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: [stable, beta, "1.85"]
+    runs-on: ubuntu-latest
+    # Only the stable cell gates merging. Beta and MSRV are advisory:
+    # they surface upstream changes (new lints, std-lib bumps, dep MSRV
+    # creep) without blocking work on green stable.
+    continue-on-error: ${{ matrix.rust != 'stable' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-dev \
+            libpipewire-0.3-dev \
+            libxkbcommon-dev \
+            libwayland-dev \
+            libasound2-dev \
+            libgbm-dev \
+            libegl-dev \
+            libxcb1-dev \
+            libxcb-shm0-dev \
+            libxcb-render0-dev \
+            libxcb-randr0-dev \
+            libxcb-xfixes0-dev \
+            libxrandr-dev \
+            libxss-dev \
+            pkg-config
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: build-${{ matrix.rust }}
+
+      - name: Check
+        run: cargo check -p aegis --no-default-features --features winit-window,crossplatform
 
       - name: Test
         run: cargo test -p aegis --no-default-features --features winit-window,crossplatform --bin aegis
