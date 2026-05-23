@@ -1,12 +1,13 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Aegis Settings",
+  "productName": "Aegis",
   "version": "0.1.0",
   "identifier": "com.aegis.settings",
   "build": {
     "frontendDist": "../src"
   },
   "app": {
+    "macOSPrivateApi": true,
     "withGlobalTauri": true,
     "windows": [
       {
