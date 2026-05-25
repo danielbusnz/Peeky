@@ -9,17 +9,17 @@
 mod backend;
 pub use backend::MousePositionBackend;
 
-#[cfg(any(not(target_os = "linux"), feature = "force-crossplatform"))]
+#[cfg(not(all(target_os = "linux", feature = "hyprland")))]
 mod crossplatform;
-#[cfg(all(target_os = "linux", not(feature = "force-crossplatform")))]
+#[cfg(all(target_os = "linux", feature = "hyprland"))]
 mod hyprland;
 
 // Linux uses the native Hyprland backend; everything else (and Linux under the
-// force-crossplatform dev override) uses the portable backend. The two cfgs are
+// no-default-features build) uses the portable backend. The two cfgs are
 // mutually exclusive and exhaustive, so exactly one Active is always defined.
-#[cfg(all(target_os = "linux", not(feature = "force-crossplatform")))]
+#[cfg(all(target_os = "linux", feature = "hyprland"))]
 type Active = hyprland::Backend;
-#[cfg(any(not(target_os = "linux"), feature = "force-crossplatform"))]
+#[cfg(not(all(target_os = "linux", feature = "hyprland")))]
 type Active = crossplatform::Backend;
 
 /// Returns the cursor's absolute screen position as `(x, y)` in pixels.

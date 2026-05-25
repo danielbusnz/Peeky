@@ -40,12 +40,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libgtk-3-dev \
-            libgtk-4-dev \
-            libgtk4-layer-shell-dev \
             libpipewire-0.3-dev \
             libxkbcommon-dev \
             libwayland-dev \
             libasound2-dev \
+            libjack-jackd2-dev \
             libgbm-dev \
             libegl-dev \
             libxcb1-dev \
@@ -64,11 +63,10 @@ jobs:
       - name: Format check
         run: cargo fmt --all -- --check
 
-      - name: Clippy (default / Hyprland)
-        run: cargo clippy -p aegis --all-targets -- -D warnings
-
-      - name: Clippy (force-crossplatform / winit)
-        run: cargo clippy -p aegis --features force-crossplatform --all-targets -- -D warnings
+      # --no-default-features drops the `hyprland` feature, so this builds the
+      # winit + portable-crate path (no GTK4/layer-shell C libs needed in CI).
+      - name: Clippy (winit / portable path)
+        run: cargo clippy -p aegis --no-default-features --all-targets -- -D warnings
 
   build:
     name: build + test (${{ matrix.rust }})
@@ -93,12 +91,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libgtk-3-dev \
-            libgtk-4-dev \
-            libgtk4-layer-shell-dev \
             libpipewire-0.3-dev \
             libxkbcommon-dev \
             libwayland-dev \
             libasound2-dev \
+            libjack-jackd2-dev \
             libgbm-dev \
             libegl-dev \
             libxcb1-dev \
@@ -115,7 +112,7 @@ jobs:
           key: build-${{ matrix.rust }}
 
       - name: Check
-        run: cargo check -p aegis
+        run: cargo check -p aegis --no-default-features
 
       - name: Test
-        run: cargo test -p aegis
+        run: cargo test -p aegis --no-default-features

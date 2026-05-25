@@ -1,16 +1,16 @@
 use std::sync::OnceLock;
 use std::time::Instant;
 
-#[cfg(all(target_os = "linux", not(feature = "force-crossplatform")))]
+#[cfg(all(target_os = "linux", feature = "hyprland"))]
 use gtk::cairo;
-#[cfg(all(target_os = "linux", not(feature = "force-crossplatform")))]
+#[cfg(all(target_os = "linux", feature = "hyprland"))]
 use gtk::prelude::*;
-#[cfg(all(target_os = "linux", not(feature = "force-crossplatform")))]
+#[cfg(all(target_os = "linux", feature = "hyprland"))]
 use std::cell::{Cell, RefCell};
-#[cfg(all(target_os = "linux", not(feature = "force-crossplatform")))]
+#[cfg(all(target_os = "linux", feature = "hyprland"))]
 use std::rc::Rc;
 
-#[cfg(any(not(target_os = "linux"), feature = "force-crossplatform"))]
+#[cfg(not(all(target_os = "linux", feature = "hyprland")))]
 use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, PixmapPaint, Transform};
 
 /// Caller-provided function returning current mic RMS (0.0..=1.0). Registered
@@ -148,7 +148,7 @@ fn spinner_size() -> (f64, f64) {
 //   Cairo / GTK backend (Hyprland)
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[cfg(all(target_os = "linux", not(feature = "force-crossplatform")))]
+#[cfg(all(target_os = "linux", feature = "hyprland"))]
 mod cairo_backend {
     use super::*;
 
@@ -331,14 +331,14 @@ mod cairo_backend {
     }
 }
 
-#[cfg(all(target_os = "linux", not(feature = "force-crossplatform")))]
+#[cfg(all(target_os = "linux", feature = "hyprland"))]
 pub use cairo_backend::{Painter, Sprite};
 
 // ═══════════════════════════════════════════════════════════════════════════
 //   tiny-skia backend (winit: Windows, macOS, X11)
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[cfg(any(not(target_os = "linux"), feature = "force-crossplatform"))]
+#[cfg(not(all(target_os = "linux", feature = "hyprland")))]
 mod skia_backend {
     use super::*;
 
@@ -498,5 +498,5 @@ mod skia_backend {
     }
 }
 
-#[cfg(any(not(target_os = "linux"), feature = "force-crossplatform"))]
+#[cfg(not(all(target_os = "linux", feature = "hyprland")))]
 pub use skia_backend::{DrawSkia, SpriteSkia};

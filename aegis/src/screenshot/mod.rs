@@ -13,17 +13,17 @@ pub use backend::ScreenshotBackend;
 #[allow(unused_imports)]
 pub use shared::pick_declared_resolution;
 
-#[cfg(all(target_os = "linux", not(feature = "force-crossplatform")))]
+#[cfg(all(target_os = "linux", feature = "hyprland"))]
 mod hyprland;
-#[cfg(any(not(target_os = "linux"), feature = "force-crossplatform"))]
+#[cfg(not(all(target_os = "linux", feature = "hyprland")))]
 mod crossplatform;
 
 // Linux uses the native grim backend; everything else (and Linux under the
-// force-crossplatform dev override) uses the portable xcap backend. The two
+// no-default-features build) uses the portable xcap backend. The two
 // cfgs are mutually exclusive and exhaustive, so exactly one Active is defined.
-#[cfg(all(target_os = "linux", not(feature = "force-crossplatform")))]
+#[cfg(all(target_os = "linux", feature = "hyprland"))]
 type Active = hyprland::Backend;
-#[cfg(any(not(target_os = "linux"), feature = "force-crossplatform"))]
+#[cfg(not(all(target_os = "linux", feature = "hyprland")))]
 type Active = crossplatform::Backend;
 
 /// Geometry `(x, y, width, height)` of the monitor a capture should target.
@@ -58,7 +58,7 @@ pub fn capture_resized_for_claude(
 /// # Errors
 ///
 /// Propagates any error from the `xcap` backend.
-#[cfg(any(not(target_os = "linux"), feature = "force-crossplatform"))]
+#[cfg(not(all(target_os = "linux", feature = "hyprland")))]
 #[allow(dead_code)]
 pub fn capture_for_claude(
     x: i32,

@@ -14,15 +14,15 @@ publish = false
 # at the same time as the Hyprland one (both export `cursor`). On Linux that
 # means the native gtk demos and the winit `demo_win` are mutually exclusive, so
 # the two features below pick a lane and gate the backend-specific demos to it:
-#   default (native):    aegis as-is (Hyprland on Linux); gtk/overlay demos.
-#   crossplatform:       aegis/force-crossplatform; the winit demo.
+#   default (native):    aegis/hyprland (Hyprland on Linux); gtk/overlay demos.
+#   crossplatform:       aegis with no default features (winit path); demo_win.
 # Build the winit demo with: --no-default-features --features crossplatform.
 # Backend-neutral demos build under either lane.
 
 [features]
 default = ["native"]
-native = []
-crossplatform = ["aegis/force-crossplatform"]
+native = ["aegis/hyprland"]
+crossplatform = []
 
 [dependencies]
 aegis = { path = "../aegis", default-features = false }

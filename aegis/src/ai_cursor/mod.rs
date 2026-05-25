@@ -25,7 +25,7 @@ pub enum CursorState {
 }
 
 // Shared types and utilities used by the winit overlay implementation.
-#[cfg(any(not(target_os = "linux"), feature = "force-crossplatform"))]
+#[cfg(not(all(target_os = "linux", feature = "hyprland")))]
 mod common;
 
 // macOS-specific window configuration (only compiled on macOS)
@@ -33,21 +33,21 @@ mod common;
 mod macos;
 
 // Platform abstraction layer for window configuration
-#[cfg(any(not(target_os = "linux"), feature = "force-crossplatform"))]
+#[cfg(not(all(target_os = "linux", feature = "hyprland")))]
 mod platform;
 
 // Cross-platform renderer abstraction (softbuffer on non-macOS, wgpu on macOS)
-#[cfg(any(not(target_os = "linux"), feature = "force-crossplatform"))]
+#[cfg(not(all(target_os = "linux", feature = "hyprland")))]
 mod renderer;
 
 // Linux/Hyprland: GTK layer-shell overlay.
-#[cfg(all(target_os = "linux", not(feature = "force-crossplatform")))]
+#[cfg(all(target_os = "linux", feature = "hyprland"))]
 mod hyprland;
-#[cfg(all(target_os = "linux", not(feature = "force-crossplatform")))]
+#[cfg(all(target_os = "linux", feature = "hyprland"))]
 pub use hyprland::*;
 
 // macOS/Windows (and Linux under the dev override): winit overlay.
-#[cfg(any(not(target_os = "linux"), feature = "force-crossplatform"))]
+#[cfg(not(all(target_os = "linux", feature = "hyprland")))]
 mod winit;
-#[cfg(any(not(target_os = "linux"), feature = "force-crossplatform"))]
+#[cfg(not(all(target_os = "linux", feature = "hyprland")))]
 pub use winit::*;

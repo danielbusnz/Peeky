@@ -1,8 +1,8 @@
 //! Desktop and window control: opening URLs, launching apps, focusing windows,
 //! and listing open windows. Backend selected by `target_os` (Linux → Hyprland,
-//! macOS/Windows → native). Unlike the overlay, this is not affected by the
-//! `force-crossplatform` override: it reflects the actual running desktop
-//! environment, and on Linux that is always Hyprland.
+//! macOS/Windows → native). Unlike the overlay, this is keyed purely on
+//! `target_os`, not the `hyprland` feature: it reflects the actual running
+//! desktop environment, and on Linux that is always Hyprland.
 
 mod backend;
 pub use backend::DesktopControl;

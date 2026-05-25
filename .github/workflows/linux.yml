@@ -21,12 +21,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libgtk-3-dev \
-            libgtk-4-dev \
-            libgtk4-layer-shell-dev \
             libpipewire-0.3-dev \
             libxkbcommon-dev \
             libwayland-dev \
             libasound2-dev \
+            libjack-jackd2-dev \
             libgbm-dev \
             libegl-dev \
             libxcb1-dev \
@@ -44,11 +43,11 @@ jobs:
 
       # Limit to the aegis package; the launcher pulls webkit2gtk and isn't
       # worth testing here. The memex tool is also out of scope.
-      - name: Type-check aegis (force-crossplatform / winit path)
-        run: cargo check -p aegis --features force-crossplatform
+      - name: Type-check aegis (winit / portable path)
+        run: cargo check -p aegis --no-default-features
 
-      - name: Build aegis bin (force-crossplatform / winit path)
-        run: cargo build -p aegis --features force-crossplatform --bin aegis
+      - name: Build aegis bin (winit / portable path)
+        run: cargo build -p aegis --no-default-features --bin aegis
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4
