@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Scan and label
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const item = context.payload.issue || context.payload.pull_request;

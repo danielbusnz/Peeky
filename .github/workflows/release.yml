@@ -30,7 +30,7 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install system dependencies
         run: |
@@ -73,11 +73,11 @@ jobs:
       # this exact workflow run and commit. Verifiable with
       # `gh attestation verify aegis-linux-x86_64.tar.gz --repo danielbusnz-lgtm/Aegis`.
       - name: Attest Linux artifact
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/aegis-linux-x86_64.tar.gz
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: aegis-linux
           path: |
@@ -87,7 +87,7 @@ jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
@@ -104,11 +104,11 @@ jobs:
           "$hash  aegis-windows-x86_64.zip" | Out-File -Encoding ascii dist/aegis-windows-x86_64.zip.sha256
 
       - name: Attest Windows artifact
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/aegis-windows-x86_64.zip
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: aegis-windows
           path: |
@@ -121,7 +121,7 @@ jobs:
     # and we can add x86_64 later if anyone asks for it.
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
@@ -156,11 +156,11 @@ jobs:
           (cd dist && shasum -a 256 aegis-macos-aarch64.dmg > aegis-macos-aarch64.dmg.sha256)
 
       - name: Attest macOS artifact
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/aegis-macos-aarch64.dmg
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: aegis-macos
           path: |
@@ -171,19 +171,19 @@ jobs:
     needs: [build-linux, build-windows, build-macos]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: aegis-linux
           path: dist/
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: aegis-windows
           path: dist/
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: aegis-macos
           path: dist/
@@ -197,7 +197,7 @@ jobs:
             echo "ref=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.tag.outputs.ref }}
           draft: true

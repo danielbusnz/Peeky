@@ -10,7 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install system dependencies
         # crossplatform feature still pulls in GTK3 on Linux via global-hotkey,
@@ -50,7 +50,7 @@ jobs:
         run: cargo build -p aegis --no-default-features --bin aegis
 
       - name: Upload binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aegis-linux
           path: target/debug/aegis
