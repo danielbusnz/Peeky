@@ -1,12 +1,17 @@
-//! Cursor overlay window. The implementation is selected at compile time
-//! by a Cargo feature so the same callers work regardless of platform.
+//! Cursor overlay window. The implementation is selected at compile time by
+//! target OS (Linux/Hyprland via GTK layer-shell, macOS/Windows via winit), so
+//! the same callers work regardless of platform.
+//!
+//! NOTE: macOS currently rides the winit path (winit window + wgpu + NSWindow
+//! tweaks in macos.rs). A native AppKit/NSPanel overlay is the intended end
+//! state but is deferred: it can only be built and tested on macOS.
 
 /// Visual state of the overlay cursor. The painter reads this to choose
 /// what to render; the orchestrator writes it as voice turns progress.
 ///
-/// `Idle` is only constructed from the hyprland feature path; the winit
-/// build path matches on it but never assigns it. The `allow(dead_code)`
-/// is for the latter so the variant stays in the public enum.
+/// `Idle` is only constructed on the Linux/Hyprland path; the winit path
+/// matches on it but never assigns it. The `allow(dead_code)` is for the
+/// latter so the variant stays in the public enum.
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum CursorState {

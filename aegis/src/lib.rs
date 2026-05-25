@@ -9,6 +9,7 @@ pub mod actions;
 pub mod ai_cursor;
 pub mod audio;
 pub mod barge_in;
+pub mod desktop;
 pub mod hotkey;
 pub mod input;
 pub mod integrations;

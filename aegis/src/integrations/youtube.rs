@@ -112,5 +112,5 @@ fn play(query: &str) {
 
     let url = format!("https://www.youtube.com/watch?v={}", id);
     eprintln!("[integration:youtube] opening {}", url);
-    crate::actions::open_url(&url);
+    crate::desktop::open_url(&url);
 }
