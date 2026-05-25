@@ -13,10 +13,10 @@ pub use backend::ScreenshotBackend;
 #[allow(unused_imports)]
 pub use shared::pick_declared_resolution;
 
-#[cfg(all(target_os = "linux", feature = "hyprland"))]
-mod hyprland;
 #[cfg(not(all(target_os = "linux", feature = "hyprland")))]
 mod crossplatform;
+#[cfg(all(target_os = "linux", feature = "hyprland"))]
+mod hyprland;
 
 // Linux uses the native grim backend; everything else (and Linux under the
 // no-default-features build) uses the portable xcap backend. The two

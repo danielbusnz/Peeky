@@ -7,10 +7,10 @@
 mod backend;
 pub use backend::HotkeyBackend;
 
-#[cfg(all(target_os = "linux", feature = "hyprland"))]
-mod hyprland;
 #[cfg(not(all(target_os = "linux", feature = "hyprland")))]
 mod crossplatform;
+#[cfg(all(target_os = "linux", feature = "hyprland"))]
+mod hyprland;
 
 // Linux uses the native Hyprland backend; everything else (and Linux under the
 // no-default-features build) uses the portable backend. The two cfgs are

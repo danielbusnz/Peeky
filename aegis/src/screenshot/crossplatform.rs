@@ -90,8 +90,7 @@ impl ScreenshotBackend for Backend {
 
         let fir_src = FirImage::from_vec_u8(src_w, src_h, rgb, PixelType::U8x3)?;
         let mut fir_dst = FirImage::new(target_w, target_h, PixelType::U8x3);
-        let opts =
-            ResizeOptions::new().resize_alg(ResizeAlg::Convolution(FirFilterType::Bilinear));
+        let opts = ResizeOptions::new().resize_alg(ResizeAlg::Convolution(FirFilterType::Bilinear));
         let mut resizer = Resizer::new();
         resizer.resize(&fir_src, &mut fir_dst, &opts)?;
 

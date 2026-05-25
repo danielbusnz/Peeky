@@ -85,7 +85,10 @@ impl SttDeepgram {
                 token_url,
                 device_id,
             } => {
-                let mut req = self.http.post(token_url).header("x-aegis-device-id", device_id);
+                let mut req = self
+                    .http
+                    .post(token_url)
+                    .header("x-aegis-device-id", device_id);
                 if let Some(code) = super::invite_code::load() {
                     req = req.header("x-aegis-invite-code", code);
                 }

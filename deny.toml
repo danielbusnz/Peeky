@@ -20,9 +20,29 @@ ignore = [
     # tauri -> tauri-utils -> urlpattern -> unic-ucd-ident. No upgrade is
     # available; clear when tauri drops the unic chain upstream.
     "RUSTSEC-2025-0098",
-    # gtk-rs GTK3 bindings are unmaintained. Pulled in transitively via
-    # global-hotkey (Linux) and the Tauri launcher; no maintained replacement.
+    # gtk-rs GTK3 bindings are unmaintained (the whole atk/gdk/gdk-pixbuf/gtk
+    # batch). Pulled in transitively via global-hotkey (Linux) and the Tauri
+    # launcher; no maintained replacement exists.
+    "RUSTSEC-2024-0411",
+    "RUSTSEC-2024-0412",
     "RUSTSEC-2024-0413",
+    "RUSTSEC-2024-0414",
+    "RUSTSEC-2024-0415",
+    "RUSTSEC-2024-0416",
+    "RUSTSEC-2024-0417",
+    "RUSTSEC-2024-0418",
+    "RUSTSEC-2024-0419",
+    "RUSTSEC-2024-0420",
+    # Other transitive unmaintained-crate notices (proc-macro-error via deps,
+    # google-apis-rs via google-gmail1, and assorted transitive crates). All
+    # are "unmaintained" advisories, not vulnerabilities.
+    "RUSTSEC-2024-0370",
+    "RUSTSEC-2024-0436",
+    "RUSTSEC-2025-0066",
+    "RUSTSEC-2025-0075",
+    "RUSTSEC-2025-0080",
+    "RUSTSEC-2025-0081",
+    "RUSTSEC-2025-0100",
 ]
 
 [licenses]
