@@ -63,16 +63,22 @@ pub fn capture_resized_for_claude(
     let local_y = (y - monitor.y()?).max(0) as u32;
     let image = monitor.capture_region(local_x, local_y, width as u32, height as u32)?;
 
+    // On macOS Retina displays, capture_region returns physical pixels even
+    // though we pass logical points. Use the actual image dimensions for
+    // resize so the coordinate mapping stays correct.
+    let src_w = image.width();
+    let src_h = image.height();
+
     // xcap gives us an RGBA buffer directly. Convert to RGB for the resize.
     let rgba = image.into_raw();
-    let mut rgb: Vec<u8> = Vec::with_capacity((width * height * 3) as usize);
+    let mut rgb: Vec<u8> = Vec::with_capacity((src_w * src_h * 3) as usize);
     for chunk in rgba.chunks_exact(4) {
         rgb.push(chunk[0]);
         rgb.push(chunk[1]);
         rgb.push(chunk[2]);
     }
 
-    let fir_src = FirImage::from_vec_u8(width as u32, height as u32, rgb, PixelType::U8x3)?;
+    let fir_src = FirImage::from_vec_u8(src_w, src_h, rgb, PixelType::U8x3)?;
     let mut fir_dst = FirImage::new(target_w, target_h, PixelType::U8x3);
     let opts = ResizeOptions::new().resize_alg(ResizeAlg::Convolution(FirFilterType::Bilinear));
     let mut resizer = Resizer::new();
