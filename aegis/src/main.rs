@@ -1,6 +1,7 @@
-use aegis::{
-    actions, ai_cursor, audio, hotkey, integrations, orchestrator, painter, providers, screenshot,
-};
+use aegis::{actions, ai_cursor, audio, hotkey, integrations, orchestrator, painter, providers};
+// Only used by the macOS screen-recording permission trigger below.
+#[cfg(target_os = "macos")]
+use aegis::screenshot;
 
 fn main() {
     // Shared reqwest::Client. Internal Arc means clones reuse the same
