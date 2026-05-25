@@ -80,7 +80,7 @@
 
 #invite {
   position: absolute;
-  bottom: 32px;
+  bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
 }

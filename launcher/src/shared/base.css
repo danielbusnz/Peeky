@@ -19,7 +19,10 @@ html, body {
   box-sizing: border-box;
   height: 100%;
   border: none;
-  border-radius: 12px;
+  /* Square corners: on macOS a transparent borderless window exposes a white
+     backing in the gap outside rounded content. Filling to the square edge
+     avoids the white-corner artifact. */
+  border-radius: 0;
   display: flex;
   flex-direction: column;
   position: relative;
