@@ -1,14 +1,13 @@
-// Welcome window. Spawns the aegis cursor + voice agent in the background,
-// saves any invite code, and closes.
+// Welcome window. Plays a pop on cursor click, spawns the aegis cursor +
+// voice agent in the background, and swaps to the pre-spawned (visible:false)
+// onboarding window centered on welcome's current position.
 
-// TODO: Pop sound disabled - not working on macOS (see GitHub issue)
-// const popSound = new Audio("pop.mp3");
-// popSound.preload = "auto";
+const popSound = new Audio("pop.mp3");
+popSound.preload = "auto";
 
 document.getElementById("cursor-button").addEventListener("click", async () => {
-    // TODO: Pop sound disabled - not working on macOS
-    // popSound.currentTime = 0;
-    // popSound.play().catch(() => { });
+    popSound.currentTime = 0;
+    popSound.play().catch(() => { });
 
     const { invoke } = window.__TAURI__.core;
 
@@ -22,14 +21,11 @@ document.getElementById("cursor-button").addEventListener("click", async () => {
         }
     }
 
-    // Mark onboarding complete so next launch skips this screen
-    await invoke("mark_onboarded").catch(() => {});
-
     // Spawn aegis
     invoke("spawn_aegis").catch((err) =>
         console.error("[welcome] spawn aegis failed:", err),
     );
 
-    // Close the welcome window
+    // Just close the welcome window
     window.__TAURI__.window.getCurrentWindow().close();
 });

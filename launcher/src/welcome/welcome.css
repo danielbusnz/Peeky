@@ -32,7 +32,6 @@
   align-items: center;
   justify-content: center;
   animation: breathing-slow 5s ease-in-out infinite;
-  pointer-events: none;
 }
 
 #breathing-button {
@@ -46,7 +45,6 @@
   align-items: center;
   justify-content: center;
   animation: breathing 5s ease-in-out infinite;
-  pointer-events: none;
 }
 
 #cursor-button {
@@ -80,7 +78,7 @@
 
 #invite {
   position: absolute;
-  bottom: 24px;
+  bottom: 32px;
   left: 50%;
   transform: translateX(-50%);
 }
