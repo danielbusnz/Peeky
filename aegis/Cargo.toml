@@ -69,6 +69,7 @@ cpal = { version = "0.17.3", features = ["jack"] }
 # PostMultiplied honors per-pixel alpha against the desktop. objc2 +
 # raw-window-handle remain for any residual NSWindow plumbing.
 # objc2-core-graphics provides native CGEvent APIs for input injection.
+# tray-icon provides native NSStatusBar menu bar icon.
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-core-foundation = "0.3"
@@ -77,6 +78,7 @@ raw-window-handle = "0.6"
 wgpu = "22"
 bytemuck = "1"
 pollster = "0.4"
+tray-icon = "0.19"
 
 # Demo and benchmark binaries live in the sibling `aegis-demos` crate
 # (../demos), which depends on this library. Keeping them out of this package

@@ -24,6 +24,7 @@ use super::common::{
 use super::platform;
 use super::renderer::Renderer;
 use crate::painter::{DrawSkia, LoadingSpinner, Soundwave, SpriteSkia};
+use crate::tray;
 
 struct CursorApp {
     attrs: WindowAttributes,
@@ -50,6 +51,11 @@ struct CursorApp {
     frame_count: u32,
     /// Start of the current 1-second FPS-counting window.
     fps_log_start: Option<Instant>,
+    /// Menu bar tray icon (macOS). Must be kept alive for icon to remain visible.
+    #[cfg(target_os = "macos")]
+    _tray: tray_icon::TrayIcon,
+    #[cfg(not(target_os = "macos"))]
+    _tray: tray::TrayStub,
 }
 
 impl ApplicationHandler for CursorApp {
@@ -87,6 +93,13 @@ impl ApplicationHandler for CursorApp {
                 // (main) thread per macOS's requirement; this is where its
                 // events get processed.
                 crate::hotkey::poll();
+
+                // Check for menu bar quit click
+                if tray::poll() {
+                    event_loop.exit();
+                    return;
+                }
+
                 self.render();
                 if let Some(w) = &self.window {
                     w.request_redraw();
@@ -272,6 +285,9 @@ pub fn cursor(initial_x: i32, initial_y: i32) -> ! {
     let event_loop = EventLoop::new().expect("EventLoop::new failed");
     event_loop.set_control_flow(ControlFlow::Poll);
 
+    // Initialize menu bar tray icon (macOS shows icon in top-right menu bar)
+    let tray = tray::init();
+
     let mut app = CursorApp {
         attrs,
         window: None,
@@ -288,6 +304,7 @@ pub fn cursor(initial_x: i32, initial_y: i32) -> ! {
         was_recording: false,
         frame_count: 0,
         fps_log_start: None,
+        _tray: tray,
     };
 
     event_loop.run_app(&mut app).expect("run_app failed");

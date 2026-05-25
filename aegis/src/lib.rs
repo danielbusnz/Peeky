@@ -19,5 +19,6 @@ pub mod orchestrator;
 pub mod painter;
 pub mod providers;
 pub mod screenshot;
+pub mod tray;
 pub mod tuning;
 pub mod voice_session;
