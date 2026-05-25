@@ -92,6 +92,24 @@ fn validate_code(code: &str) -> Result<(), &'static str> {
     Ok(())
 }
 
+/// Check if user has completed onboarding.
+fn is_onboarded() -> bool {
+    dirs::config_dir()
+        .map(|d| d.join("aegis").join("onboarded").exists())
+        .unwrap_or(false)
+}
+
+/// Mark onboarding as complete.
+#[tauri::command]
+fn mark_onboarded() -> Result<(), String> {
+    let dir = dirs::config_dir()
+        .ok_or("no config dir")?
+        .join("aegis");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{e}"))?;
+    std::fs::write(dir.join("onboarded"), "").map_err(|e| format!("{e}"))?;
+    Ok(())
+}
+
 /// Validate and persist an invite code to the same config dir aegis reads
 /// from at startup (see aegis/src/providers/invite_code.rs). The empty
 /// string clears the code.
@@ -112,6 +130,14 @@ fn save_invite_code(code: String) -> Result<(), String> {
 }
 
 fn main() {
+    // If already onboarded, spawn aegis directly and exit (no UI).
+    if is_onboarded() {
+        if let Err(e) = spawn_aegis() {
+            eprintln!("[launcher] {e}");
+        }
+        return;
+    }
+
     // webkit2gtk's DMABUF renderer crashes against Hyprland and several
     // other Wayland compositors with "Error 71 (Protocol error)". Disabling
     // it forces a software path that works everywhere. Harmless on non-Linux
@@ -122,7 +148,7 @@ fn main() {
     }
 
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![spawn_aegis, save_invite_code])
+        .invoke_handler(tauri::generate_handler![spawn_aegis, save_invite_code, mark_onboarded])
         .run(tauri::generate_context!())
         .expect("error running launcher");
 }
