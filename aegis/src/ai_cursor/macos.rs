@@ -113,6 +113,9 @@ pub unsafe fn configure_window_transparency(window: &Arc<Window>) {
     // Prevent window from being released when closed
     let _: () = msg_send![ns_window, setReleasedWhenClosed: Bool::NO];
 
+    // Allow window to appear over login screen and fullscreen apps
+    let _: () = msg_send![ns_window, setCanBecomeVisibleWithoutLogin: Bool::YES];
+
     // Force the window to front
     let _: () = msg_send![ns_window, orderFrontRegardless];
 

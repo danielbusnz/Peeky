@@ -1,4 +1,4 @@
-use aegis::{actions, ai_cursor, audio, hotkey, integrations, orchestrator, painter, providers};
+use aegis::{actions, ai_cursor, audio, hotkey, integrations, orchestrator, painter, providers, screenshot};
 
 fn main() {
     // Shared reqwest::Client. Internal Arc means clones reuse the same
@@ -15,6 +15,15 @@ fn main() {
     let mic = audio::Mic::init();
     actions::init_input_executor();
     actions::check_input_injection_available();
+
+    // Trigger screen recording permission prompt on macOS by attempting a capture.
+    // Microphone permission is already triggered by audio::Mic::init() above.
+    // This runs early so the permission dialogs don't interrupt the voice flow.
+    #[cfg(target_os = "macos")]
+    {
+        let _ = screenshot::capture_for_claude(0, 0, 100, 100);
+        eprintln!("[startup] screen recording permission check triggered");
+    }
 
     // Wire the soundwave painter to live mic RMS so the overlay reflects
     // input level without an explicit per-frame channel.

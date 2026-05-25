@@ -544,7 +544,7 @@ async fn run_agent(
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.to_string().into() })
     };
 
-    let running_apps = crate::actions::list_running_apps();
+    let running_apps = crate::desktop::list_running_apps();
     eprintln!(
         "[agent-loop] running apps detected: {}",
         if running_apps.is_empty() {
@@ -635,15 +635,15 @@ fn dispatch_action(action: crate::providers::claude::Action, early_exit: &Cancel
         Action::Scroll { direction, amount } => crate::actions::scroll(&direction, amount),
         Action::OpenUrl { url } => {
             set_cursor_idle();
-            crate::actions::open_url(&url);
+            crate::desktop::open_url(&url);
         }
         Action::LaunchApp { app } => {
             set_cursor_idle();
-            crate::actions::launch_app(&app);
+            crate::desktop::launch_app(&app);
         }
         Action::SwitchToWindow { target } => {
             set_cursor_idle();
-            crate::actions::switch_to_window(&target);
+            crate::desktop::switch_to_window(&target);
         }
         Action::Integration => {}
     }
