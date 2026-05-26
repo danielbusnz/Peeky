@@ -28,6 +28,20 @@
 
 Built in Rust. Primary target is Linux/Hyprland; macOS and Windows build flag-free from the same `cargo run`.
 
+## Download
+
+Prebuilt binaries are on the [Releases page](https://github.com/danielbusnz-lgtm/Aegis/releases/latest).
+
+**macOS (Apple Silicon):** download `aegis-macos-aarch64.dmg`, open it, and drag Aegis into Applications. If macOS blocks it as unverified, right-click the app and choose Open, or run:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Aegis.app
+```
+
+First launch walks you through onboarding: drop in an access code or your own API keys, then it shows the push-to-talk hotkey (hold Ctrl+Space). With a code you need no keys of your own.
+
+**Linux / Windows:** the release ships the raw `aegis` binary, or build from source below.
+
 ## Run it
 
 ```bash
