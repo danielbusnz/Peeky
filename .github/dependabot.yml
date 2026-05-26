@@ -19,6 +19,11 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: deps
+    # Major bumps arrive as individual PRs and tend to break (e.g. wgpu 22->29
+    # rewrites the renderer APIs). Skip them; take majors by hand when wanted.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       cargo-minor-and-patch:
         update-types:
@@ -54,6 +59,9 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: deps
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       proxy-minor-and-patch:
         update-types:
