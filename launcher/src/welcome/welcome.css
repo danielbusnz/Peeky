@@ -172,14 +172,14 @@
 .howto-title {
   margin: 0;
   color: #fff;
-  font-size: 20px;
+  font-size: 28px;
   font-weight: 600;
 }
 
 .howto-sub {
   margin: 0;
-  color: rgba(255,255,255,0.7);
-  font-size: 14px;
+  color: rgba(255,255,255,0.75);
+  font-size: 18px;
 }
 
 #hotkey-combo {
@@ -187,20 +187,20 @@
   background: rgba(255,255,255,0.1);
   border: 1px solid rgba(255,255,255,0.25);
   border-radius: 6px;
-  padding: 3px 8px;
+  padding: 4px 10px;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 17px;
   color: #fff;
 }
 
 #howto-done {
-  margin-top: 4px;
+  margin-top: 6px;
   background: #ff8c00;
   color: #fff;
   border: none;
   border-radius: 6px;
-  padding: 8px 22px;
-  font-size: 14px;
+  padding: 10px 26px;
+  font-size: 16px;
   cursor: pointer;
   transition: background 120ms ease;
 }
