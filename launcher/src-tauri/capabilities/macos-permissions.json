@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "macos-permissions",
+  "description": "Onboarding-only TCC permission prompts on macOS: microphone, screen recording, and accessibility. Requested before the agent spawns so it starts with access.",
+  "platforms": ["macOS"],
+  "windows": ["main"],
+  "permissions": ["macos-permissions:default"]
+}

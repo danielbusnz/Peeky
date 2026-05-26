@@ -350,16 +350,23 @@ fn main() {
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
     }
 
-    tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![
-            spawn_aegis,
-            save_invite_code,
-            mark_onboarded,
-            verify_invite_code,
-            save_api_keys,
-            api_keys_status,
-            verify_api_keys
-        ])
+    let builder = tauri::Builder::default().invoke_handler(tauri::generate_handler![
+        spawn_aegis,
+        save_invite_code,
+        mark_onboarded,
+        verify_invite_code,
+        save_api_keys,
+        api_keys_status,
+        verify_api_keys
+    ]);
+
+    // macOS only: the permission plugin lets onboarding prompt for mic, screen
+    // recording, and accessibility before the agent spawns. Compiled out
+    // elsewhere, so the Linux/Windows builds are unchanged.
+    #[cfg(target_os = "macos")]
+    let builder = builder.plugin(tauri_plugin_macos_permissions::init());
+
+    builder
         .run(tauri::generate_context!())
         .expect("error running launcher");
 }

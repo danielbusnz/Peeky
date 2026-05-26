@@ -19,3 +19,9 @@ uuid = { version = "1.10", features = ["v4"] }
 # Native secret store per OS: Keychain (macOS), Credential Manager (Windows),
 # Secret Service (Linux). sync-secret-service is pure-Rust (zbus), no libsecret.
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+
+# macOS-only: TCC permission prompts (mic, screen recording, accessibility) so
+# onboarding can grant them before the agent spawns. Target-gated, so it is
+# never resolved into or compiled for Linux/Windows builds.
+[target.'cfg(target_os = "macos")'.dependencies]
+tauri-plugin-macos-permissions = "2"

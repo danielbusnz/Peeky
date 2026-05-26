@@ -102,13 +102,38 @@ for (const field of Object.values(byokFields)) {
     }
 })();
 
+function isMac() {
+    return /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || "");
+}
+
 // Swap the welcome view for the "how to use it" card, filling in the
 // platform's push-to-talk chord. macOS uses Ctrl+Space (the cross-platform
 // winit hotkey); other platforms read the same.
 function showHowTo() {
-    const isMac = /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || "");
-    document.getElementById("hotkey-combo").textContent = isMac ? "⌃ Space" : "Ctrl + Space";
+    document.getElementById("hotkey-combo").textContent = isMac() ? "⌃ Space" : "Ctrl + Space";
     document.querySelector(".window").classList.add("show-howto");
+}
+
+// macOS only: prompt for the agent's TCC permissions while the launcher is
+// still in the foreground, so the agent inherits them on spawn instead of
+// triggering prompts mid-session and forcing a restart. Mic + screen are
+// API-grantable; accessibility can't be auto-granted, so we open its pane and
+// continue (the hotkey starts working once the user toggles it). Commands come
+// from tauri-plugin-macos-permissions. NOTE: verify these invoke strings and
+// the grant-transfers-to-agent behavior on a signed macOS build.
+async function requestMacPermissions(invoke) {
+    try {
+        await invoke("plugin:macos-permissions|request_microphone_permission");
+    } catch (_) {}
+    try {
+        await invoke("plugin:macos-permissions|request_screen_recording_permission");
+    } catch (_) {}
+    try {
+        const granted = await invoke("plugin:macos-permissions|check_accessibility_permission");
+        if (!granted) {
+            await invoke("plugin:macos-permissions|request_accessibility_permission");
+        }
+    } catch (_) {}
 }
 
 // True when the key-entry panel is the active enrollment mode.
@@ -217,6 +242,11 @@ document.getElementById("cursor-button").addEventListener("click", async () => {
 
 document.getElementById("howto-done").addEventListener("click", async () => {
     const { invoke } = window.__TAURI__.core;
+
+    // Grant the agent's macOS permissions before it spawns (no-op elsewhere).
+    if (isMac()) {
+        await requestMacPermissions(invoke);
+    }
 
     // Mark onboarding complete so the next launch skips this screen.
     await invoke("mark_onboarded").catch(() => { });
