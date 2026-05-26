@@ -379,10 +379,19 @@ Always call a tool. Never respond with plain text."
 mod tests {
     use super::*;
 
+    fn tmp_path(label: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!(
+            "aegis-mem-{}-{}.jsonl",
+            label,
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&p);
+        p
+    }
+
     #[test]
     fn store_and_recall_roundtrip() {
-        let tmp = std::env::temp_dir().join(format!("aegis-mem-test-{}.jsonl", std::process::id()));
-        let _ = std::fs::remove_file(&tmp);
+        let tmp = tmp_path("roundtrip");
         let store = MemoryStore::open(tmp.clone()).expect("open");
         store.store_fact("name", "Dan").unwrap();
         store.store_fact("home_city", "Boston").unwrap();
@@ -408,11 +417,112 @@ mod tests {
 
     #[test]
     fn empty_store_returns_none() {
-        let tmp =
-            std::env::temp_dir().join(format!("aegis-mem-empty-{}.jsonl", std::process::id()));
-        let _ = std::fs::remove_file(&tmp);
+        let tmp = tmp_path("empty");
         let store = MemoryStore::open(tmp.clone()).expect("open");
         assert!(store.as_prompt_block().is_none());
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn missing_file_opens_as_empty_store() {
+        // open() on a non-existent path should succeed and load zero facts.
+        let tmp = tmp_path("missing");
+        // Ensure it really doesn't exist.
+        assert!(!tmp.exists());
+        let store = MemoryStore::open(tmp.clone()).expect("open");
+        assert!(store.as_prompt_block().is_none(), "missing file => empty store");
+        // No file should have been created just by opening.
+        assert!(!tmp.exists(), "open() should not create the file before a write");
+    }
+
+    #[test]
+    fn corrupt_lines_are_skipped() {
+        let tmp = tmp_path("corrupt");
+        std::fs::write(
+            &tmp,
+            concat!(
+                "not-json\n",
+                "{\"key\":\"good\",\"value\":\"ok\",\"ts\":\"epoch:0\"}\n",
+                "{\"missing_value_field\":true}\n",
+                "{\"key\":\"second\",\"value\":\"yes\",\"ts\":\"epoch:1\"}\n",
+            ),
+        )
+        .unwrap();
+        let store = MemoryStore::open(tmp.clone()).expect("open");
+        let prompt = store.as_prompt_block().unwrap();
+        assert!(prompt.contains("good: ok"), "valid line should load");
+        assert!(prompt.contains("second: yes"), "second valid line should load");
+        // The corrupt lines must not have caused a panic or truncated the load.
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn key_is_normalised_to_lowercase() {
+        let tmp = tmp_path("lower");
+        let store = MemoryStore::open(tmp.clone()).expect("open");
+        store.store_fact("FAVORITE_COLOR", "blue").unwrap();
+        let prompt = store.as_prompt_block().unwrap();
+        assert!(
+            prompt.contains("favorite_color: blue"),
+            "key should be lowercased; got: {}",
+            prompt
+        );
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn key_and_value_whitespace_is_trimmed() {
+        let tmp = tmp_path("trim");
+        let store = MemoryStore::open(tmp.clone()).expect("open");
+        store.store_fact("  city  ", "  Boston  ").unwrap();
+        let prompt = store.as_prompt_block().unwrap();
+        assert!(prompt.contains("city: Boston"), "leading/trailing whitespace must be stripped");
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn latest_entry_wins_per_key_on_reload() {
+        // The JSONL format is append-only; on reload the later entry for
+        // a duplicate key must win over the earlier one.
+        let tmp = tmp_path("latest-wins");
+        std::fs::write(
+            &tmp,
+            concat!(
+                "{\"key\":\"color\",\"value\":\"red\",\"ts\":\"epoch:1\"}\n",
+                "{\"key\":\"color\",\"value\":\"blue\",\"ts\":\"epoch:2\"}\n",
+            ),
+        )
+        .unwrap();
+        let store = MemoryStore::open(tmp.clone()).expect("open");
+        let prompt = store.as_prompt_block().unwrap();
+        assert!(prompt.contains("color: blue"), "latest entry should win");
+        assert!(!prompt.contains("color: red"), "earlier entry should be shadowed");
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn store_fact_updates_in_memory_without_reload() {
+        // store_fact() should update the in-memory view immediately so a
+        // subsequent as_prompt_block() sees the new value without re-opening.
+        let tmp = tmp_path("in-memory");
+        let store = MemoryStore::open(tmp.clone()).expect("open");
+        store.store_fact("pet", "cat").unwrap();
+        store.store_fact("pet", "dog").unwrap();
+        let prompt = store.as_prompt_block().unwrap();
+        assert!(prompt.contains("pet: dog"), "in-memory view must reflect the latest write");
+        assert!(!prompt.contains("pet: cat"), "old in-memory value must be replaced");
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn prompt_block_format_is_bullet_list() {
+        let tmp = tmp_path("format");
+        let store = MemoryStore::open(tmp.clone()).expect("open");
+        store.store_fact("color", "green").unwrap();
+        let prompt = store.as_prompt_block().unwrap();
+        // Each line must be "- key: value\n"
+        assert!(prompt.starts_with("- "), "prompt block should start with a bullet");
+        assert!(prompt.contains("- color: green\n"));
         let _ = std::fs::remove_file(&tmp);
     }
 }

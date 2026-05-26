@@ -304,4 +304,160 @@ mod tests {
         assert_eq!(keyword_classify("what's my name"), Some(Intent::Memory));
         assert_eq!(keyword_classify("what's your name"), Some(Intent::Chat));
     }
+
+    #[test]
+    fn memory_please_remember_prefix() {
+        assert_eq!(
+            keyword_classify("please remember my birthday is March 5"),
+            Some(Intent::Memory)
+        );
+    }
+
+    #[test]
+    fn memory_did_i_tell_you() {
+        assert_eq!(
+            keyword_classify("did I tell you my favorite food"),
+            Some(Intent::Memory)
+        );
+    }
+
+    #[test]
+    fn memory_do_you_remember() {
+        assert_eq!(
+            keyword_classify("do you remember my home address"),
+            Some(Intent::Memory)
+        );
+    }
+
+    #[test]
+    fn integration_next_and_previous_track() {
+        assert_eq!(keyword_classify("next song"), Some(Intent::Integration));
+        assert_eq!(keyword_classify("next track"), Some(Intent::Integration));
+        assert_eq!(keyword_classify("previous song"), Some(Intent::Integration));
+        assert_eq!(keyword_classify("previous track"), Some(Intent::Integration));
+    }
+
+    #[test]
+    fn integration_resume() {
+        assert_eq!(keyword_classify("resume"), Some(Intent::Integration));
+    }
+
+    #[test]
+    fn integration_email_and_pr_phrases() {
+        assert_eq!(
+            keyword_classify("check my inbox"),
+            Some(Intent::Integration)
+        );
+        assert_eq!(
+            keyword_classify("show my unread email"),
+            Some(Intent::Integration)
+        );
+        assert_eq!(
+            keyword_classify("what are my pull requests"),
+            Some(Intent::Integration)
+        );
+        assert_eq!(
+            keyword_classify("list my repos"),
+            Some(Intent::Integration)
+        );
+    }
+
+    #[test]
+    fn integration_youtube_service_name() {
+        assert_eq!(
+            keyword_classify("play something on youtube"),
+            Some(Intent::Integration)
+        );
+    }
+
+    #[test]
+    fn find_action_ui_element_references() {
+        assert_eq!(
+            keyword_classify("click on the button"),
+            Some(Intent::FindAction)
+        );
+        assert_eq!(
+            keyword_classify("open the menu"),
+            Some(Intent::FindAction)
+        );
+        assert_eq!(
+            keyword_classify("focus the search bar"),
+            // "the search bar" is a UI ref → FindAction
+            Some(Intent::FindAction)
+        );
+    }
+
+    #[test]
+    fn find_action_type_and_scroll_prefixes() {
+        assert_eq!(
+            keyword_classify("type hello into the box"),
+            Some(Intent::FindAction)
+        );
+        assert_eq!(
+            keyword_classify("scroll up a bit"),
+            Some(Intent::FindAction)
+        );
+    }
+
+    #[test]
+    fn find_action_select_prefix() {
+        assert_eq!(
+            keyword_classify("select the text"),
+            Some(Intent::FindAction)
+        );
+    }
+
+    #[test]
+    fn find_action_show_me_where() {
+        assert_eq!(
+            keyword_classify("show me where the settings are"),
+            Some(Intent::FindAction)
+        );
+    }
+
+    #[test]
+    fn chat_greeting_variants() {
+        assert_eq!(keyword_classify("hello"), Some(Intent::Chat));
+        assert_eq!(keyword_classify("good morning"), Some(Intent::Chat));
+        assert_eq!(keyword_classify("good afternoon"), Some(Intent::Chat));
+        assert_eq!(keyword_classify("good evening"), Some(Intent::Chat));
+        assert_eq!(keyword_classify("hey there"), Some(Intent::Chat));
+        assert_eq!(keyword_classify("hi there"), Some(Intent::Chat));
+    }
+
+    #[test]
+    fn chat_identity_variants() {
+        assert_eq!(keyword_classify("tell me a joke"), Some(Intent::Chat));
+        assert_eq!(keyword_classify("what can you do"), Some(Intent::Chat));
+        assert_eq!(keyword_classify("what do you do"), Some(Intent::Chat));
+        assert_eq!(
+            keyword_classify("tell me about yourself"),
+            Some(Intent::Chat)
+        );
+    }
+
+    #[test]
+    fn keyword_classify_is_case_insensitive() {
+        // The classifier lowercases input before matching.
+        assert_eq!(
+            keyword_classify("REMEMBER MY NAME IS ALICE"),
+            Some(Intent::Memory)
+        );
+        assert_eq!(
+            keyword_classify("PLAY Some Music"),
+            Some(Intent::Integration)
+        );
+        assert_eq!(
+            keyword_classify("CLICK THE BUTTON"),
+            Some(Intent::FindAction)
+        );
+    }
+
+    #[test]
+    fn keyword_classify_trims_leading_trailing_whitespace() {
+        assert_eq!(
+            keyword_classify("  remember my color is red  "),
+            Some(Intent::Memory)
+        );
+    }
 }
