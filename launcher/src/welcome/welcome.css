@@ -118,6 +118,25 @@
   color: rgba(63,185,80,0.7);
 }
 
+#byok input.valid {
+  border-color: rgba(63,185,80,0.9);
+  box-shadow: 0 0 0 2px rgba(63,185,80,0.25);
+}
+
+#byok input.invalid {
+  border-color: rgba(248,81,73,0.9);
+  box-shadow: 0 0 0 2px rgba(248,81,73,0.25);
+}
+
+#gate-hint {
+  margin: 2px 0 0;
+  min-height: 14px;
+  max-width: 240px;
+  text-align: center;
+  font-size: 12px;
+  color: rgba(255,255,255,0.55);
+}
+
 .link-btn {
   background: none;
   border: none;
@@ -213,6 +232,19 @@
 
 @keyframes invite-spin {
   to { transform: rotate(360deg); }
+}
+
+/* Quick wobble to flag an empty/invalid field when the user tries to advance. */
+@keyframes field-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
+.shake {
+  animation: field-shake 0.3s ease;
 }
 
 /* "How to use it" card, shown after the user clicks the cursor to start.

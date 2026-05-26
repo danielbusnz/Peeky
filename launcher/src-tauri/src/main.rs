@@ -215,6 +215,84 @@ async fn verify_invite_code(code: String) -> Result<(), String> {
     Err(reason)
 }
 
+/// Live-validate the user's own provider keys by hitting each provider's
+/// auth the same way aegis does in direct mode. Returns a per-provider map
+/// of whether the key works. An empty key is reported `false`. Used by the
+/// onboarding gate so a typo'd key can't slip through.
+#[tauri::command]
+async fn verify_api_keys(
+    anthropic: String,
+    deepgram: String,
+    cartesia: String,
+) -> std::collections::HashMap<String, bool> {
+    // A blank field falls back to the key already in the keychain, so a
+    // returning user who left it blank ("leave blank to keep") is still
+    // checked against the key that will actually be used.
+    let resolve = |passed: String, account: &str| -> String {
+        let t = passed.trim();
+        if t.is_empty() {
+            keychain_get(account).unwrap_or_default()
+        } else {
+            t.to_string()
+        }
+    };
+    let anthropic = resolve(anthropic, "anthropic");
+    let deepgram = resolve(deepgram, "deepgram");
+    let cartesia = resolve(cartesia, "cartesia");
+
+    let client = reqwest::Client::new();
+    let mut out = std::collections::HashMap::new();
+    out.insert("anthropic".to_string(), check_anthropic(&client, &anthropic).await);
+    out.insert("deepgram".to_string(), check_deepgram(&client, &deepgram).await);
+    out.insert("cartesia".to_string(), check_cartesia(&client, &cartesia).await);
+    out
+}
+
+async fn check_anthropic(client: &reqwest::Client, key: &str) -> bool {
+    if key.is_empty() {
+        return false;
+    }
+    client
+        .get("https://api.anthropic.com/v1/models")
+        .header("x-api-key", key)
+        .header("anthropic-version", "2023-06-01")
+        .send()
+        .await
+        .map(|r| r.status().is_success())
+        .unwrap_or(false)
+}
+
+async fn check_deepgram(client: &reqwest::Client, key: &str) -> bool {
+    if key.is_empty() {
+        return false;
+    }
+    client
+        .post("https://api.deepgram.com/v1/auth/grant")
+        .header("authorization", format!("Token {key}"))
+        .header("content-type", "application/json")
+        .json(&serde_json::json!({ "ttl_seconds": 60 }))
+        .send()
+        .await
+        .map(|r| r.status().is_success())
+        .unwrap_or(false)
+}
+
+async fn check_cartesia(client: &reqwest::Client, key: &str) -> bool {
+    if key.is_empty() {
+        return false;
+    }
+    client
+        .post("https://api.cartesia.ai/access-token")
+        .header("authorization", format!("Bearer {key}"))
+        .header("cartesia-version", "2026-03-01")
+        .header("content-type", "application/json")
+        .json(&serde_json::json!({ "grants": { "tts": true }, "expires_in": 60 }))
+        .send()
+        .await
+        .map(|r| r.status().is_success())
+        .unwrap_or(false)
+}
+
 /// Check if user has completed onboarding.
 fn is_onboarded() -> bool {
     dirs::config_dir()
@@ -275,7 +353,8 @@ fn main() {
             mark_onboarded,
             verify_invite_code,
             save_api_keys,
-            api_keys_status
+            api_keys_status,
+            verify_api_keys
         ])
         .run(tauri::generate_context!())
         .expect("error running launcher");
