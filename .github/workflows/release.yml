@@ -161,6 +161,9 @@ jobs:
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           KEYCHAIN_PASSWORD=$(openssl rand -base64 24)
           echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
@@ -181,22 +184,24 @@ jobs:
             echo "::error::No 'Developer ID Application' identity in the imported certificate."
             exit 1
           fi
+          # Export signing + notarization vars for the build step. These are
+          # only set on this (signing) path; otherwise they stay ABSENT so
+          # Tauri builds unsigned. Setting APPLE_SIGNING_IDENTITY to an empty
+          # string is NOT the same as unset — Tauri would try to sign with ""
+          # and fail, so we must only define it when actually signing.
           echo "APPLE_SIGNING_IDENTITY=$CERT_ID" >> "$GITHUB_ENV"
+          echo "APPLE_ID=$APPLE_ID" >> "$GITHUB_ENV"
+          echo "APPLE_PASSWORD=$APPLE_PASSWORD" >> "$GITHUB_ENV"
+          echo "APPLE_TEAM_ID=$APPLE_TEAM_ID" >> "$GITHUB_ENV"
           echo "Signing identity: $CERT_ID"
 
-      # Tauri's build.rs in launcher/src-tauri copies the aegis binary
-      # with the right target-triple suffix, then `cargo tauri build`
-      # bundles it as a sidecar inside Aegis Settings.app and produces
-      # a .dmg installer. When APPLE_SIGNING_IDENTITY is set, Tauri signs
-      # the bundle; when the APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID trio is
-      # also present, it notarizes and staples. All empty = unsigned build.
+      # Tauri's build.rs in launcher/src-tauri copies the aegis binary with the
+      # right target-triple suffix, then `cargo tauri build` bundles it as a
+      # sidecar inside Aegis.app and produces a .dmg. If the signing vars were
+      # exported above (secrets present) Tauri signs + notarizes; otherwise
+      # they're absent and it builds unsigned.
       - name: Build launcher .app + .dmg
         working-directory: launcher
-        env:
-          APPLE_SIGNING_IDENTITY: ${{ env.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: cargo tauri build
 
       - name: Package artifact
