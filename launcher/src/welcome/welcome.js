@@ -44,6 +44,15 @@ codeInput.addEventListener("keydown", async (e) => {
     }
 });
 
+// Swap the welcome view for the "how to use it" card, filling in the
+// platform's push-to-talk chord. macOS uses Ctrl+Space (the cross-platform
+// winit hotkey); other platforms read the same.
+function showHowTo() {
+    const isMac = /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || "");
+    document.getElementById("hotkey-combo").textContent = isMac ? "⌃ Space" : "Ctrl + Space";
+    document.querySelector(".window").classList.add("show-howto");
+}
+
 document.getElementById("cursor-button").addEventListener("click", async () => {
     // TODO: Pop sound disabled - not working on macOS
     // popSound.currentTime = 0;
@@ -60,6 +69,14 @@ document.getElementById("cursor-button").addEventListener("click", async () => {
             console.error("[welcome] save invite code failed:", err);
         }
     }
+
+    // Show the hotkey card. Onboarding is finalized + aegis spawned only when
+    // the user acknowledges it, so they always see how to talk before it starts.
+    showHowTo();
+});
+
+document.getElementById("howto-done").addEventListener("click", async () => {
+    const { invoke } = window.__TAURI__.core;
 
     // Mark onboarding complete so next launch skips this screen
     await invoke("mark_onboarded").catch(() => {});
