@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Developer ID distribution, hardened runtime (Tauri enables it by
+	  default and notarization requires it). NOT sandboxed: Aegis posts
+	  synthetic CGEvents and reads the screen to drive the cursor, which
+	  the App Sandbox forbids.
+
+	  tauri-bundler applies this single file to every signed binary in the
+	  bundle, including the `aegis` sidecar in Contents/MacOS. The sidecar
+	  is what opens the microphone via cpal, so the audio-input entitlement
+	  has to be here for voice capture to work under the hardened runtime.
+
+	  Screen recording and Accessibility (CGEvent injection) are TCC-gated,
+	  not entitlement-gated, so they need no key here, only the usage
+	  strings already in Info.plist plus the user's permission grant.
+	-->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+</dict>
+</plist>
