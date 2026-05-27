@@ -178,7 +178,9 @@ impl Claude {
                                         emitted = Some(action);
                                     } else {
                                         // Log why the action failed
-                                        if name == "computer" && input["action"].as_str() == Some("screenshot") {
+                                        if name == "computer"
+                                            && input["action"].as_str() == Some("screenshot")
+                                        {
                                             eprintln!(
                                                 "[find_action] ERROR: Claude called screenshot action (FORBIDDEN). \
                                                 User asked: {:?}. Claude should have used mouse_move or left_click instead.",
