@@ -1,19 +1,19 @@
-//! Conversational path. Used when the classifier returns Intent::Chat
-//! (the user asked something that doesn't need the screen, doesn't need
-//! a service tool, and doesn't need multi-step planning). Just talk back.
+//! Conversational path. Used when the classifier returns Intent::Chat.
+//! Now includes a screenshot so Claude can see the user's screen and
+//! provide contextual help (e.g., "how do I do X in this app?").
 //!
 //! Differences from `run_agent_loop`:
 //!   * No tools at all. Claude can't accidentally try to call gmail or
 //!     move the cursor on a casual question.
-//!   * No screenshot attached.
+//!   * Screenshot IS attached for visual context.
 //!   * No agent loop. One streaming response, every text delta is piped
 //!     to the caller's `on_text_delta` so TTS can start speaking on the
 //!     first sentence boundary.
 //!   * Optional user_profile string (loaded from memory) gets injected
 //!     into the system prompt so Claude knows who it's talking to.
 //!
-//! The fast path most voice turns will take. Target latency: ~600-800ms
-//! release-to-speech when cache is warm.
+//! The fast path most voice turns will take. Target latency: ~800-1000ms
+//! release-to-speech when cache is warm (slightly slower due to image).
 
 use super::Claude;
 use futures_util::StreamExt;
@@ -21,9 +21,11 @@ use futures_util::StreamExt;
 impl Claude {
     /// Run a chat turn. Streams text deltas via `on_text_delta` and
     /// returns the full assembled text when the stream ends.
+    /// Now includes a screenshot for visual context.
     pub async fn chat<T>(
         &self,
         transcript: &str,
+        screenshot_b64: &str,
         user_profile: Option<&str>,
         mut on_text_delta: T,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>>
@@ -52,9 +54,20 @@ impl Claude {
             "max_tokens": 1024,
             "stream": true,
             "system": system_blocks,
-            "messages": [
-                { "role": "user", "content": transcript }
-            ]
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/jpeg",
+                            "data": screenshot_b64
+                        }
+                    },
+                    { "type": "text", "text": transcript }
+                ]
+            }]
         });
 
         let t_send = std::time::Instant::now();
@@ -121,8 +134,9 @@ impl Claude {
 /// it caches well. Keep short. Every token here is sent on every chat
 /// turn.
 fn chat_system_prompt() -> &'static str {
-    "You are aegis, a voice assistant running on the user's desktop. The \
-user is speaking to you and hearing your replies via TTS, so:\n\
+    "You are aegis, a voice assistant running on the user's desktop. A \
+screenshot of the user's current screen is attached. The user is \
+speaking to you and hearing your replies via TTS, so:\n\
 - Be concise. Aim for 1-3 sentences unless the user asks for detail.\n\
 - Plain prose only. No markdown, no lists, no code blocks. They sound \
 weird when read aloud.\n\
@@ -131,8 +145,8 @@ weird when read aloud.\n\
 - If the user asks something you don't know, say so briefly. Don't \
 guess and don't pad with disclaimers.\n\
 \n\
-You don't have access to the user's screen, files, or any external \
-services in this conversation. If they ask for something that needs \
-those, tell them to phrase it differently (e.g. \"check my email\" or \
-\"where is X on screen\")."
+You CAN see the user's screen in the attached image. Use it to provide \
+contextual help. If they ask \"how do I do X\" and you can see the app \
+they're using, guide them through the UI you see. Reference specific \
+buttons, menus, or elements visible on screen. Be helpful and specific."
 }

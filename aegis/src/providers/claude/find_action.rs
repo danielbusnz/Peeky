@@ -177,10 +177,19 @@ impl Claude {
                                         on_action(action.clone());
                                         emitted = Some(action);
                                     } else {
-                                        eprintln!(
-                                            "[find_action] unknown tool '{}' input={}",
-                                            name, input_json
-                                        );
+                                        // Log why the action failed
+                                        if name == "computer" && input["action"].as_str() == Some("screenshot") {
+                                            eprintln!(
+                                                "[find_action] ERROR: Claude called screenshot action (FORBIDDEN). \
+                                                User asked: {:?}. Claude should have used mouse_move or left_click instead.",
+                                                prompt
+                                            );
+                                        } else {
+                                            eprintln!(
+                                                "[find_action] unknown/invalid tool '{}' input={}. User asked: {:?}",
+                                                name, input_json, prompt
+                                            );
+                                        }
                                     }
                                 }
                                 tool_json_buffer.clear();

@@ -17,14 +17,9 @@
   Voice-controlled AI cursor for Linux. Hold a hotkey, say something, the cursor flies to whatever you mentioned or the right action fires.
 </p>
 
-```
-"where is the search bar"      → cursor flies to it
-"click the play button"        → cursor moves + real click fires
-"play despacito on spotify"    → spotify API call, music starts
-"check my email"               → gmail unread count, spoken aloud
-"remember my name is Daniel"   → stored locally, recalled later
-"what's your name"             → spoken reply, no screen used
-```
+<p align="center">
+  <img alt="Aegis Demo" src="aegis/assets/demo.gif" width="800">
+</p>
 
 Built in Rust. Primary target is Linux/Hyprland; macOS and Windows build flag-free from the same `cargo run`.
 

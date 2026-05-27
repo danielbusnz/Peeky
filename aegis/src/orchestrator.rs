@@ -259,6 +259,7 @@ fn run_one_turn(
     rt.block_on(async {
         match intent {
             Intent::FindAction => {
+                eprintln!("[intent] → FindAction for: {:?}", transcript);
                 run_find_action(
                     claude,
                     &transcript,
@@ -275,9 +276,11 @@ fn run_one_turn(
                 .await
             }
             Intent::Chat => {
+                eprintln!("[intent] → Chat for: {:?}", transcript);
                 run_chat(
                     claude,
                     &transcript,
+                    &resized_b64,
                     memory,
                     release_t,
                     &cancel_claude,
@@ -406,12 +409,12 @@ async fn run_find_action(
     }
 }
 
-/// Dispatch the Chat path. No tools, no screen; pure conversational
-/// streaming. Text deltas land in the sentence channel which the TTS
-/// task pulls from.
+/// Dispatch the Chat path. Now includes screenshot for visual context.
+/// Text deltas land in the sentence channel which the TTS task pulls from.
 async fn run_chat(
     claude: &Claude,
     transcript: &str,
+    screenshot_b64: &str,
     memory: &crate::providers::claude::MemoryStore,
     release_t: std::time::Instant,
     cancel_claude: &CancellationToken,
@@ -425,7 +428,7 @@ async fn run_chat(
             eprintln!("[barge-in] chat aborted at {:?}", release_t.elapsed());
         }
         result = claude.chat(
-            transcript, profile.as_deref(),
+            transcript, screenshot_b64, profile.as_deref(),
             |delta| helper.push_delta(delta),
         ) => {
             match result {
