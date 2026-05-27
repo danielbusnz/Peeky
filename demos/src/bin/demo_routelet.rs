@@ -17,16 +17,32 @@ struct Case {
 fn main() {
     let dir = Path::new("models/routelet");
     let t_load = std::time::Instant::now();
-    let routelet = Routelet::load(dir).unwrap_or_else(|e| panic!("failed to load routelet from {}: {e}", dir.display()));
+    let routelet = Routelet::load(dir)
+        .unwrap_or_else(|e| panic!("failed to load routelet from {}: {e}", dir.display()));
     let load_ms = t_load.elapsed().as_millis();
     println!("model loaded in {}ms\n", load_ms);
 
     let cases = [
-        Case { phrase: "play despacito on spotify",                              expected: "Integration" },
-        Case { phrase: "what's my wifi password",                                expected: "Memory"      },
-        Case { phrase: "where is the search bar",                                expected: "FindAction"  },
-        Case { phrase: "what's the capital of france",                           expected: "Chat"        },
-        Case { phrase: "open youtube, search for lofi and play the first result", expected: "Agent"      },
+        Case {
+            phrase: "play despacito on spotify",
+            expected: "Integration",
+        },
+        Case {
+            phrase: "what's my wifi password",
+            expected: "Memory",
+        },
+        Case {
+            phrase: "where is the search bar",
+            expected: "FindAction",
+        },
+        Case {
+            phrase: "what's the capital of france",
+            expected: "Chat",
+        },
+        Case {
+            phrase: "open youtube, search for lofi and play the first result",
+            expected: "Agent",
+        },
     ];
 
     let mut passed = 0usize;

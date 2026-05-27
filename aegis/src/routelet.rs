@@ -99,8 +99,7 @@ impl Routelet {
                     })
                     .collect::<Result<Vec<f32>, String>>()
             })
-            .collect::<Result<Vec<Vec<f32>>, String>>()
-            .map_err(|e| e)?;
+            .collect::<Result<Vec<Vec<f32>>, String>>()?;
 
         let intercept = head["intercept"]
             .as_array()
@@ -112,8 +111,7 @@ impl Routelet {
                     .ok_or_else(|| format!("head.json: intercept[{i}] is not a number"))
                     .map(|f| f as f32)
             })
-            .collect::<Result<Vec<f32>, String>>()
-            .map_err(|e| e)?;
+            .collect::<Result<Vec<f32>, String>>()?;
 
         let labels = head["labels"]
             .as_array()
@@ -125,8 +123,7 @@ impl Routelet {
                     .ok_or_else(|| format!("head.json: labels[{i}] is not a string"))
                     .map(str::to_owned)
             })
-            .collect::<Result<Vec<String>, String>>()
-            .map_err(|e| e)?;
+            .collect::<Result<Vec<String>, String>>()?;
 
         // Optional temperature field; default to 1.0 (no scaling) if absent.
         let temperature = head["temperature"]
@@ -163,47 +160,13 @@ impl Routelet {
     pub fn classify_with_confidence(&self, text: &str) -> Option<(Intent, f32)> {
         let normalized = preprocess(text);
         let embedding = self.embed(&normalized).ok()?;
-
-        let num_classes = self.labels.len();
-        let mut logits: Vec<f32> = Vec::with_capacity(num_classes);
-
-        for c in 0..num_classes {
-            let coef_row = &self.coef[c];
-            let dot: f32 = coef_row
-                .iter()
-                .zip(embedding.iter())
-                .map(|(a, b)| a * b)
-                .sum();
-            logits.push(dot + self.intercept[c]);
-        }
-
-        // Temperature scaling: divide logits before softmax.
-        // temperature=1.0 is identity; values != 1.0 were stored in head.json.
-        let temp = if self.temperature > 0.0 {
-            self.temperature
-        } else {
-            1.0
-        };
-        for v in &mut logits {
-            *v /= temp;
-        }
-
-        // Numerically stable softmax: subtract max before exp.
-        let max_logit = logits.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-        let mut exps: Vec<f32> = logits.iter().map(|&v| (v - max_logit).exp()).collect();
-        let sum: f32 = exps.iter().sum();
-        for v in &mut exps {
-            *v /= sum;
-        }
-
-        // Argmax of the softmax probabilities (same ordering as raw logits).
-        let (best_class, &best_prob) = exps
-            .iter()
-            .enumerate()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))?;
-
-        let intent = Intent::from_str(self.labels[best_class].as_str())?;
-        Some((intent, best_prob))
+        head_predict_with_confidence(
+            &self.coef,
+            &self.intercept,
+            self.temperature,
+            &self.labels,
+            &embedding,
+        )
     }
 
     /// Classify `text` into one of the five intents. Returns None if the
@@ -214,7 +177,8 @@ impl Routelet {
     /// score. Synchronous CPU inference; target latency is under 30ms on a
     /// modern desktop. Does not require a tokio runtime.
     pub fn classify(&self, text: &str) -> Option<Intent> {
-        self.classify_with_confidence(text).map(|(intent, _)| intent)
+        self.classify_with_confidence(text)
+            .map(|(intent, _)| intent)
     }
 
     /// Run the BERT embedder and return the [384] embedding vector.
@@ -251,7 +215,59 @@ impl Routelet {
         let embedding: Vec<f32> = view.iter().copied().collect();
         Ok(embedding)
     }
+}
 
+/// Pure head computation: dot-product logits, temperature scaling, numerically
+/// stable softmax, argmax, label lookup. Separated from `embed` so the math
+/// can be exercised in hermetic unit tests without loading the ONNX model.
+///
+/// Returns `None` when `coef`/`intercept`/`labels` are empty, no argmax
+/// winner exists (all NaN), or the winning label is not a recognized intent.
+fn head_predict_with_confidence(
+    coef: &[Vec<f32>],
+    intercept: &[f32],
+    temperature: f32,
+    labels: &[String],
+    embedding: &[f32],
+) -> Option<(Intent, f32)> {
+    let num_classes = labels.len();
+    if num_classes == 0 {
+        return None;
+    }
+
+    let mut logits: Vec<f32> = Vec::with_capacity(num_classes);
+    for c in 0..num_classes {
+        let dot: f32 = coef[c]
+            .iter()
+            .zip(embedding.iter())
+            .map(|(a, b)| a * b)
+            .sum();
+        logits.push(dot + intercept[c]);
+    }
+
+    // Temperature scaling: divide logits before softmax.
+    // temperature=1.0 is identity; values != 1.0 were stored in head.json.
+    let temp = if temperature > 0.0 { temperature } else { 1.0 };
+    for v in &mut logits {
+        *v /= temp;
+    }
+
+    // Numerically stable softmax: subtract max before exp.
+    let max_logit = logits.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+    let mut exps: Vec<f32> = logits.iter().map(|&v| (v - max_logit).exp()).collect();
+    let sum: f32 = exps.iter().sum();
+    for v in &mut exps {
+        *v /= sum;
+    }
+
+    // Argmax of the softmax probabilities (same ordering as raw logits).
+    let (best_class, &best_prob) = exps
+        .iter()
+        .enumerate()
+        .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))?;
+
+    let intent = Intent::from_str(labels[best_class].as_str())?;
+    Some((intent, best_prob))
 }
 
 // ────── redaction ──────
@@ -592,10 +608,7 @@ mod tests {
             let input = v["in"].as_str().expect("vector 'in' must be a string");
             let want = v["out"].as_str().expect("vector 'out' must be a string");
             let got = preprocess(input);
-            assert_eq!(
-                got, want,
-                "preprocess({input:?}) = {got:?}, want {want:?}"
-            );
+            assert_eq!(got, want, "preprocess({input:?}) = {got:?}, want {want:?}");
         }
     }
 
@@ -618,5 +631,121 @@ mod tests {
                 intent
             );
         }
+    }
+
+    // ── hermetic head-math tests (no model, no file I/O, no network) ──
+
+    /// Build the minimal inputs for head_predict_with_confidence.
+    /// dim=3, 5 classes matching the canonical label order.
+    fn make_labels() -> Vec<String> {
+        ["agent", "chat", "find_action", "integration", "memory"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
+    }
+
+    // Argmax + label mapping: coef constructed so "chat" (index 1) wins clearly.
+    // embedding = [1, 0, 0]; coef[1] = [10, 0, 0] gives logit 10; all others 0.
+    #[test]
+    fn head_argmax_picks_clear_winner() {
+        let labels = make_labels();
+        let dim = 3usize;
+        let mut coef: Vec<Vec<f32>> = vec![vec![0.0; dim]; labels.len()];
+        // Class 1 = "chat" wins with a large positive dot product.
+        coef[1][0] = 10.0;
+        let intercept = vec![0.0f32; labels.len()];
+        let embedding = vec![1.0f32, 0.0, 0.0];
+
+        let result = head_predict_with_confidence(&coef, &intercept, 1.0, &labels, &embedding);
+        let (intent, conf) = result.expect("must return Some for a clear winner");
+        assert_eq!(intent, Intent::Chat, "expected Chat to win");
+        assert!(
+            conf > 0.0 && conf <= 1.0,
+            "confidence must be in (0, 1], got {conf}"
+        );
+    }
+
+    // Confidence equals the max softmax probability, verified by hand for a
+    // small 3-class case reduced from the 5-class setup.
+    //
+    // Classes: ["agent"=0, "chat"=1, "find_action"=2, "integration"=3, "memory"=4]
+    // embedding=[1,0,0], coef row dot products: [0, 2, 0, 0, 0], intercepts all 0.
+    // Logits (temp=1): [0, 2, 0, 0, 0].
+    // Stable softmax: max=2, shifted=[−2, 0, −2, −2, −2],
+    //   exps=[e^−2, 1, e^−2, e^−2, e^−2], sum = 1 + 4*e^−2.
+    //   p_chat = 1 / (1 + 4*e^−2).
+    #[test]
+    fn head_confidence_matches_softmax_by_hand() {
+        let labels = make_labels();
+        let dim = 3usize;
+        let mut coef: Vec<Vec<f32>> = vec![vec![0.0; dim]; labels.len()];
+        coef[1][0] = 2.0; // "chat" gets logit 2, all others get 0.
+        let intercept = vec![0.0f32; labels.len()];
+        let embedding = vec![1.0f32, 0.0, 0.0];
+
+        let (_, conf) = head_predict_with_confidence(&coef, &intercept, 1.0, &labels, &embedding)
+            .expect("must return Some");
+
+        let e_neg2 = (-2.0f32).exp();
+        let expected = 1.0 / (1.0 + 4.0 * e_neg2);
+        assert!(
+            (conf - expected).abs() < 1e-5,
+            "confidence {conf} differs from expected {expected} by more than 1e-5"
+        );
+    }
+
+    // Temperature flattening: with higher temperature the winning probability
+    // is strictly lower, but the argmax intent is unchanged.
+    #[test]
+    fn head_temperature_flattens_confidence() {
+        let labels = make_labels();
+        let dim = 3usize;
+        let mut coef: Vec<Vec<f32>> = vec![vec![0.0; dim]; labels.len()];
+        coef[3][0] = 5.0; // "integration" wins with logit 5.
+        let intercept = vec![0.0f32; labels.len()];
+        let embedding = vec![1.0f32, 0.0, 0.0];
+
+        let (intent_t1, conf_t1) =
+            head_predict_with_confidence(&coef, &intercept, 1.0, &labels, &embedding)
+                .expect("must return Some at temperature 1.0");
+        let (intent_t2, conf_t2) =
+            head_predict_with_confidence(&coef, &intercept, 2.0, &labels, &embedding)
+                .expect("must return Some at temperature 2.0");
+
+        assert_eq!(
+            intent_t1, intent_t2,
+            "argmax must be the same at both temperatures"
+        );
+        assert_eq!(
+            intent_t1,
+            Intent::Integration,
+            "expected Integration to win"
+        );
+        assert!(
+            conf_t2 < conf_t1,
+            "higher temperature must flatten confidence: t=2 gave {conf_t2}, t=1 gave {conf_t1}"
+        );
+    }
+
+    // Unknown label: when the argmax winner has a label not recognized by
+    // Intent::from_str, head_predict_with_confidence returns None.
+    #[test]
+    fn head_unknown_label_returns_none() {
+        let mut labels = make_labels();
+        // Replace the "chat" entry (index 1) with a bogus label so it becomes the
+        // argmax winner but cannot be mapped to an Intent.
+        labels[1] = "bogus_label".to_string();
+
+        let dim = 3usize;
+        let mut coef: Vec<Vec<f32>> = vec![vec![0.0; dim]; labels.len()];
+        coef[1][0] = 10.0; // bogus_label wins by a large margin.
+        let intercept = vec![0.0f32; labels.len()];
+        let embedding = vec![1.0f32, 0.0, 0.0];
+
+        let result = head_predict_with_confidence(&coef, &intercept, 1.0, &labels, &embedding);
+        assert!(
+            result.is_none(),
+            "expected None when argmax label is unrecognized, got {result:?}"
+        );
     }
 }

@@ -25,7 +25,13 @@ impl VoiceSession {
     /// Build the per-process session: create the tokio runtime, warm HTTP
     /// pools to all three providers in parallel, start the persistent cpal
     /// mic stream, and open the audio output sink.
-    pub fn start(mic: audio::Mic, stt: SttDeepgram, claude: Claude, cartesia: TtsCartesia, routelet: Routelet) -> Self {
+    pub fn start(
+        mic: audio::Mic,
+        stt: SttDeepgram,
+        claude: Claude,
+        cartesia: TtsCartesia,
+        routelet: Routelet,
+    ) -> Self {
         // Tokio runtime owned by this thread. Streaming providers (Deepgram WS,
         // Claude SSE, Cartesia SSE) all run via `rt.block_on(...)`.
         let rt = tokio::runtime::Runtime::new().expect("failed to start tokio runtime");
