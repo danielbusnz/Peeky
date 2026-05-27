@@ -32,11 +32,10 @@ pub enum Intent {
 }
 
 impl Intent {
-    /// Parse the string Claude returns from the tool call back into the enum.
-    /// Returns None if Claude managed to emit a category we don't recognize
-    /// (which shouldn't happen because of the JSON-schema enum, but defend
-    /// anyway).
-    fn from_str(s: &str) -> Option<Self> {
+    /// Parse a category string into the enum. Used by both the LLM classifier
+    /// (Claude tool call output) and the local routelet ONNX classifier.
+    /// Returns None for any string that isn't one of the five known labels.
+    pub(crate) fn from_str(s: &str) -> Option<Self> {
         match s {
             "find_action" => Some(Self::FindAction),
             "integration" => Some(Self::Integration),
@@ -44,6 +43,17 @@ impl Intent {
             "memory" => Some(Self::Memory),
             "agent" => Some(Self::Agent),
             _ => None,
+        }
+    }
+
+    /// Inverse of `from_str`: returns the canonical label string for the intent.
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::FindAction => "find_action",
+            Self::Integration => "integration",
+            Self::Chat => "chat",
+            Self::Memory => "memory",
+            Self::Agent => "agent",
         }
     }
 }
@@ -242,5 +252,18 @@ mod tests {
         assert_eq!(Intent::from_str(""), None);
         assert_eq!(Intent::from_str("Find_Action"), None); // case-sensitive on purpose
         assert_eq!(Intent::from_str("garbage"), None);
+    }
+
+    #[test]
+    fn as_str_round_trips_from_str() {
+        for intent in [
+            Intent::FindAction,
+            Intent::Integration,
+            Intent::Chat,
+            Intent::Memory,
+            Intent::Agent,
+        ] {
+            assert_eq!(Intent::from_str(intent.as_str()), Some(intent));
+        }
     }
 }
