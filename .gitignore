@@ -1,4 +1,5 @@
 /target
+/models/
 .env
 launcher/src-tauri/gen/
 *.wav

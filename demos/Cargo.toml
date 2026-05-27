@@ -56,3 +56,6 @@ required-features = ["native"]
 [[bin]]
 name = "demo_win"
 required-features = ["crossplatform"]
+
+[[bin]]
+name = "demo_routelet"

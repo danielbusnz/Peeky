@@ -1,0 +1,16 @@
+{
+  "_note": "Canonical preprocess() conformance vectors. A byte-identical copy lives in the other repo (routelet at tests/, aegis at aegis/tests/); keep the two in sync. preprocess is the intent-independent input normalization the model sees at BOTH training and inference: (1) after a secret keyword, mask the remainder; (2) emails -> <EMAIL>; (3) runs of 4+ digits -> <NUM>. It must NOT depend on intent (inference does not know the intent yet). The Rust and Python implementations must reproduce every `out` exactly.",
+  "vectors": [
+    { "in": "play despacito on spotify", "out": "play despacito on spotify" },
+    { "in": "what's the capital of france", "out": "what's the capital of france" },
+    { "in": "where is the search bar", "out": "where is the search bar" },
+    { "in": "set volume to 50", "out": "set volume to 50" },
+    { "in": "remember my name is daniel", "out": "remember my name is daniel" },
+    { "in": "my wifi password is hunter2", "out": "my wifi password <SECRET>" },
+    { "in": "email me at john@example.com", "out": "email me at <EMAIL>" },
+    { "in": "call 5551234", "out": "call <NUM>" },
+    { "in": "my pin is 9041", "out": "my pin <SECRET>" },
+    { "in": "my github token is ghp_abc123", "out": "my github token <SECRET>" },
+    { "in": "send a@b.com my pin 4321", "out": "send <EMAIL> my pin <SECRET>" }
+  ]
+}

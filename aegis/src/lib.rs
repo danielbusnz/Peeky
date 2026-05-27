@@ -18,6 +18,7 @@ pub mod mouse_position;
 pub mod orchestrator;
 pub mod painter;
 pub mod providers;
+pub mod routelet;
 pub mod screenshot;
 pub mod tray;
 pub mod tuning;
