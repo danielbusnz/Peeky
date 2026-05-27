@@ -1,6 +1,7 @@
 //! Voice-turn orchestrator. One iteration per hotkey press:
 //!   1. Record + transcribe (Deepgram WS).
-//!   2. Classify intent (small Claude call, in parallel with screenshot join).
+//!   2. Classify intent (keyword, then on-device routelet, then Claude only on
+//!      low confidence).
 //!   3. Set up shared per-turn infra (barge-in, TTS pipeline, sentence channel).
 //!   4. Branch on intent: find_action / integration / chat / memory / agent.
 //!   5. Race the branch against barge-in; flush tail text to TTS.
@@ -28,7 +29,13 @@ fn set_cursor_idle() {
     crate::ai_cursor::set_state(crate::ai_cursor::CursorState::Idle);
 }
 
-pub fn run_loop(mic: audio::Mic, stt: SttDeepgram, claude: Claude, cartesia: TtsCartesia, routelet: Routelet) {
+pub fn run_loop(
+    mic: audio::Mic,
+    stt: SttDeepgram,
+    claude: Claude,
+    cartesia: TtsCartesia,
+    routelet: Routelet,
+) {
     let session = VoiceSession::start(mic, stt, claude, cartesia, routelet);
 
     println!("aegis ready. hold Ctrl+Space to talk");

@@ -1,4 +1,6 @@
-use aegis::{actions, ai_cursor, audio, hotkey, integrations, orchestrator, painter, providers, routelet};
+use aegis::{
+    actions, ai_cursor, audio, hotkey, integrations, orchestrator, painter, providers, routelet,
+};
 // Only used by the macOS screen-recording permission trigger below.
 #[cfg(target_os = "macos")]
 use aegis::screenshot;
@@ -22,9 +24,16 @@ fn main() {
     let routelet_dir = std::env::var("AEGIS_ROUTELET_DIR")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| std::path::PathBuf::from("models/routelet"));
-    let routelet = routelet::Routelet::load(&routelet_dir)
-        .unwrap_or_else(|e| panic!("routelet: failed to load from {}: {e}", routelet_dir.display()));
-    eprintln!("[startup] routelet classifier loaded from {}", routelet_dir.display());
+    let routelet = routelet::Routelet::load(&routelet_dir).unwrap_or_else(|e| {
+        panic!(
+            "routelet: failed to load from {}: {e}",
+            routelet_dir.display()
+        )
+    });
+    eprintln!(
+        "[startup] routelet classifier loaded from {}",
+        routelet_dir.display()
+    );
 
     actions::init_input_executor();
     actions::check_input_injection_available();
