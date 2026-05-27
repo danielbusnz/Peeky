@@ -1,6 +1,105 @@
-# Development Rules
+# Aegis Agent Guide
 
-Rules for humans and agents working in this repo. If you use an agent, run it from the repo root so it picks this file up automatically.
+Orientation and rules for humans and agents working in this repo. The first half maps the codebase (what it is, how a voice turn flows, where things live). The second half is the working rules. If you use an agent, run it from the repo root so it picks this file up automatically.
+
+## Overview
+
+Aegis is a voice-controlled AI cursor for Linux, written in Rust. Hold a push-to-talk hotkey, say something, release. The transcript is classified into one of five intents, the matching path runs, and the reply streams back as speech (and, when relevant, the cursor moves or a real click/type fires).
+
+A single voice turn flows like this:
+
+1. **Hotkey** (`aegis/src/hotkey/`) flips a global `RECORDING` atomic. On Hyprland, `bind`/`bindr` send `SIGUSR1` (press) / `SIGUSR2` (release) to the process; a signal-hook listener thread flips the flag. Other platforms use the `global-hotkey` crate polled from the winit loop.
+2. **Audio capture** (`aegis/src/audio/input.rs`) holds a persistent `cpal` mic stream and forwards PCM to the STT channel while the key is held, with a pre-roll ring and a post-release grace window.
+3. **STT** (`aegis/src/providers/stt_deepgram.rs`) streams PCM over a Deepgram websocket and returns the final transcript on release, after a short quiescence wait for multi-segment utterances.
+4. **Classify** (hybrid). The keyword classifier (`aegis/src/intent.rs`) runs first, sub-millisecond. If it returns `None`, the LLM classifier (`aegis/src/providers/claude/classifier.rs`) makes a forced-tool Claude call, spawned in parallel with the screenshot capture so its latency is mostly hidden.
+5. **Dispatch** (`aegis/src/orchestrator.rs`) routes to one of five paths, all under `aegis/src/providers/claude/`: `find_action`, `integration`, `chat`, `memory`, `agent`.
+6. **TTS** (`aegis/src/providers/tts_cartesia.rs`). Claude deltas are split into sentences and streamed to Cartesia, which synthesizes PCM into the `rodio` sink. The first flush is permissive (fast first audio); later flushes are strict (natural prosody).
+7. **Barge-in** (`aegis/src/barge_in.rs`). A watchdog polls the hotkey; a re-press mid-turn cancels the in-flight Claude and Cartesia streams so the next turn starts clean.
+
+`aegis/src/orchestrator.rs` is the core loop: one voice turn per iteration. Start there.
+
+## Architecture
+
+**Workspace** (`Cargo.toml`). Four Rust members: `aegis` (the agent binary plus its library), `demos` (hand-run dev tools and benchmarks), `launcher/src-tauri` (the Tauri onboarding app), and `memex` (a localhost personal-data daemon). The `proxy/` directory is **not** a workspace member: it is a TypeScript Cloudflare Worker.
+
+**The `aegis` crate** splits into `lib.rs` (every subsystem exposed as a public module) and a thin `main.rs`, so the out-of-tree `demos` crate builds against the same modules. Default feature is `hyprland`; the winit/X11 path builds with `--no-default-features`.
+
+**Platform-backend pattern.** Several subsystems (`hotkey/`, `input/`, `desktop/`, `screenshot/`, `mouse_position/`, `ai_cursor/`) share one shape: a `mod.rs` facade, a `backend.rs` trait, and per-OS implementations (`hyprland.rs`, `macos.rs`, `windows.rs`, `crossplatform.rs`/`winit.rs`) selected by feature flags. When adding a platform capability, add it to the trait and implement it in every backend.
+
+**Sibling crates and services:**
+
+- **launcher** (`launcher/src-tauri/`): Tauri 2 first-run onboarding. Collects an invite code or the user's own API keys (stored in the OS keychain), requests macOS TCC permissions, then spawns the `aegis` binary as a child with the right env. If `~/.config/aegis/onboarded` exists, it spawns silently and exits.
+- **memex** (`memex/`): an Axum daemon on `127.0.0.1:7142` (override with `MEMEX_ADDR`) meant to ingest personal data and serve a query API. Currently a scaffold: routes are wired (`/health`, `/search`, `/recent/{source}`), the store is TODO.
+- **proxy** (`proxy/src/index.ts`): the Cloudflare Worker that holds the real API keys and enforces per-tier usage caps. Deployed with Wrangler. See routes below.
+
+## API Proxy
+
+The app ships without API keys. By default every provider call routes through the Worker, which holds the secrets and meters usage (free trial turns, or per-day caps under an invite code). Each provider can be pointed straight at its upstream with an `AEGIS_*_DIRECT=1` env var plus the matching key (see "Use your own API keys" in the README).
+
+| Route | Method | Upstream | Purpose |
+| --- | --- | --- | --- |
+| `/v1/anthropic/messages` | POST | Anthropic Messages API | Full SSE proxy for Claude; enforces daily token caps |
+| `/v1/deepgram/token` | POST | Deepgram | Mints a short-lived STT token; client opens the websocket directly |
+| `/v1/cartesia/token` | POST | Cartesia | Mints a short-lived TTS token; client connects directly |
+| `/v1/invite/verify` | POST | KV | Validates an invite code (exists, not expired, device slot free) |
+| `OPTIONS *` | OPTIONS | none | CORS preflight |
+
+Deepgram and Cartesia never sit on the data path: the Worker only mints a token, then the client streams to them directly. Worker secrets: `ANTHROPIC_API_KEY`, `DEEPGRAM_API_KEY`, `CARTESIA_API_KEY`. Source and deploy notes: `proxy/src/index.ts` and `proxy/README.md`.
+
+## Key Files
+
+Pipeline and entry points:
+
+| File | ~Lines | Purpose |
+| --- | --- | --- |
+| `aegis/src/main.rs` | 48 | Thin binary. Builds the session and runs the turn loop. |
+| `aegis/src/lib.rs` | - | Library root. Exposes every subsystem as a public module. |
+| `aegis/src/orchestrator.rs` | 800 | Core loop. One turn: record → classify → dispatch → stream TTS → barge-in. |
+| `aegis/src/voice_session.rs` | 64 | Session holder (tokio runtime, mic, audio sink, provider clients, memory), built once at startup. |
+| `aegis/src/intent.rs` | 460 | Keyword classifier (fast path) and its disambiguation tests. |
+| `aegis/src/tuning.rs` | 52 | Every behavior dial in one place, each with an `↑`/`↓` tradeoff comment. |
+
+Claude paths (`aegis/src/providers/claude/`):
+
+| File | ~Lines | Purpose |
+| --- | --- | --- |
+| `mod.rs` | 152 | Claude client. Auth (proxy vs `AEGIS_ANTHROPIC_DIRECT`), request builder, connection warming. |
+| `classifier.rs` | 246 | LLM fallback classifier. Forced tool call returns the intent enum. |
+| `find_action.rs` | 280 | Point/click/type/scroll from a single screenshot query; action fires mid-stream. |
+| `integration.rs` | 266 | Service calls. Two-step: pick tool (forced), dispatch, then summarize. |
+| `chat.rs` | 138 | Pure Q&A. No screen, no tools. Injects the user profile from memory. |
+| `memory.rs` | 549 | Store/recall facts in `~/.config/aegis/memory.jsonl`. |
+| `agent_loop.rs` | 526 | Multi-step loop with iterative screenshots (cap `AGENT_MAX_STEPS`). |
+| `parsing.rs` | 815 | Tool schemas, SSE parsing, old-screenshot trimming, `cache_control` markers. |
+
+Providers and I/O:
+
+| File | Purpose |
+| --- | --- |
+| `aegis/src/providers/stt_deepgram.rs` | Deepgram websocket STT (proxy token or direct key). |
+| `aegis/src/providers/tts_cartesia.rs` | Cartesia streaming TTS (proxy token or direct key). |
+| `aegis/src/providers/device_id.rs`, `invite_code.rs` | Persisted identifiers for proxy auth, re-read per request. |
+| `aegis/src/audio/input.rs`, `output.rs` | `cpal` mic capture and `rodio` playback. |
+| `aegis/src/actions.rs` | Serialized executor draining Claude's input actions to the platform input backend. |
+| `aegis/src/input/`, `desktop/`, `screenshot/`, `mouse_position/` | Platform backends: input injection, window/app management, capture, cursor position. |
+| `aegis/src/ai_cursor/`, `painter.rs` | The blue cursor overlay and its renderer (GTK/cairo on Hyprland). |
+| `aegis/src/barge_in.rs` | Re-press watchdog that fires the cancellation token. |
+| `aegis/src/tray.rs` | macOS menu bar icon. |
+
+Integrations (`aegis/src/integrations/`): `mod.rs` is the registry (`all_tools()` + `dispatch()`); `gmail.rs`, `spotify.rs`, `github.rs`, `youtube.rs`, `health.rs` are the service handlers, each gated on its own credentials.
+
+## Architecture Decisions
+
+The non-obvious "why"s. Check these before changing the related behavior.
+
+- **Push-to-talk over Unix signals (Hyprland).** Hyprland's `bind`/`bindr` can signal a process matched by regex, so press/release map to `SIGUSR1`/`SIGUSR2` and a signal-hook thread flips a global atomic (no polling). The README's `pkill -SIGUSR1/-SIGUSR2` hotkey config depends on this exact mechanism.
+- **Proxy by default, per-provider direct opt-out.** Zero keys needed to run. `AEGIS_ANTHROPIC_DIRECT` / `AEGIS_DEEPGRAM_DIRECT` / `AEGIS_CARTESIA_DIRECT` (each with its matching key) bypass the Worker. Mix and match.
+- **Hybrid classify, LLM overlapped with the screenshot.** The keyword path resolves most turns with no round-trip. When it can't, the LLM classifier call runs in parallel with the screenshot capture/resize so its latency is largely hidden. Voice turns are latency-bound; do not add synchronous work before TTS without checking the budget in `tuning.rs`.
+- **Keyword order: FindAction before Integration.** Locator verbs ("where is", "click", "show me") are stronger signals than a bare service name. "where's my YouTube button" must point at the button, not play a video. There are tests pinning this; keep them green.
+- **TTS first flush permissive, later flushes strict.** The first sentence flushes on a clause break (comma/semicolon/colon) once past `TTS_FIRST_FLUSH_MIN_CHARS`, to start audio fast. Once speech is rolling, only `.!?` flush, for natural prosody.
+- **Don't early-cancel on integration actions.** Visual actions (point/click/type) get on-screen feedback, so the Claude stream exits early to cut chatter. Integration actions are silent API calls whose results must flow back for Claude to speak a summary, so they are not cancelled.
+- **Agent loop bounds requests.** `AGENT_KEEP_RECENT_SCREENSHOTS` strips image bytes from older tool results to keep request bodies small; `AGENT_SETTLE_MS` waits for the UI to repaint before the next screenshot so the model doesn't act on a pre-animation frame.
+- **Invite code and device id are re-read per request.** So the onboarding window can change them without restarting aegis.
 
 ## Conversational Style
 
@@ -120,6 +219,17 @@ aegis is a binary crate, not a published library. Releases are:
 6. (Optional) Create a GitHub release with the binary attached.
 
 No npm, no crates.io publish, no 2FA flow.
+
+## Keeping This File Current
+
+When a change makes the orientation half stale, update it in the same session:
+
+- New or deleted source files that matter for orientation: add or remove the row in "Key Files".
+- A new subsystem, crate, platform backend, or proxy route: update "Architecture" or "API Proxy".
+- A new non-obvious tradeoff or gotcha: add it to "Architecture Decisions".
+- A pipeline change (a stage moves, splits, or is reordered): fix the flow in "Overview".
+
+Skip updates for minor edits, bug fixes, and refactors that leave the documented structure intact. Approximate line counts only need fixing when they drift by more than ~50 lines.
 
 ## User Override
 
