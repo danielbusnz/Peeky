@@ -71,8 +71,16 @@ jobs:
 
       - name: Package artifact
         run: |
-          mkdir -p dist
-          cp target/release/aegis dist/aegis-linux-x86_64
+          mkdir -p dist/aegis-linux-x86_64
+          cp target/release/aegis dist/aegis-linux-x86_64/aegis
+          # The classifier loads from ./models/routelet relative to the
+          # binary's cwd, so ship the three files alongside the executable.
+          # Users untar and run from the extracted dir.
+          mkdir -p dist/aegis-linux-x86_64/models/routelet
+          cp models/routelet/embedder.onnx \
+             models/routelet/head.json \
+             models/routelet/tokenizer.json \
+             dist/aegis-linux-x86_64/models/routelet/
           (cd dist && tar -czf aegis-linux-x86_64.tar.gz aegis-linux-x86_64)
           (cd dist && sha256sum aegis-linux-x86_64.tar.gz > aegis-linux-x86_64.tar.gz.sha256)
 
@@ -104,9 +112,13 @@ jobs:
       - name: Package artifact
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item target/release/aegis.exe dist/aegis-windows-x86_64.exe
-          Compress-Archive -Path dist/aegis-windows-x86_64.exe -DestinationPath dist/aegis-windows-x86_64.zip
+          New-Item -ItemType Directory -Force dist/aegis-windows-x86_64 | Out-Null
+          Copy-Item target/release/aegis.exe dist/aegis-windows-x86_64/aegis.exe
+          # Ship the classifier next to the binary so AEGIS_ROUTELET_DIR's
+          # default (./models/routelet) resolves on first run.
+          New-Item -ItemType Directory -Force dist/aegis-windows-x86_64/models/routelet | Out-Null
+          Copy-Item models/routelet/embedder.onnx,models/routelet/head.json,models/routelet/tokenizer.json dist/aegis-windows-x86_64/models/routelet/
+          Compress-Archive -Path dist/aegis-windows-x86_64/* -DestinationPath dist/aegis-windows-x86_64.zip
           $hash = (Get-FileHash dist/aegis-windows-x86_64.zip -Algorithm SHA256).Hash.ToLower()
           "$hash  aegis-windows-x86_64.zip" | Out-File -Encoding ascii dist/aegis-windows-x86_64.zip.sha256
 

@@ -57,6 +57,11 @@
     "externalBin": [
       "binaries/aegis"
     ],
+    "resources": {
+      "../../models/routelet/embedder.onnx": "models/routelet/embedder.onnx",
+      "../../models/routelet/head.json": "models/routelet/head.json",
+      "../../models/routelet/tokenizer.json": "models/routelet/tokenizer.json"
+    },
     "macOS": {
       "minimumSystemVersion": "10.13",
       "entitlements": "./Entitlements.plist"

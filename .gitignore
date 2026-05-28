@@ -1,5 +1,13 @@
 /target
-/models/
+# Bulk-ignore models/, then un-ignore the three routelet artifacts the
+# shipped binary loads at startup. They are checked in so CI builds the
+# .dmg / tarballs with the classifier bundled. Everything else under
+# models/ (training artifacts, fp32 backups, setfit experiments) stays out.
+/models/**
+!/models/routelet/
+!/models/routelet/embedder.onnx
+!/models/routelet/head.json
+!/models/routelet/tokenizer.json
 .env
 launcher/src-tauri/gen/
 *.wav

@@ -7,9 +7,11 @@
 //!   token_type_ids] -> BERT embedder ONNX -> [1, 384] L2-normalized
 //!   embedding -> logistic-regression head -> argmax -> Intent.
 //!
-//! The embedder is an fp32 ONNX model exported at opset 14 with LayerNorm
-//! decomposed into primitive ops so tract can load it. The head is a small
-//! JSON file: 5x384 coefficient matrix + 5 intercepts + 5 label strings.
+//! The embedder is an ONNX model exported at opset 14 with LayerNorm
+//! decomposed into primitive ops so tract can load it. Weights are
+//! dynamically quantized to int8 to keep the shipped artifact ~34MB. The
+//! head is a small JSON file: 5x384 coefficient matrix + 5 intercepts + 5
+//! label strings.
 
 use std::io::Write;
 use std::path::Path;
