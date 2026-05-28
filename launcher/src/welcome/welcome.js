@@ -119,9 +119,24 @@ function showHowTo() {
 // triggering prompts mid-session and forcing a restart. Mic + screen are
 // API-grantable; accessibility can't be auto-granted, so we open its pane and
 // continue (the hotkey starts working once the user toggles it). Commands come
-// from tauri-plugin-macos-permissions. NOTE: verify these invoke strings and
-// the grant-transfers-to-agent behavior on a signed macOS build.
+// from tauri-plugin-macos-permissions.
+//
+// Returns true if a relaunch is needed (permissions were just granted and
+// require app restart to take effect).
 async function requestMacPermissions(invoke) {
+    let needsRelaunch = false;
+
+    // Check current state before requesting
+    let hadMic = false;
+    let hadScreen = false;
+    try {
+        hadMic = await invoke("plugin:macos-permissions|check_microphone_permission");
+    } catch (_) {}
+    try {
+        hadScreen = await invoke("plugin:macos-permissions|check_screen_recording_permission");
+    } catch (_) {}
+
+    // Request permissions
     try {
         await invoke("plugin:macos-permissions|request_microphone_permission");
     } catch (_) {}
@@ -134,6 +149,23 @@ async function requestMacPermissions(invoke) {
             await invoke("plugin:macos-permissions|request_accessibility_permission");
         }
     } catch (_) {}
+
+    // Check if permissions changed (were just granted)
+    let hasMic = false;
+    let hasScreen = false;
+    try {
+        hasMic = await invoke("plugin:macos-permissions|check_microphone_permission");
+    } catch (_) {}
+    try {
+        hasScreen = await invoke("plugin:macos-permissions|check_screen_recording_permission");
+    } catch (_) {}
+
+    // If any permission was just granted, we need to relaunch for it to take effect
+    if ((!hadMic && hasMic) || (!hadScreen && hasScreen)) {
+        needsRelaunch = true;
+    }
+
+    return needsRelaunch;
 }
 
 // True when the key-entry panel is the active enrollment mode.
@@ -243,13 +275,21 @@ document.getElementById("cursor-button").addEventListener("click", async () => {
 document.getElementById("howto-done").addEventListener("click", async () => {
     const { invoke } = window.__TAURI__.core;
 
-    // Grant the agent's macOS permissions before it spawns (no-op elsewhere).
-    if (isMac()) {
-        await requestMacPermissions(invoke);
-    }
-
     // Mark onboarding complete so the next launch skips this screen.
     await invoke("mark_onboarded").catch(() => { });
+
+    // Grant the agent's macOS permissions before it spawns (no-op elsewhere).
+    // If permissions were just granted, relaunch so they take effect.
+    if (isMac()) {
+        const needsRelaunch = await requestMacPermissions(invoke);
+        if (needsRelaunch) {
+            // Relaunch the app so permissions take effect. On relaunch,
+            // the onboarded file exists so the launcher skips the UI and
+            // spawns aegis directly with the new permissions.
+            window.__TAURI__.process.relaunch();
+            return;
+        }
+    }
 
     // Fire-and-forget: the agent runs as its own process, so don't block the
     // window close on it booting.
