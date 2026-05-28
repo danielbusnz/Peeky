@@ -13,8 +13,9 @@ export const DEEPGRAM_TOKEN_URL = "https://api.deepgram.com/v1/auth/grant";
 export const CARTESIA_TOKEN_URL = "https://api.cartesia.ai/access-token";
 export const CARTESIA_API_VERSION = "2026-03-01";
 
-export const DEMO_KV_TTL_SECONDS = 48 * 60 * 60;
-export const TRIAL_KV_TTL_SECONDS = 30 * 24 * 60 * 60;
+// Usage counters soft-reset after 30 days of inactivity: each use refreshes
+// the TTL, so an active device's cap holds while an idle one's expires.
+export const TURN_KV_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 // How long upstream tokens live. Long enough for the client to open a WS,
 // short enough that a stolen token is useless quickly.

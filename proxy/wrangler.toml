@@ -2,28 +2,12 @@ name = "aegis-proxy"
 main = "src/index.ts"
 compatibility_date = "2026-05-15"
 
-# Trial tier: lifetime turn cap per device. Bumped on every endpoint call.
-# 18 = 6 voice queries at 3 calls per query (STT, Claude, TTS). Marketing
-# language is "6 free tries" where a try = one voice query.
-#
-# Demo tier: fallback daily caps used when an invite code's payload omits a
-# field. Live code values always come from the invite KV entry itself, set
-# by scripts/mint-code.sh.
-#
-# Sizing notes for demo defaults:
-#   Anthropic: each voice turn sends two screenshots at ~1.3-1.5k tokens each
-#     plus system prompt + transcript, around 3.5k input tokens and 200-300
-#     output. 100k input / 20k output is roughly 30 turns/day.
-#   Deepgram: each token gates one streaming STT session. 50 sessions/day is
-#     roughly 50 voice queries. At ~10s of audio each, ~$0.04/day cap.
-#   Cartesia: each token gates one or more TTS sessions. A few extra in case
-#     the client refreshes mid-conversation.
+# Trial tier: lifetime call cap per device, bumped on every endpoint call.
+# 9 = 3 voice queries at 3 calls per query (STT, Claude, TTS). Marketing
+# language is "3 free tries" where a try = one voice query. Recruiter codes
+# raise this cap per code (see scripts/mint-code.sh).
 [vars]
-TRIAL_TURNS_CAP = "18"
-DAILY_INPUT_TOKEN_CAP = "100000"
-DAILY_OUTPUT_TOKEN_CAP = "20000"
-DAILY_DEEPGRAM_TOKEN_CAP = "50"
-DAILY_CARTESIA_TOKEN_CAP = "100"
+TRIAL_TURNS_CAP = "9"
 
 # KV namespace for per-device usage counters. Create with:
 #   wrangler kv namespace create USAGE_KV

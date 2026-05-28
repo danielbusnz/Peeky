@@ -2,17 +2,14 @@ import { ANTHROPIC_URL } from "../constants";
 import { cors, jsonResponse, passthroughHeaders, requireDeviceId } from "../http";
 import { resolveTier } from "../tiers";
 import type { Env } from "../types";
-import { consumeTrialTurn, demoUsageKey, readUsage, tallyAnthropicUsage } from "../usage";
+import { consumeTurn, usageKey } from "../usage";
 
 /**
- * Full HTTP proxy for Anthropic's Messages API. Trial tier bumps the turn
- * counter pre-flight; demo tier tallies token usage from a teed SSE copy.
+ * Full HTTP proxy for Anthropic's Messages API. Charges one call against the
+ * device's lifetime counter up front, then streams the SSE response through
+ * untouched.
  */
-export async function handleAnthropic(
-    request: Request,
-    env: Env,
-    ctx: ExecutionContext,
-): Promise<Response> {
+export async function handleAnthropic(request: Request, env: Env): Promise<Response> {
     const deviceId = requireDeviceId(request);
     if (deviceId instanceof Response) return deviceId;
 
@@ -30,42 +27,19 @@ export async function handleAnthropic(
         return cors(jsonResponse(400, { error: "stream: true required" }));
     }
 
-    // Pre-flight cap check. Trial pays a turn up front; demo pays tokens after
-    // the SSE stream reports usage.
-    if (tier.kind === "trial") {
-        const consumed = await consumeTrialTurn(env.USAGE_KV, deviceId, tier.turnsCap);
-        if (!consumed) {
-            return cors(
-                jsonResponse(429, {
-                    error: "trial_exhausted",
-                    message:
-                        "Free trial spent. Use your own API keys (BYOK) or contact us for an invite code.",
-                    provider: "anthropic",
-                    tier: "trial",
-                }),
-            );
-        }
-    } else {
-        const kvKey = demoUsageKey(tier.code, deviceId);
-        const usage = await readUsage(env.USAGE_KV, kvKey);
-        if (
-            usage.input >= tier.caps.daily_input_tokens ||
-            usage.output >= tier.caps.daily_output_tokens
-        ) {
-            return cors(
-                jsonResponse(429, {
-                    error: "daily_cap_exceeded",
-                    message: "Daily cap for this invite code reached. Try again tomorrow.",
-                    provider: "anthropic",
-                    tier: "demo",
-                    usage,
-                    caps: {
-                        input: tier.caps.daily_input_tokens,
-                        output: tier.caps.daily_output_tokens,
-                    },
-                }),
-            );
-        }
+    const consumed = await consumeTurn(env.USAGE_KV, usageKey(tier, deviceId), tier.turnsCap);
+    if (!consumed) {
+        return cors(
+            jsonResponse(429, {
+                error: tier.kind === "trial" ? "trial_exhausted" : "code_exhausted",
+                message:
+                    tier.kind === "trial"
+                        ? "Free trial spent. Use your own API keys (BYOK) or contact us for an invite code."
+                        : "This invite code's uses are spent.",
+                provider: "anthropic",
+                tier: tier.kind,
+            }),
+        );
     }
 
     const upstreamHeaders: Record<string, string> = {
@@ -82,32 +56,9 @@ export async function handleAnthropic(
         body: rawBody,
     });
 
-    if (!upstream.ok || !upstream.body) {
-        return cors(
-            new Response(upstream.body, {
-                status: upstream.status,
-                headers: passthroughHeaders(upstream.headers),
-            }),
-        );
-    }
-
-    // Only demo tier needs token accounting. Trial already paid its turn.
-    if (tier.kind === "demo") {
-        const [toClient, toTally] = upstream.body.tee();
-        ctx.waitUntil(
-            tallyAnthropicUsage(toTally, env.USAGE_KV, demoUsageKey(tier.code, deviceId)),
-        );
-        return cors(
-            new Response(toClient, {
-                status: 200,
-                headers: passthroughHeaders(upstream.headers),
-            }),
-        );
-    }
-
     return cors(
         new Response(upstream.body, {
-            status: 200,
+            status: upstream.ok ? 200 : upstream.status,
             headers: passthroughHeaders(upstream.headers),
         }),
     );

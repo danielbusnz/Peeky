@@ -46,20 +46,20 @@ import type { Env } from "./types";
 export type { Env };
 
 export default {
-    async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    async fetch(request: Request, env: Env): Promise<Response> {
         const url = new URL(request.url);
 
         if (request.method === "OPTIONS") return cors(new Response(null, { status: 204 }));
 
         if (request.method === "POST") {
             if (url.pathname === "/v1/anthropic/messages") {
-                return handleAnthropic(request, env, ctx);
+                return handleAnthropic(request, env);
             }
             if (url.pathname === "/v1/deepgram/token") {
-                return handleDeepgramToken(request, env, ctx);
+                return handleDeepgramToken(request, env);
             }
             if (url.pathname === "/v1/cartesia/token") {
-                return handleCartesiaToken(request, env, ctx);
+                return handleCartesiaToken(request, env);
             }
             if (url.pathname === "/v1/invite/verify") {
                 return handleInviteVerify(request, env);

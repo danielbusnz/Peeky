@@ -10,10 +10,10 @@ export interface Env {
     /** Cartesia API key. Set via `wrangler secret put CARTESIA_API_KEY`. */
     CARTESIA_API_KEY: string;
     /**
-     * Shared namespace for both usage counters and invite codes. Keys:
-     *   usage:trial:{deviceId}                  -> TrialUsage (30d TTL)
-     *   usage:demo:{code}:{deviceId}:{date}     -> Usage (48h TTL)
-     *   invite:{CODE}                           -> InviteCode (no TTL, managed by hand)
+     * Shared namespace for usage counters and invite codes. Keys:
+     *   usage:trial:{deviceId}            -> TurnUsage (30d TTL, refreshed on use)
+     *   usage:demo:{code}:{deviceId}      -> TurnUsage (30d TTL, refreshed on use)
+     *   invite:{CODE}                     -> InviteCode (no TTL, managed by hand)
      */
     USAGE_KV: KVNamespace;
     /**
@@ -22,41 +22,19 @@ export interface Env {
      * Opt-in on the client; the bucket only ever sees redacted text.
      */
     ROUTELET_R2: R2Bucket;
-    /** Lifetime turn cap for trial-tier devices. Decimal string. */
+    /** Lifetime call cap for trial-tier devices. Decimal string. One voice query = 3 calls (STT, Claude, TTS). */
     TRIAL_TURNS_CAP: string;
-    /** Daily caps for demo-tier devices when the invite code omits a field. */
-    DAILY_INPUT_TOKEN_CAP: string;
-    DAILY_OUTPUT_TOKEN_CAP: string;
-    DAILY_DEEPGRAM_TOKEN_CAP: string;
-    DAILY_CARTESIA_TOKEN_CAP: string;
 }
 
-export type Usage = {
-    /** Anthropic input tokens consumed today. */
-    input: number;
-    /** Anthropic output tokens consumed today. */
-    output: number;
-    /** Deepgram tokens minted today (each gates one streaming session). */
-    deepgram_tokens: number;
-    /** Cartesia tokens minted today (each gates one or more TTS sessions). */
-    cartesia_tokens: number;
-};
-
-export type TrialUsage = {
-    /** Any-endpoint calls this device has made. Compared to TRIAL_TURNS_CAP. */
+/** Lifetime call counter, shared by both tiers. One per (tier, device). */
+export type TurnUsage = {
+    /** Metered calls this device has made (STT/Claude/TTS each count one). */
     turns: number;
 };
 
-export type DemoCaps = {
-    daily_input_tokens: number;
-    daily_output_tokens: number;
-    daily_deepgram_tokens: number;
-    daily_cartesia_tokens: number;
-};
-
-export type InviteCode = DemoCaps & {
-    /** ISO 8601. Codes past this date are rejected. */
-    expires_at: string;
+export type InviteCode = {
+    /** Lifetime call cap for any device using this code. 10 uses = 30 calls. */
+    turns_cap: number;
     /** Hard ceiling on `devices_seen.length`. */
     max_devices: number;
     /** Device IDs that have used this code. Append-only. */
@@ -65,7 +43,7 @@ export type InviteCode = DemoCaps & {
 
 export type Tier =
     | { kind: "trial"; turnsCap: number }
-    | { kind: "demo"; code: string; caps: DemoCaps };
+    | { kind: "demo"; code: string; turnsCap: number };
 
 /** Successful read-only resolution of an invite code against KV. */
 export type InviteLookup = {

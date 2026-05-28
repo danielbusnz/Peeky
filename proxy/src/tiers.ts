@@ -8,8 +8,8 @@ import type { Env, InviteCode, InviteLookup, Tier } from "./types";
 import { parseCap } from "./usage";
 
 /**
- * Read-only validation of an invite code: format, existence, expiry, and
- * device-slot accounting. Performs NO writes (no device binding), so it's
+ * Read-only validation of an invite code: format, existence, and device-slot
+ * accounting. Performs NO writes (no device binding), so it's
  * safe for both the metered request path and the pre-flight verify endpoint.
  * Returns the parsed code on success or an error Response to early-return.
  */
@@ -36,10 +36,6 @@ export async function lookupInvite(
         return cors(jsonResponse(500, { error: "invite_code_corrupt" }));
     }
 
-    if (Date.parse(invite.expires_at) <= Date.now()) {
-        return cors(jsonResponse(403, { error: "invite_code_expired" }));
-    }
-
     return {
         normalized,
         invite,
@@ -50,8 +46,8 @@ export async function lookupInvite(
 
 /**
  * Inspects the request for `x-aegis-invite-code`. If absent, returns the trial
- * tier with the configured cap. If present, validates the code, enforces
- * expiry + device binding, and returns the demo tier. Returns an error
+ * tier with the configured cap. If present, validates the code, binds the
+ * device, and returns the demo tier with the code's call cap. Returns an error
  * Response on any validation failure so callers can early-return.
  */
 export async function resolveTier(
@@ -84,16 +80,7 @@ export async function resolveTier(
         await env.USAGE_KV.put(`invite:${normalized}`, JSON.stringify(invite));
     }
 
-    return {
-        kind: "demo",
-        code: normalized,
-        caps: {
-            daily_input_tokens: invite.daily_input_tokens,
-            daily_output_tokens: invite.daily_output_tokens,
-            daily_deepgram_tokens: invite.daily_deepgram_tokens,
-            daily_cartesia_tokens: invite.daily_cartesia_tokens,
-        },
-    };
+    return { kind: "demo", code: normalized, turnsCap: invite.turns_cap };
 }
 
 /**
@@ -127,7 +114,7 @@ export async function handleInviteVerify(request: Request, env: Env): Promise<Re
     return cors(
         jsonResponse(200, {
             ok: true,
-            expires_at: lookup.invite.expires_at,
+            turns_cap: lookup.invite.turns_cap,
             max_devices: lookup.invite.max_devices,
         }),
     );
