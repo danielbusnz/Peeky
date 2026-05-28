@@ -9,9 +9,9 @@ import { parseCap } from "./usage";
 
 /**
  * Read-only validation of an invite code: format, existence, and device-slot
- * accounting. Performs NO writes (no device binding), so it's
- * safe for both the metered request path and the pre-flight verify endpoint.
- * Returns the parsed code on success or an error Response to early-return.
+ * accounting. Performs NO writes (no device binding), so it's safe for both
+ * the metered request path and the pre-flight verify endpoint. Returns the
+ * parsed code on success or an error Response to early-return.
  */
 export async function lookupInvite(
     env: Env,
