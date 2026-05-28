@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). aegis f
 
 ### Added
 
+- On-device ONNX intent classifier (`aegis/src/routelet.rs`) via tract. Replaces the per-turn Claude classifier call with a local SetFit model. Falls back to Claude only when calibrated confidence is below `ROUTELET_CONFIDENCE_THRESHOLD`.
+- `demo_routelet` bin (`demos/src/bin/demo_routelet.rs`) for hand-testing the classifier.
+- `PRIVACY.md` documenting what leaves the device and how on-device logging works.
+- `AEGIS_ROUTELET_LOG` env var to opt into redacted router logging at `~/.config/aegis/routelet_log.jsonl` (capped at 5000 lines).
 - SQLite + FTS5 conversation log (`aegis/src/providers/claude/history.rs`). Per-turn record + keyword search with porter stemming and BM25 ranking.
 - Tool-routing eval harness (`aegis/evals/runners/tool_routing.rs`). Runs cases from `aegis/evals/cases/tool_routing.json` through the live classifier and reports pass rate, per-category breakdown, and confusion matrix.
 - Cursor SVG hero in the project README.

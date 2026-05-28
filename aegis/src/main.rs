@@ -1,4 +1,6 @@
-use aegis::{actions, ai_cursor, audio, hotkey, integrations, orchestrator, painter, providers};
+use aegis::{
+    actions, ai_cursor, audio, hotkey, integrations, orchestrator, painter, providers, routelet,
+};
 // Only used by the macOS screen-recording permission trigger below.
 #[cfg(target_os = "macos")]
 use aegis::screenshot;
@@ -16,6 +18,23 @@ fn main() {
     let cartesia =
         providers::tts_cartesia::TtsCartesia::from_env(http).expect("missing CARTESIA_API_KEY");
     let mic = audio::Mic::init();
+
+    // Load the local ONNX classifier. Asset path: AEGIS_ROUTELET_DIR env var,
+    // or the default models/routelet relative to the working directory.
+    let routelet_dir = std::env::var("AEGIS_ROUTELET_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from("models/routelet"));
+    let routelet = routelet::Routelet::load(&routelet_dir).unwrap_or_else(|e| {
+        panic!(
+            "routelet: failed to load from {}: {e}",
+            routelet_dir.display()
+        )
+    });
+    eprintln!(
+        "[startup] routelet classifier loaded from {}",
+        routelet_dir.display()
+    );
+
     actions::init_input_executor();
     actions::check_input_injection_available();
 
@@ -40,7 +59,7 @@ fn main() {
     // so a slow API doesn't delay the overlay appearing.
     std::thread::spawn(integrations::health::check_and_print);
 
-    std::thread::spawn(move || orchestrator::run_loop(mic, stt, claude, cartesia));
+    std::thread::spawn(move || orchestrator::run_loop(mic, stt, claude, cartesia, routelet));
 
     // Cursor event loop holds the main thread for the rest of the process.
     // Required because winit/Hyprland event loops are main-thread-only.

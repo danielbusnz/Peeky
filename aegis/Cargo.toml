@@ -19,6 +19,12 @@ hyprland = ["dep:gtk", "dep:gtk4-layer-shell", "dep:hyprland", "dep:signal-hook"
 [dependencies]
 base64 = "0.22.1"
 cpal = "0.17.3"
+# Local ONNX intent classifier. tract-onnx runs the BERT embedder graph;
+# tokenizers loads the HuggingFace tokenizer.json. default-features = false
+# drops onig (the C regex engine) and the progress bar; fancy-regex is the
+# pure-Rust regex backend the tokenizer still needs to load and encode.
+tract-onnx = "0.21.15"
+tokenizers = { version = "0.21.4", default-features = false, features = ["fancy-regex"] }
 dotenvy = "0.15.7"
 futures-util = "0.3.32"
 hound = "3.5.1"
@@ -31,6 +37,9 @@ tokio-tungstenite = { version = "0.29.0", features = ["native-tls"] }
 tokio-util = { version = "0.7", default-features = false }
 uuid = { version = "1.10", features = ["v4"] }
 dirs = "5.0"
+# Regex engine for the routelet redaction pass (PII scrubbing before log write).
+# Compiled patterns are cached via OnceLock so per-call overhead is negligible.
+regex = "1.12.3"
 rusqlite = { version = "0.32", features = ["bundled", "blob"] }
 fast_image_resize = { version = "5", features = ["image"] }
 open = "5"

@@ -32,6 +32,17 @@ pub const STT_QUIESCENCE_MS: u64 = 150;
 /// ↓ catches shorter clauses like "Hi there," (faster first audio).
 pub const TTS_FIRST_FLUSH_MIN_CHARS: usize = 12;
 
+// ────── routelet classifier ──────
+
+/// Minimum routelet confidence required to accept its prediction on-device.
+/// Below this threshold the turn falls back to the Claude classifier (one
+/// network round-trip) for a second opinion. Typical on-distribution
+/// confidence is above 0.9, so this threshold only fires on genuinely
+/// garbled or out-of-distribution input.
+/// ↑ defers more ambiguous turns to Claude (more accurate, adds latency).
+/// ↓ keeps more turns fully on-device (faster, accepts lower-confidence calls).
+pub const ROUTELET_CONFIDENCE_THRESHOLD: f32 = 0.55;
+
 // ────── Claude agent loop ──────
 
 /// Hard cap on agent loop iterations per turn.

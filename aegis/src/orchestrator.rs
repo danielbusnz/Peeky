@@ -1,6 +1,7 @@
 //! Voice-turn orchestrator. One iteration per hotkey press:
 //!   1. Record + transcribe (Deepgram WS).
-//!   2. Classify intent (small Claude call, in parallel with screenshot join).
+//!   2. Classify intent (keyword, then on-device routelet, then Claude only on
+//!      low confidence).
 //!   3. Set up shared per-turn infra (barge-in, TTS pipeline, sentence channel).
 //!   4. Branch on intent: find_action / integration / chat / memory / agent.
 //!   5. Race the branch against barge-in; flush tail text to TTS.
@@ -14,6 +15,7 @@ use crate::intent::keyword_classify;
 use crate::providers::claude::{Claude, Intent};
 use crate::providers::stt_deepgram::SttDeepgram;
 use crate::providers::tts_cartesia::TtsCartesia;
+use crate::routelet::Routelet;
 use crate::screenshot;
 use crate::voice_session::VoiceSession;
 use std::time::Duration;
@@ -27,8 +29,14 @@ fn set_cursor_idle() {
     crate::ai_cursor::set_state(crate::ai_cursor::CursorState::Idle);
 }
 
-pub fn run_loop(mic: audio::Mic, stt: SttDeepgram, claude: Claude, cartesia: TtsCartesia) {
-    let session = VoiceSession::start(mic, stt, claude, cartesia);
+pub fn run_loop(
+    mic: audio::Mic,
+    stt: SttDeepgram,
+    claude: Claude,
+    cartesia: TtsCartesia,
+    routelet: Routelet,
+) {
+    let session = VoiceSession::start(mic, stt, claude, cartesia, routelet);
 
     println!("aegis ready. hold Ctrl+Space to talk");
     loop {
@@ -68,6 +76,7 @@ fn run_one_turn(
     let claude = &session.claude;
     let cartesia = &session.cartesia;
     let memory = &session.memory;
+    let routelet = &session.routelet;
 
     // ────── phase 1: record + transcribe ──────
     let (audio_tx, audio_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<i16>>();
@@ -104,19 +113,12 @@ fn run_one_turn(
         return Ok(());
     }
 
-    // Hybrid classification: try the local keyword classifier first
-    // (sub-millisecond). If it returns Some, we skip the LLM round-trip
-    // entirely. If it returns None, fall through to the LLM classifier
-    // (~700ms), spawned in parallel with the screenshot join so the
-    // wait at least overlaps with the screenshot resize.
+    // Hybrid classification, three tiers: keyword classifier first
+    // (sub-millisecond); if it returns None, routelet (local ONNX, synchronous,
+    // ~5-30ms) classifies with a confidence; only if that confidence is below
+    // ROUTELET_CONFIDENCE_THRESHOLD do we pay for a Claude round-trip as a
+    // tie-breaker. So Claude is reached only on genuinely uncertain turns.
     let keyword_intent = keyword_classify(&transcript);
-    let classifier_task = if keyword_intent.is_some() {
-        None
-    } else {
-        let claude = claude.clone();
-        let transcript_for_classifier = transcript.clone();
-        Some(rt.spawn(async move { claude.classify_intent(&transcript_for_classifier).await }))
-    };
 
     let t_ss_join = std::time::Instant::now();
     let (x, y, w, h, resized_b64) = rt
@@ -135,30 +137,76 @@ fn run_one_turn(
         eprintln!("[timing] screenshot ready → {:?}", release_t.elapsed());
     }
 
-    let intent_result = match (keyword_intent, classifier_task) {
-        (Some(i), _) => {
-            eprintln!(
-                "[classifier] keyword match → {:?} at {:?} (LLM skipped)",
-                i,
-                release_t.elapsed()
-            );
-            Some(i)
+    let intent_result = if let Some(i) = keyword_intent {
+        eprintln!(
+            "[classifier] keyword match → {:?} at {:?} (routelet skipped)",
+            i,
+            release_t.elapsed()
+        );
+        Some(i)
+    } else {
+        let routelet_result = routelet.classify_with_confidence(&transcript);
+
+        match routelet_result {
+            Some((routelet_intent, conf))
+                if conf >= crate::tuning::ROUTELET_CONFIDENCE_THRESHOLD =>
+            {
+                eprintln!(
+                    "[classifier] routelet conf={:.2} → {:?} at {:?}",
+                    conf,
+                    routelet_intent,
+                    release_t.elapsed()
+                );
+                // Stage 1 data loop: opt-in redacted logging for offline distillation.
+                crate::routelet::log_classification(&transcript, routelet_intent);
+                Some(routelet_intent)
+            }
+            low_confidence_result => {
+                // Below threshold or None: ask Claude for a second opinion.
+                let conf_str = low_confidence_result
+                    .map(|(_, c)| format!("{c:.2}"))
+                    .unwrap_or_else(|| "none".to_string());
+                eprintln!(
+                    "[classifier] routelet conf={conf_str} below threshold \
+                     ({:.2}) at {:?} -> claude fallback",
+                    crate::tuning::ROUTELET_CONFIDENCE_THRESHOLD,
+                    release_t.elapsed()
+                );
+
+                let claude_result = rt.block_on(claude.classify_intent(&transcript));
+                match claude_result {
+                    Ok(Some(claude_intent)) => {
+                        eprintln!(
+                            "[classifier] claude fallback → {:?} at {:?}",
+                            claude_intent,
+                            release_t.elapsed()
+                        );
+                        // Log the Claude-chosen intent for distillation; use it as
+                        // the ground-truth label for this low-confidence turn.
+                        crate::routelet::log_classification(&transcript, claude_intent);
+                        Some(claude_intent)
+                    }
+                    Ok(None) => {
+                        eprintln!(
+                            "[classifier] claude fallback returned no intent at {:?}; \
+                             keeping routelet result ({:?})",
+                            release_t.elapsed(),
+                            low_confidence_result.map(|(i, _)| i),
+                        );
+                        low_confidence_result.map(|(i, _)| i)
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "[classifier] claude fallback error at {:?}: {e}; \
+                             keeping routelet result ({:?})",
+                            release_t.elapsed(),
+                            low_confidence_result.map(|(i, _)| i),
+                        );
+                        low_confidence_result.map(|(i, _)| i)
+                    }
+                }
+            }
         }
-        (None, Some(task)) => {
-            let llm_intent = rt
-                .block_on(task)
-                .map_err(|e| -> Box<dyn std::error::Error> {
-                    format!("classifier task panicked: {e}").into()
-                })?
-                .map_err(|e| -> Box<dyn std::error::Error> { e.to_string().into() })?;
-            eprintln!(
-                "[classifier] LLM fallback → {:?} at {:?}",
-                llm_intent,
-                release_t.elapsed()
-            );
-            llm_intent
-        }
-        (None, None) => None, // unreachable in practice; guard anyway
     };
     eprintln!(
         "[timing] classifier ready → {:?}: {:?}",
@@ -259,6 +307,7 @@ fn run_one_turn(
     rt.block_on(async {
         match intent {
             Intent::FindAction => {
+                eprintln!("[intent] → FindAction for: {:?}", transcript);
                 run_find_action(
                     claude,
                     &transcript,
@@ -275,9 +324,11 @@ fn run_one_turn(
                 .await
             }
             Intent::Chat => {
+                eprintln!("[intent] → Chat for: {:?}", transcript);
                 run_chat(
                     claude,
                     &transcript,
+                    &resized_b64,
                     memory,
                     release_t,
                     &cancel_claude,
@@ -406,12 +457,12 @@ async fn run_find_action(
     }
 }
 
-/// Dispatch the Chat path. No tools, no screen; pure conversational
-/// streaming. Text deltas land in the sentence channel which the TTS
-/// task pulls from.
+/// Dispatch the Chat path. Now includes screenshot for visual context.
+/// Text deltas land in the sentence channel which the TTS task pulls from.
 async fn run_chat(
     claude: &Claude,
     transcript: &str,
+    screenshot_b64: &str,
     memory: &crate::providers::claude::MemoryStore,
     release_t: std::time::Instant,
     cancel_claude: &CancellationToken,
@@ -425,7 +476,7 @@ async fn run_chat(
             eprintln!("[barge-in] chat aborted at {:?}", release_t.elapsed());
         }
         result = claude.chat(
-            transcript, profile.as_deref(),
+            transcript, screenshot_b64, profile.as_deref(),
             |delta| helper.push_delta(delta),
         ) => {
             match result {

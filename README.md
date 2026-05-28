@@ -17,32 +17,41 @@
   Voice-controlled AI cursor for Linux. Hold a hotkey, say something, the cursor flies to whatever you mentioned or the right action fires.
 </p>
 
-```
-"where is the search bar"      → cursor flies to it
-"click the play button"        → cursor moves + real click fires
-"play despacito on spotify"    → spotify API call, music starts
-"check my email"               → gmail unread count, spoken aloud
-"remember my name is Daniel"   → stored locally, recalled later
-"what's your name"             → spoken reply, no screen used
-```
+<p align="center">
+  <img alt="Aegis Demo" src="aegis/assets/demo.gif" width="800">
+</p>
 
 Built in Rust. Primary target is Linux/Hyprland; macOS and Windows build flag-free from the same `cargo run`.
 
-## Download
+## Get started with Claude Code
 
-Prebuilt binaries are on the [Releases page](https://github.com/danielbusnz-lgtm/Aegis/releases/latest).
+The fastest way to get Aegis running is with Claude Code. Open it in an empty directory and paste this:
 
-**macOS (Apple Silicon):** download `aegis-macos-aarch64.dmg`, open it, and drag Aegis into Applications. If macOS blocks it as unverified, right-click the app and choose Open, or run:
+```
+Hi Claude.
 
-```bash
-xattr -dr com.apple.quarantine /Applications/Aegis.app
+Clone https://github.com/danielbusnz-lgtm/aegis.git into my current directory.
+
+Then read AGENTS.md. I want to get Aegis running locally on Linux/Hyprland.
+
+Help me set up everything: building it with cargo, wiring the push-to-talk
+hotkey into my Hyprland config, and (optionally) pointing it at my own API
+keys instead of the hosted proxy. Walk me through it.
 ```
 
-First launch walks you through onboarding: drop in an access code or your own API keys, then it shows the push-to-talk hotkey (hold Ctrl+Space). With a code you need no keys of your own.
+That's it. It clones the repo, reads the docs, and walks you through the whole setup. Once you're running you can keep talking to it: build features, fix bugs, whatever.
 
-**Linux / Windows:** the release ships the raw `aegis` binary, or build from source below.
+## Manual setup
 
-## Run it
+If you want to do it yourself, here's the deal.
+
+**Prerequisites**
+
+- Rust (stable) via [rustup](https://rustup.rs)
+- Linux with Hyprland (or any X11 WM, see below), macOS, or Windows
+- PipeWire for audio capture (`pw-record`)
+
+**Build and run**
 
 ```bash
 git clone https://github.com/danielbusnz-lgtm/aegis.git
@@ -50,16 +59,26 @@ cd aegis
 cargo run --release -p aegis
 ```
 
-All API calls route through a hosted Cloudflare Worker by default, so no keys needed locally to try it.
+All API calls route through a hosted Cloudflare Worker by default, so no keys are needed locally to try it.
 
-On Hyprland, add the hotkey to `~/.config/hypr/hyprland.conf`:
+**Hotkey (Hyprland)**
+
+Add the push-to-talk bind to `~/.config/hypr/hyprland.conf`:
 
 ```conf
 bind  = , insert, exec, pkill -SIGUSR1 -f "target/(debug|release)/(aegis|test_)"
 bindr = , insert, exec, pkill -SIGUSR2 -f "target/(debug|release)/(aegis|test_)"
 ```
 
-`hyprctl reload`. Hold INSERT, ask something, release.
+Then `hyprctl reload`. Hold INSERT, ask something, release.
+
+**Other platforms**
+
+macOS and Windows build flag-free from the same `cargo run --release -p aegis`; the backend is picked by target OS. On Linux, build the winit/X11 path instead of Hyprland with `--no-default-features`.
+
+**Prebuilt binaries**
+
+Prefer not to build? Grab one from the [Releases page](https://github.com/danielbusnz-lgtm/Aegis/releases/latest). On macOS (Apple Silicon), download `aegis-macos-aarch64.dmg`, open it, and drag Aegis into Applications. If macOS blocks it as unverified, right-click the app and choose Open, or run `xattr -dr com.apple.quarantine /Applications/Aegis.app`. First launch walks you through onboarding (access code or your own API keys), then shows the push-to-talk hotkey. Linux and Windows releases ship the raw `aegis` binary.
 
 ## How it routes
 
@@ -74,16 +93,6 @@ Every voice turn picks one of five paths based on what you said. Each path has a
 | `agent` | Multi-step chains: "open YouTube, search for X, play the top result" | Full agent loop with iterative screenshots |
 
 A hybrid classifier picks the path: sub-millisecond keyword match for clear cases (~80%), LLM fallback (~700ms) for ambiguous ones. Total release → action is typically ~1.2s.
-
-## macOS / Windows
-
-Same command, no flags. The backend is picked by target OS:
-
-```bash
-cargo run --release -p aegis
-```
-
-On Linux, build the winit/X11 path instead of Hyprland with `--no-default-features`.
 
 ## Demos and benchmarks
 
@@ -120,6 +129,10 @@ AEGIS_CARTESIA_DIRECT=1
 ```
 
 Each `_DIRECT=1` opts that provider out of the proxy. Mix and match.
+
+## Privacy
+
+Aegis runs on your machine. Intent routing happens fully on-device. On-device logging for improving the router is off by default and opt-in (`AEGIS_ROUTELET_LOG=1`); when on, lines are redacted, capped, and stored only at `~/.config/aegis/`, never uploaded. Details in [PRIVACY.md](PRIVACY.md).
 
 ## Contributing
 
