@@ -97,7 +97,7 @@ impl Claude {
             return req;
         }
         match super::invite_code::load() {
-            Some(code) => req.header("x-aegis-invite-code", code),
+            Some(code) => req.header(crate::providers::proxy_contract::INVITE_CODE_HEADER, code),
             None => req,
         }
     }
@@ -145,7 +145,10 @@ impl Claude {
         Ok(Claude {
             http,
             endpoint: PROXY_URL.to_string(),
-            auth: ("x-aegis-device-id".to_string(), device_id),
+            auth: (
+                crate::providers::proxy_contract::DEVICE_ID_HEADER.to_string(),
+                device_id,
+            ),
             via_proxy: true,
         })
     }

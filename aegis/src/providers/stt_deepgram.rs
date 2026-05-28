@@ -88,9 +88,9 @@ impl SttDeepgram {
                 let mut req = self
                     .http
                     .post(token_url)
-                    .header("x-aegis-device-id", device_id);
+                    .header(super::proxy_contract::DEVICE_ID_HEADER, device_id);
                 if let Some(code) = super::invite_code::load() {
-                    req = req.header("x-aegis-invite-code", code);
+                    req = req.header(super::proxy_contract::INVITE_CODE_HEADER, code);
                 }
                 let proxy = req.send();
                 let _ = tokio::join!(dg, proxy);
@@ -117,9 +117,9 @@ impl SttDeepgram {
                 let mut req = self
                     .http
                     .post(token_url)
-                    .header("x-aegis-device-id", device_id);
+                    .header(super::proxy_contract::DEVICE_ID_HEADER, device_id);
                 if let Some(code) = super::invite_code::load() {
-                    req = req.header("x-aegis-invite-code", code);
+                    req = req.header(super::proxy_contract::INVITE_CODE_HEADER, code);
                 }
                 let resp = req.send().await?;
                 if !resp.status().is_success() {
