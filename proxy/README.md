@@ -13,12 +13,12 @@ for Deepgram and Cartesia (the client opens its own WebSocket to those).
 
 Selected per request, no account required.
 
-- **trial** (default, no header): lifetime turn counter, capped by
-  `TRIAL_TURNS_CAP`. Default 18 = 6 voice queries at 3 calls each.
+- **trial** (default, no header): lifetime call counter, capped by
+  `TRIAL_TURNS_CAP`. Default 9 = 3 voice queries at 3 calls each.
   Soft-resets after 30 days of inactivity (KV TTL).
-- **demo** (request carries `x-aegis-invite-code`): per-day token caps
-  pulled from the code's KV payload. Used for recruiter demos and
-  hand-granted extended access. Mint with `scripts/mint-code.sh`.
+- **demo** (request carries `x-aegis-invite-code`): the same lifetime counter
+  with a higher cap (`turns_cap`) from the code's KV payload. Used for
+  recruiter demos and hand-granted access. Mint with `scripts/mint-code.sh`.
 
 ## Endpoint
 
@@ -37,8 +37,8 @@ Body:
 ```
 
 Response is identical to Anthropic's, including SSE streaming, with one
-exception: requests over the daily cap return `429` with a JSON body
-explaining which cap was hit.
+exception: requests past the device's lifetime cap return `429` with a JSON
+body (`trial_exhausted` or `code_exhausted`).
 
 ## Deploy
 
@@ -114,17 +114,14 @@ curl -X POST https://aegis-proxy.your-subdomain.workers.dev/v1/anthropic/message
 
 You should see SSE events stream back.
 
-## Daily caps
+## Usage caps
 
-Defaults (in `wrangler.toml`):
-
-| Limit | Value | Approx cost @ Haiku 4.5 |
-|---|---|---|
-| Input tokens / device / day | 30,000 | ~$0.03 |
-| Output tokens / device / day | 10,000 | ~$0.05 |
-
-Worst-case cost per device per day: ~$0.08. 100 daily active users at the cap
-= ~$8/day. Tune in `wrangler.toml`; redeploy with `wrangler deploy` to apply.
+Both tiers meter the same way: a lifetime count of calls per device. Each
+voice query is about 3 calls (STT token, Claude, TTS token). The trial cap is
+`TRIAL_TURNS_CAP` in `wrangler.toml` (default 9, so 3 voice queries). Invite
+codes carry their own `turns_cap`. Counters soft-reset after 30 days of
+inactivity. Tune the trial cap in `wrangler.toml` or a code's payload, then
+redeploy with `wrangler deploy` to apply.
 
 ## Local development
 
@@ -144,13 +141,13 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 ## Architecture (one paragraph)
 
-Worker receives a POST → reads `x-aegis-device-id` → looks up
-`usage:{deviceId}:{today}` in KV → 429s if over cap → otherwise forwards the
-body to Anthropic with our secret key → tees the streaming SSE response → one
-branch streams to the client, the other is parsed in `ctx.waitUntil()` to
-extract `input_tokens` (from `message_start`) and `output_tokens` (from the
-final `message_delta`) → adds those to the day's KV entry. Entries auto-expire
-after 48 hours so yesterday's data cleans itself up.
+Worker receives a POST → reads `x-aegis-device-id` → resolves the tier (trial,
+or demo when a valid invite code is present) → charges one call against the
+device's lifetime counter in KV (`usage:trial:{deviceId}` or
+`usage:demo:{code}:{deviceId}`) → 429s if over the cap → otherwise forwards the
+body to Anthropic with our secret key and streams the SSE response straight
+through. The Deepgram and Cartesia token-mint endpoints charge a call the same
+way before minting. Counters carry a 30-day TTL, refreshed on each use.
 
 ## Invite codes
 
@@ -159,11 +156,14 @@ it to them out-of-band. The recipient pastes it into the Aegis client, which
 sends it as `x-aegis-invite-code`.
 
 ```bash
-./scripts/mint-code.sh RECRUITER-ACME 30 2
+./scripts/mint-code.sh RECRUITER-ACME 50 2
 # Code:        RECRUITER-ACME-A3F1B2
-# Expires:     2026-06-21T19:30:00Z
+# Uses:        50 (150 calls)
 # Max devices: 2
 ```
+
+Args are `<label> [uses] [max_devices]`. Codes do not expire; they run until
+their lifetime uses are spent.
 
 Codes are stored in `USAGE_KV` as `invite:{CODE}`. Edit caps by either
 re-minting (overwrites the old key with the same code, if you reuse the

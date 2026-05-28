@@ -6,14 +6,14 @@
 //   it and have it just work. The Worker holds all three secret keys, caps
 //   per-device usage from a KV store, and streams/forwards responses.
 //
-// Two tiers, selected per request:
-//   trial: no invite code. Lifetime turn counter, capped by TRIAL_TURNS_CAP.
-//          Default 18 turns = 6 voice queries at 3 calls/query (STT, Claude,
-//          TTS). Cap is per-device, soft-resets after 30 days of inactivity
-//          when the KV entry expires.
-//   demo:  request carries `x-aegis-invite-code`. Code's KV payload supplies
-//          per-day token caps and a max-devices binding. Used for recruiter
-//          demos and anyone we hand-grant extended access.
+// Two tiers, selected per request. Both run on one lifetime call counter; an
+// invite code just raises the cap.
+//   trial: no invite code. Capped by TRIAL_TURNS_CAP. Default 9 = 3 voice
+//          queries at 3 calls/query (STT, Claude, TTS). Per-device, soft-resets
+//          after 30 days of inactivity when the KV entry expires.
+//   demo:  request carries `x-aegis-invite-code`. The code's KV payload sets a
+//          higher lifetime cap (turns_cap) and a max-devices binding. Used for
+//          recruiter demos and anyone we hand-grant extended access.
 //
 // Routes:
 //   POST /v1/anthropic/messages   HTTP SSE proxy to Claude Messages API
