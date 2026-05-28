@@ -145,7 +145,10 @@ impl Claude {
         Ok(Claude {
             http,
             endpoint: PROXY_URL.to_string(),
-            auth: (crate::providers::proxy_contract::DEVICE_ID_HEADER.to_string(), device_id),
+            auth: (
+                crate::providers::proxy_contract::DEVICE_ID_HEADER.to_string(),
+                device_id,
+            ),
             via_proxy: true,
         })
     }
