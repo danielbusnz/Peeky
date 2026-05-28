@@ -43,6 +43,12 @@ ignore = [
     "RUSTSEC-2025-0080",
     "RUSTSEC-2025-0081",
     "RUSTSEC-2025-0100",
+    # time 0.3.41 stack-exhaustion in the parser. Fix is >=0.3.47 but
+    # tract-linalg 0.21.15 hard-pins time = ">=0.3.23, <0.3.42". Exposure is
+    # transitive only: liquid (tract build templating), yup-oauth2 (Google
+    # token expiry), tauri/plist (bundle metadata). No attacker-controlled
+    # input reaches time's parser at runtime. Drop when tract relaxes the pin.
+    "RUSTSEC-2026-0009",
 ]
 
 [licenses]

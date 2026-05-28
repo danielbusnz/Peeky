@@ -8,6 +8,7 @@ use crate::audio;
 use crate::providers::claude::{Claude, MemoryStore};
 use crate::providers::stt_deepgram::SttDeepgram;
 use crate::providers::tts_cartesia::TtsCartesia;
+use crate::routelet::Routelet;
 
 pub struct VoiceSession {
     pub rt: tokio::runtime::Runtime,
@@ -17,13 +18,20 @@ pub struct VoiceSession {
     pub claude: Claude,
     pub cartesia: TtsCartesia,
     pub memory: MemoryStore,
+    pub routelet: Routelet,
 }
 
 impl VoiceSession {
     /// Build the per-process session: create the tokio runtime, warm HTTP
     /// pools to all three providers in parallel, start the persistent cpal
     /// mic stream, and open the audio output sink.
-    pub fn start(mic: audio::Mic, stt: SttDeepgram, claude: Claude, cartesia: TtsCartesia) -> Self {
+    pub fn start(
+        mic: audio::Mic,
+        stt: SttDeepgram,
+        claude: Claude,
+        cartesia: TtsCartesia,
+        routelet: Routelet,
+    ) -> Self {
         // Tokio runtime owned by this thread. Streaming providers (Deepgram WS,
         // Claude SSE, Cartesia SSE) all run via `rt.block_on(...)`.
         let rt = tokio::runtime::Runtime::new().expect("failed to start tokio runtime");
@@ -59,6 +67,7 @@ impl VoiceSession {
             claude,
             cartesia,
             memory,
+            routelet,
         }
     }
 }

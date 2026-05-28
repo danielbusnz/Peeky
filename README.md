@@ -130,6 +130,10 @@ AEGIS_CARTESIA_DIRECT=1
 
 Each `_DIRECT=1` opts that provider out of the proxy. Mix and match.
 
+## Privacy
+
+Aegis runs on your machine. Intent routing happens fully on-device. On-device logging for improving the router is off by default and opt-in (`AEGIS_ROUTELET_LOG=1`); when on, lines are redacted, capped, and stored only at `~/.config/aegis/`, never uploaded. Details in [PRIVACY.md](PRIVACY.md).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and [AGENTS.md](AGENTS.md) for project-specific rules (for both humans and agents).
