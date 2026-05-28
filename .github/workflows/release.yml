@@ -196,7 +196,7 @@ jobs:
           # job for ~6h). With them absent Tauri signs but skips notarization,
           # and we notarize the .dmg ourselves below with a bounded wait.
           # Setting APPLE_SIGNING_IDENTITY to an empty string is NOT the same as
-          # unset — Tauri would try to sign with "" and fail, so we only define
+          # unset. Tauri would try to sign with "" and fail, so we only define
           # it when actually signing.
           echo "APPLE_SIGNING_IDENTITY=$CERT_ID" >> "$GITHUB_ENV"
           echo "Signing identity: $CERT_ID"
@@ -226,7 +226,7 @@ jobs:
           cp "$DMG" dist/aegis-macos-aarch64.dmg
 
       # Notarize the signed .dmg ourselves instead of letting `cargo tauri
-      # build` do it inline. notarytool's default wait is unbounded — that's
+      # build` do it inline. notarytool's default wait is unbounded, which is
       # what hung the job for ~6h. --timeout fails the submit in minutes if
       # Apple's notary queue is stuck, and on any non-Accepted result we pull
       # the notary log so the reason shows up in the run. Stapling writes the
