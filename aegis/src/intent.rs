@@ -24,9 +24,10 @@ pub fn keyword_classify(transcript: &str) -> Option<Intent> {
     let lower = transcript.trim().to_lowercase();
     let normalized = lower.trim_end_matches(['.', '!', '?']).trim_end();
     match normalized {
-        "play" | "pause" | "resume" | "stop" | "mute" | "unmute" | "skip"
-        | "next" | "next song" | "next track" | "previous" | "previous song"
-        | "previous track" => Some(Intent::Integration),
+        "play" | "pause" | "resume" | "stop" | "mute" | "unmute" | "skip" | "next"
+        | "next song" | "next track" | "previous" | "previous song" | "previous track" => {
+            Some(Intent::Integration)
+        }
         _ => None,
     }
 }
@@ -38,8 +39,19 @@ mod tests {
     #[test]
     fn bare_transport_commands_match() {
         for cmd in [
-            "play", "pause", "resume", "stop", "mute", "unmute", "skip", "next",
-            "next song", "next track", "previous", "previous song", "previous track",
+            "play",
+            "pause",
+            "resume",
+            "stop",
+            "mute",
+            "unmute",
+            "skip",
+            "next",
+            "next song",
+            "next track",
+            "previous",
+            "previous song",
+            "previous track",
         ] {
             assert_eq!(
                 keyword_classify(cmd),
