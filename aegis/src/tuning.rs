@@ -35,13 +35,16 @@ pub const TTS_FIRST_FLUSH_MIN_CHARS: usize = 12;
 // ────── routelet classifier ──────
 
 /// Minimum routelet confidence required to accept its prediction on-device.
-/// Below this threshold the turn falls back to the Claude classifier (one
-/// network round-trip) for a second opinion. Typical on-distribution
-/// confidence is above 0.9, so this threshold only fires on genuinely
-/// garbled or out-of-distribution input.
-/// ↑ defers more ambiguous turns to Claude (more accurate, adds latency).
-/// ↓ keeps more turns fully on-device (faster, accepts lower-confidence calls).
-pub const ROUTELET_CONFIDENCE_THRESHOLD: f32 = 0.55;
+/// Below this the turn falls back to the Claude classifier for a second opinion.
+///
+/// Set high on purpose. routelet's max-softmax saturates near 0.98 for almost
+/// everything, including garbled/out-of-distribution input, so a low gate never
+/// fired (see the deferral analysis in routelet/report). At 0.55 it deferred ~0%
+/// of OOD probes; at 0.95 it catches a meaningful share of them while deferring
+/// only ~1 to 2% of real in-distribution commands.
+/// ↑ defers more turns to Claude (catches more OOD, adds latency and cost).
+/// ↓ keeps more turns on-device (faster, but the gate stops catching OOD).
+pub const ROUTELET_CONFIDENCE_THRESHOLD: f32 = 0.95;
 
 /// Max distillation samples drained and POSTed in one uploader wakeup.
 /// ↑ fewer wakeups under bursty use. larger transient batch if the proxy is slow.
