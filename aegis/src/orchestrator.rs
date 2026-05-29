@@ -148,8 +148,12 @@ fn run_one_turn(
         let routelet_result = routelet.classify_with_confidence(&transcript);
 
         match routelet_result {
+            // Accept on-device only when confident AND not the reject class.
+            // A high-confidence `None` is routelet flagging out-of-distribution
+            // input, which must defer to Claude, not route anywhere.
             Some((routelet_intent, conf))
-                if conf >= crate::tuning::ROUTELET_CONFIDENCE_THRESHOLD =>
+                if conf >= crate::tuning::ROUTELET_CONFIDENCE_THRESHOLD
+                    && routelet_intent != Intent::None =>
             {
                 eprintln!(
                     "[classifier] routelet conf={:.2} → {:?} at {:?}",
@@ -168,14 +172,15 @@ fn run_one_turn(
                 Some(routelet_intent)
             }
             low_confidence_result => {
-                // Below threshold or None: ask Claude for a second opinion.
-                let conf_str = low_confidence_result
-                    .map(|(_, c)| format!("{c:.2}"))
-                    .unwrap_or_else(|| "none".to_string());
+                // Below threshold, the reject class, or no prediction: ask Claude
+                // for a second opinion (it re-classifies into the five real intents).
+                let reason = match low_confidence_result {
+                    Some((Intent::None, c)) => format!("reject (none, conf={c:.2})"),
+                    Some((_, c)) => format!("low confidence ({c:.2})"),
+                    None => "no prediction".to_string(),
+                };
                 eprintln!(
-                    "[classifier] routelet conf={conf_str} below threshold \
-                     ({:.2}) at {:?} -> claude fallback",
-                    crate::tuning::ROUTELET_CONFIDENCE_THRESHOLD,
+                    "[classifier] routelet {reason} at {:?} -> claude fallback",
                     release_t.elapsed()
                 );
 
@@ -230,9 +235,11 @@ fn run_one_turn(
     // contract: speak a short error and stop. No silent fallback to
     // run_agent_loop. Surprises here mean the prompt drifted or the API
     // changed, and we want to see it.
+    // `Intent::None` means routelet rejected the input and Claude couldn't
+    // resolve it either, so handle it exactly like "no category": speak a short
+    // error. This also guarantees the dispatch below only sees real intents.
     let intent = match intent_result {
-        Some(i) => i,
-        None => {
+        Some(Intent::None) | None => {
             return speak_error(
                 rt,
                 cartesia,
@@ -240,6 +247,7 @@ fn run_one_turn(
                 "I'm not sure how to handle that. Try rephrasing.",
             );
         }
+        Some(i) => i,
     };
 
     // ────── phase 3: shared per-turn infra (barge-in, TTS pipeline) ──────
@@ -386,6 +394,9 @@ fn run_one_turn(
                 )
                 .await
             }
+            // Unreachable: `Intent::None` is collapsed into the speak-error path
+            // above, so only the five real intents reach dispatch.
+            Intent::None => unreachable!("Intent::None is handled before dispatch"),
         }
     });
     println!();

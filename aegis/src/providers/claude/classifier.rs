@@ -29,12 +29,18 @@ pub enum Intent {
     /// Multi-step desktop work: "go to youtube, search for X, play the
     /// top result, then fullscreen". Goes to the existing agent_loop.
     Agent,
+    /// Reject class: out-of-distribution or garbled input the router should not
+    /// act on. Only the local routelet classifier emits this (the Claude
+    /// classifier's tool enum stays the five real intents). The orchestrator
+    /// treats a `None` prediction as "defer to Claude" rather than routing it.
+    None,
 }
 
 impl Intent {
     /// Parse a category string into the enum. Used by both the LLM classifier
     /// (Claude tool call output) and the local routelet ONNX classifier.
-    /// Returns None for any string that isn't one of the five known labels.
+    /// Returns `Option::None` for any string that isn't one of the known labels;
+    /// the recognized labels include "none", the routelet reject class.
     pub(crate) fn from_str(s: &str) -> Option<Self> {
         match s {
             "find_action" => Some(Self::FindAction),
@@ -42,7 +48,8 @@ impl Intent {
             "chat" => Some(Self::Chat),
             "memory" => Some(Self::Memory),
             "agent" => Some(Self::Agent),
-            _ => None,
+            "none" => Some(Self::None),
+            _ => Option::None,
         }
     }
 
@@ -54,6 +61,7 @@ impl Intent {
             Self::Chat => "chat",
             Self::Memory => "memory",
             Self::Agent => "agent",
+            Self::None => "none",
         }
     }
 }
