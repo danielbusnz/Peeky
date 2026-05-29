@@ -20,7 +20,7 @@ A single voice turn flows like this:
 
 ## Architecture
 
-**Workspace** (`Cargo.toml`). Four Rust members: `aegis` (the agent binary plus its library), `demos` (hand-run dev tools and benchmarks), `launcher/src-tauri` (the Tauri onboarding app), and `memex` (a localhost personal-data daemon). The `proxy/` directory is **not** a workspace member: it is a TypeScript Cloudflare Worker.
+**Workspace** (`Cargo.toml`). Three Rust members: `aegis` (the agent binary plus its library), `demos` (hand-run dev tools and benchmarks), and `launcher/src-tauri` (the Tauri onboarding app). The `proxy/` directory is **not** a workspace member: it is a TypeScript Cloudflare Worker.
 
 **The `aegis` crate** splits into `lib.rs` (every subsystem exposed as a public module) and a thin `main.rs`, so the out-of-tree `demos` crate builds against the same modules. Default feature is `hyprland`; the winit/X11 path builds with `--no-default-features`.
 
@@ -29,7 +29,6 @@ A single voice turn flows like this:
 **Sibling crates and services:**
 
 - **launcher** (`launcher/src-tauri/`): Tauri 2 first-run onboarding. Collects an invite code or the user's own API keys (stored in the OS keychain), requests macOS TCC permissions, then spawns the `aegis` binary as a child with the right env. If `~/.config/aegis/onboarded` exists, it spawns silently and exits.
-- **memex** (`memex/`): an Axum daemon on `127.0.0.1:7142` (override with `MEMEX_ADDR`) meant to ingest personal data and serve a query API. Currently a scaffold: routes are wired (`/health`, `/search`, `/recent/{source}`), the store is TODO.
 - **proxy** (`proxy/src/index.ts`): the Cloudflare Worker that holds the real API keys and enforces per-tier usage caps. Deployed with Wrangler. See routes below.
 
 ## API Proxy
