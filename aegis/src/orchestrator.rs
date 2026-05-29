@@ -113,11 +113,12 @@ fn run_one_turn(
         return Ok(());
     }
 
-    // Hybrid classification, three tiers: keyword classifier first
-    // (sub-millisecond); if it returns None, routelet (local ONNX, synchronous,
-    // ~5-30ms) classifies with a confidence; only if that confidence is below
-    // ROUTELET_CONFIDENCE_THRESHOLD do we pay for a Claude round-trip as a
-    // tie-breaker. So Claude is reached only on genuinely uncertain turns.
+    // Hybrid classification, three tiers: the keyword allowlist decides the
+    // route first (sub-millisecond) when it matches a bare transport command.
+    // routelet (local ONNX, synchronous, ~45ms in release) runs every turn,
+    // so the model's call is always logged; its result routes the turn when the
+    // keyword layer abstains. Only a low-confidence or reject (`none`) routelet
+    // result pays for a Claude round-trip as a tie-breaker.
     let keyword_intent = keyword_classify(&transcript);
 
     let t_ss_join = std::time::Instant::now();
@@ -137,16 +138,35 @@ fn run_one_turn(
         eprintln!("[timing] screenshot ready → {:?}", release_t.elapsed());
     }
 
+    // Run routelet on every turn so the model's call is always logged, even
+    // when the keyword allowlist will win the route. One inference, reused for
+    // routing below.
+    let t_routelet = std::time::Instant::now();
+    let routelet_result = routelet.classify_with_confidence(&transcript);
+    let routelet_ms = t_routelet.elapsed();
+    match routelet_result {
+        Some((intent, conf)) => eprintln!(
+            "[routelet] {:?} conf={:.2} ({:?} inference, {:?} since release)",
+            intent,
+            conf,
+            routelet_ms,
+            release_t.elapsed()
+        ),
+        None => eprintln!(
+            "[routelet] no prediction ({:?} inference, {:?} since release)",
+            routelet_ms,
+            release_t.elapsed()
+        ),
+    }
+
     let intent_result = if let Some(i) = keyword_intent {
         eprintln!(
-            "[classifier] keyword match → {:?} at {:?} (routelet skipped)",
+            "[classifier] keyword match → {:?} at {:?} (overrides routelet)",
             i,
             release_t.elapsed()
         );
         Some(i)
     } else {
-        let routelet_result = routelet.classify_with_confidence(&transcript);
-
         match routelet_result {
             // Accept on-device only when confident AND not the reject class.
             // A high-confidence `None` is routelet flagging out-of-distribution
@@ -155,12 +175,7 @@ fn run_one_turn(
                 if conf >= crate::tuning::ROUTELET_CONFIDENCE_THRESHOLD
                     && routelet_intent != Intent::None =>
             {
-                eprintln!(
-                    "[classifier] routelet conf={:.2} → {:?} at {:?}",
-                    conf,
-                    routelet_intent,
-                    release_t.elapsed()
-                );
+                eprintln!("[classifier] → {:?} on-device", routelet_intent);
                 // Stage 1 data loop: opt-in redacted logging for offline distillation.
                 // High-confidence turn, no Claude call, so no teacher label.
                 crate::routelet::log_classification(
