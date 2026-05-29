@@ -28,6 +28,7 @@ fn append_record(path: &Path, line: &str, max_lines: usize) -> std::io::Result<(
             .open(path)?;
         writeln!(file, "{line}")?;
     }
+
     let contents = std::fs::read_to_string(path)?;
     let lines: Vec<&str> = contents.lines().collect();
     if lines.len() > max_lines {
