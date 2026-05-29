@@ -210,36 +210,36 @@ the user's transcript and pick ONE category by calling the `classify` \
 tool. Never respond with plain text.\n\
 \n\
 Categories:\n\
-- find_action: user wants the cursor to move to, or interact with, \
-something visible on their screen RIGHT NOW. ANY \"where\" question \
-about visible content counts (the cursor goes there): \"where is X\", \
-\"where does it say X\", \"where on the page is X\", \"where on screen \
-does it talk about X\", \"where can I find X\". Also: \"click X\", \
-\"show me X\", \"find X\", \"point at X\", \"point to X\", \"press X\", \
-\"select X\", \"type X\", \"scroll up/down\", \"navigate to X\". \
-Default to find_action whenever the request is about LOCATING or \
-INTERACTING with content the user can already see, even if the \
-phrasing is conversational like \"where does it say...\" or \"can you \
-show me where...\".\n\
-- integration: user wants to use a connected service (Gmail, Spotify, \
-GitHub, YouTube) without looking at the screen. Phrases like \"play \
-<song>\", \"pause\", \"skip\", \"check my email\", \"what's my unread \
-count\", \"my open PRs\", \"play <youtube video>\".\n\
-- chat: conversational or informational, no screen access needed, no \
-service action. Phrases like \"what's your name\", \"how are you\", \
-\"explain X\", \"what is X\", \"tell me about Y\". Default category for \
-ambiguous questions.\n\
-- memory: user wants to remember a fact about themselves OR recall one \
-they told you before. Phrases like \"remember my X is Y\", \"my Z is \
-Q\", \"what did I tell you about R\", \"what's my W\".\n\
-- agent: explicit multi-step task chaining several actions together. \
-Phrases like \"open spotify and play X then check email\", \"go to \
-youtube, search for X, and play the top result\". Use only when the \
-request clearly contains 2+ chained actions; otherwise prefer \
-find_action or integration.\n\
+- find_action: move the cursor to, or operate, a UI element visible on \
+screen right now. Needs a locate-or-operate command: \"click X\", \
+\"select X\", \"type X\", \"scroll down\", \"point at X\", \"show me \
+X\", \"find X\", or \"where is X\" when the user wants to go there. \
+Naming a visible element with such a command is find_action even if an \
+app is named (\"click the skip button\").\n\
+- integration: one discrete action against a connected service (Gmail, \
+Spotify, GitHub, YouTube) without looking at the screen: \"play \
+<song>\", \"pause\", \"skip\", \"next\", \"volume up\", \"check my \
+email\", \"my open PRs\". Playback verbs are integration unless a \
+specific button is named.\n\
+- chat: general knowledge, explanation, or conversation. No screen \
+action, no service call. The default. This INCLUDES any question about \
+a visible element or an action with no command to perform it: \"what \
+does this button do\", \"what's the green button\", \"tell me about \
+X\", \"explain how to X\", \"talk me through X\", \"what's your name\", \
+small talk.\n\
+- memory: store or recall a personal fact. Storing needs an explicit \
+remember/note/save: \"remember my X is Y\". Recall: \"what's my Z\", \
+\"what did I tell you about R\". A fact from world knowledge is chat, \
+not memory.\n\
+- agent: two or more chained actions, OR a single task that needs \
+planning to finish: \"open youtube, search lofi, play the top \
+result\", \"book me a restaurant\". Not only when the user spells out \
+the steps.\n\
 \n\
-Be decisive. If the request fits more than one category, pick the most \
-specific one. Always call the tool. Never refuse to classify."
+If a command fits more than one, pick the first match in this order: \
+agent, memory, integration, find_action, chat. chat is the default; \
+when unsure between find_action and chat, choose chat. Always call the \
+tool. Never refuse to classify."
 }
 
 #[cfg(test)]
