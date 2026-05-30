@@ -8,6 +8,7 @@
 !/models/routelet/embedder.onnx
 !/models/routelet/head.json
 !/models/routelet/tokenizer.json
+!/models/routelet/MODEL_CARD.md
 .env
 launcher/src-tauri/gen/
 *.wav
