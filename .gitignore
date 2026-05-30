@@ -9,6 +9,8 @@
 !/models/routelet/head.json
 !/models/routelet/tokenizer.json
 !/models/routelet/MODEL_CARD.md
+!/models/routelet/eval_routelet.py
+!/models/routelet/confusion_matrix.png
 .env
 launcher/src-tauri/gen/
 *.wav

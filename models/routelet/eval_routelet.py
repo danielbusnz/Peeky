@@ -5,7 +5,7 @@ Evaluate routelet intent classifier and generate confusion matrix.
 Usage:
     cd Aegis
     pip install onnxruntime tokenizers numpy matplotlib seaborn scikit-learn
-    python reports/eval_routelet.py
+    python models/routelet/eval_routelet.py
 """
 
 import json
@@ -17,7 +17,7 @@ from tokenizers import Tokenizer
 import onnxruntime as ort
 from sklearn.metrics import confusion_matrix, classification_report
 
-MODEL_DIR = Path("models/routelet")
+MODEL_DIR = Path(__file__).parent
 
 # Test examples with ground truth labels
 # These should be unambiguous examples for each class
@@ -178,7 +178,7 @@ def main():
     plt.title("Routelet Intent Classifier - Confusion Matrix")
     plt.tight_layout()
 
-    output_path = Path("reports/confusion_matrix.png")
+    output_path = MODEL_DIR / "confusion_matrix.png"
     plt.savefig(output_path, dpi=150)
     print(f"\nConfusion matrix saved to: {output_path}")
 
