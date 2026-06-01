@@ -14,7 +14,14 @@ import {
 import { cors, jsonResponse, requireDeviceId } from "../http";
 import { resolveTier } from "../tiers";
 import type { Env, Tier } from "../types";
-import { consumeTurn, usageKey } from "../usage";
+import {
+    cartesiaExhausted,
+    dailyUsageKey,
+    deepgramExhausted,
+    readDailyUsage,
+    recordUsage,
+    utcDateKey,
+} from "../usage";
 
 /** 429 body for a device that has spent its lifetime calls. */
 function exhausted(tier: Tier, provider: string): Response {
@@ -35,15 +42,21 @@ function exhausted(tier: Tier, provider: string): Response {
  * Mints a short-lived Deepgram JWT scoped to one streaming session. Client
  * uses the token to open a WS directly with Deepgram, bypassing the Worker.
  */
-export async function handleDeepgramToken(request: Request, env: Env): Promise<Response> {
+export async function handleDeepgramToken(
+    request: Request,
+    env: Env,
+    ctx: ExecutionContext,
+): Promise<Response> {
     const deviceId = requireDeviceId(request);
     if (deviceId instanceof Response) return deviceId;
 
     const tier = await resolveTier(request, env, deviceId);
     if (tier instanceof Response) return tier;
 
-    const consumed = await consumeTurn(env.USAGE_KV, usageKey(tier, deviceId), tier.turnsCap);
-    if (!consumed) return exhausted(tier, "deepgram");
+    const key = dailyUsageKey(tier, deviceId, utcDateKey(new Date()));
+    const usage = await readDailyUsage(env.USAGE_KV, key);
+    if (deepgramExhausted(usage, tier.budget)) return exhausted(tier, "deepgram");
+    ctx.waitUntil(recordUsage(env.USAGE_KV, key, { deepgram: 1 }));
 
     const upstream = await fetch(DEEPGRAM_TOKEN_URL, {
         method: "POST",
@@ -80,15 +93,21 @@ export async function handleDeepgramToken(request: Request, env: Env): Promise<R
  * as Deepgram: client uses the returned token directly against Cartesia's
  * WebSocket, Worker isn't on the data path.
  */
-export async function handleCartesiaToken(request: Request, env: Env): Promise<Response> {
+export async function handleCartesiaToken(
+    request: Request,
+    env: Env,
+    ctx: ExecutionContext,
+): Promise<Response> {
     const deviceId = requireDeviceId(request);
     if (deviceId instanceof Response) return deviceId;
 
     const tier = await resolveTier(request, env, deviceId);
     if (tier instanceof Response) return tier;
 
-    const consumed = await consumeTurn(env.USAGE_KV, usageKey(tier, deviceId), tier.turnsCap);
-    if (!consumed) return exhausted(tier, "cartesia");
+    const key = dailyUsageKey(tier, deviceId, utcDateKey(new Date()));
+    const usage = await readDailyUsage(env.USAGE_KV, key);
+    if (cartesiaExhausted(usage, tier.budget)) return exhausted(tier, "cartesia");
+    ctx.waitUntil(recordUsage(env.USAGE_KV, key, { cartesia: 1 }));
 
     const upstream = await fetch(CARTESIA_TOKEN_URL, {
         method: "POST",

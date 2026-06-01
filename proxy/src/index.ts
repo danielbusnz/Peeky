@@ -6,13 +6,12 @@
 //   it and have it just work. The Worker holds all three secret keys, caps
 //   per-device usage from a KV store, and streams/forwards responses.
 //
-// Two tiers, selected per request. Both run on one lifetime call counter; an
-// invite code just raises the cap.
-//   trial: no invite code. Capped by TRIAL_TURNS_CAP. Default 9 = 3 voice
-//          queries at 3 calls/query (STT, Claude, TTS). Per-device, soft-resets
-//          after 30 days of inactivity when the KV entry expires.
-//   demo:  request carries `x-aegis-invite-code`. The code's KV payload sets a
-//          higher lifetime cap (turns_cap) and a max-devices binding. Used for
+// Two tiers, selected per request. Both meter against per-UTC-day budgets
+// (Anthropic tokens, Deepgram/Cartesia mint counts) that reset at midnight UTC.
+//   trial: no invite code. Uses TRIAL_DAILY_BUDGET from constants.ts. Per
+//          device, keyed by UTC day.
+//   demo:  request carries `x-aegis-invite-code`. The code's KV payload sets
+//          the daily budgets, an expiry, and a max-devices binding. Used for
 //          recruiter demos and anyone we hand-grant extended access.
 //
 // Routes:
@@ -24,7 +23,7 @@
 //
 // Why mixed patterns:
 //   Anthropic is HTTP request/response with streaming SSE. We forward bytes
-//   through and parse the stream for token accounting. Cheap.
+//   through untouched and charge a flat per-turn token estimate. Cheap.
 //
 //   Deepgram + Cartesia are WebSocket-only for streaming. Proxying WebSockets
 //   through Workers is hairy (bidirectional forwarding, mid-stream cap
@@ -46,20 +45,20 @@ import type { Env } from "./types";
 export type { Env };
 
 export default {
-    async fetch(request: Request, env: Env): Promise<Response> {
+    async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
         const url = new URL(request.url);
 
         if (request.method === "OPTIONS") return cors(new Response(null, { status: 204 }));
 
         if (request.method === "POST") {
             if (url.pathname === "/v1/anthropic/messages") {
-                return handleAnthropic(request, env);
+                return handleAnthropic(request, env, ctx);
             }
             if (url.pathname === "/v1/deepgram/token") {
-                return handleDeepgramToken(request, env);
+                return handleDeepgramToken(request, env, ctx);
             }
             if (url.pathname === "/v1/cartesia/token") {
-                return handleCartesiaToken(request, env);
+                return handleCartesiaToken(request, env, ctx);
             }
             if (url.pathname === "/v1/invite/verify") {
                 return handleInviteVerify(request, env);

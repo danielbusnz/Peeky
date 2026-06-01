@@ -11,9 +11,11 @@ export interface Env {
     CARTESIA_API_KEY: string;
     /**
      * Shared namespace for usage counters and invite codes. Keys:
-     *   usage:trial:{deviceId}            -> TurnUsage (30d TTL, refreshed on use)
-     *   usage:demo:{code}:{deviceId}      -> TurnUsage (30d TTL, refreshed on use)
-     *   invite:{CODE}                     -> InviteCode (no TTL, managed by hand)
+     *   usage:trial:{deviceId}:{utcDate}        -> DailyUsage (~2d TTL)
+     *   usage:demo:{code}:{deviceId}:{utcDate}  -> DailyUsage (~2d TTL)
+     *   invite:{CODE}                           -> InviteCode (no TTL, by hand)
+     * Usage is per UTC day: the date in the key is the reset boundary, and the
+     * short TTL lets yesterday's entry expire on its own.
      */
     USAGE_KV: KVNamespace;
     /**
@@ -22,28 +24,48 @@ export interface Env {
      * Opt-in on the client; the bucket only ever sees redacted text.
      */
     ROUTELET_R2: R2Bucket;
-    /** Lifetime call cap for trial-tier devices. Decimal string. One voice query = 3 calls (STT, Claude, TTS). */
-    TRIAL_TURNS_CAP: string;
 }
 
-/** Lifetime call counter, shared by both tiers. One per (tier, device). */
-export type TurnUsage = {
-    /** Metered calls this device has made (STT/Claude/TTS each count one). */
-    turns: number;
+/**
+ * Per-day usage caps. Anthropic is metered in estimated tokens; Deepgram and
+ * Cartesia in token-mint count (one mint covers a whole session thanks to
+ * client-side caching).
+ */
+export type DailyBudget = {
+    input_tokens: number;
+    output_tokens: number;
+    deepgram: number;
+    cartesia: number;
+};
+
+/** Running usage for one (tier, device, UTC day). Same fields as DailyBudget. */
+export type DailyUsage = {
+    input_tokens: number;
+    output_tokens: number;
+    deepgram: number;
+    cartesia: number;
 };
 
 export type InviteCode = {
-    /** Lifetime call cap for any device using this code. 10 uses = 30 calls. */
-    turns_cap: number;
+    /** Per-day Anthropic input-token budget for any device using this code. */
+    daily_input_tokens: number;
+    /** Per-day Anthropic output-token budget. */
+    daily_output_tokens: number;
+    /** Per-day Deepgram token-mint budget (mints, not audio seconds). */
+    daily_deepgram_tokens: number;
+    /** Per-day Cartesia token-mint budget. */
+    daily_cartesia_tokens: number;
     /** Hard ceiling on `devices_seen.length`. */
     max_devices: number;
+    /** ISO 8601 instant after which the code is rejected. */
+    expires_at: string;
     /** Device IDs that have used this code. Append-only. */
     devices_seen: string[];
 };
 
 export type Tier =
-    | { kind: "trial"; turnsCap: number }
-    | { kind: "demo"; code: string; turnsCap: number };
+    | { kind: "trial"; budget: DailyBudget }
+    | { kind: "demo"; code: string; budget: DailyBudget };
 
 /** Successful read-only resolution of an invite code against KV. */
 export type InviteLookup = {

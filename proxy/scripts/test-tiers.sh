@@ -4,15 +4,19 @@
 # Usage:
 #   ./scripts/test-tiers.sh
 #
-# It starts `wrangler dev --local`, then drives the metered endpoint with fresh
-# device ids to prove each tier's lifetime call cap is enforced exactly:
-#   - trial (no invite code): cap = TRIAL_TURNS_CAP from wrangler.toml
-#   - recruiter (minted code): cap = uses * 3
+# It starts `wrangler dev --local`, then drives the cartesia token endpoint with
+# fresh device ids to prove each tier's daily mint budget is enforced:
+#   - trial (no invite code): cap = TRIAL_DAILY_BUDGET.cartesia in constants.ts
+#   - recruiter (minted code): cap = daily_cartesia_tokens from mint-code.sh
 #
-# Why this works without provider secrets: every metered endpoint charges a
-# turn BEFORE it calls the upstream provider. With no secret the upstream call
-# 401s, but the turn is already spent, so the only thing that matters here is
-# whether the request got past the gate (any non-429) or was capped (429).
+# Why this works without provider secrets: the gate runs before the upstream
+# call, so a missing secret only 401s after the request already passed (or was
+# 429'd at) the budget check. We only care whether it got past the gate.
+#
+# Note: usage is recorded via ctx.waitUntil (after the response), so the write
+# can lag the next request. The cap isn't enforced to the exact call; we assert
+# that the budget admits at least `cap` calls and then 429s within a little
+# slack, not that call cap+1 is the first 429.
 
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -50,11 +54,13 @@ check() {
     fi
 }
 
-# Drive `cap` calls (expect all admitted) then one more (expect 429), and
-# confirm the 429 body carries the expected error code. $1 label, $2 cap,
-# $3 expected error, $4 device, $5 invite (optional).
+# Drive `cap` calls (expect all admitted, since the budget covers them) then
+# keep going until a 429 appears within a little slack, and confirm its body
+# carries the expected error code. Slack absorbs the deferred-write lag. $1
+# label, $2 cap, $3 expected error, $4 device, $5 invite (optional).
 assert_cap() {
     local label="$1" cap="$2" want_err="$3" device="$4" code="${5:-}"
+    local slack=3
 
     local i status admitted=1
     for ((i = 1; i <= cap; i++)); do
@@ -63,20 +69,21 @@ assert_cap() {
     done
     check "${label}: ${cap} calls admitted" "$admitted" "1"
 
-    status="$(hit "$device" "$code")"
-    check "${label}: call $((cap + 1)) capped" "$status" "429"
-
-    local body
-    if [[ -n "$code" ]]; then
-        body="$(curl -s -X POST "$ENDPOINT" -H "x-aegis-device-id: ${device}" -H "x-aegis-invite-code: ${code}")"
-    else
-        body="$(curl -s -X POST "$ENDPOINT" -H "x-aegis-device-id: ${device}")"
-    fi
-    if grep -q "\"${want_err}\"" <<<"$body"; then
-        echo "  PASS  ${label}: error is ${want_err}"
+    # Within `slack` more calls, one must 429. Capture that 429's body.
+    local body="" capped=0
+    for ((i = 1; i <= slack; i++)); do
+        if [[ -n "$code" ]]; then
+            body="$(curl -s -X POST "$ENDPOINT" -H "x-aegis-device-id: ${device}" -H "x-aegis-invite-code: ${code}")"
+        else
+            body="$(curl -s -X POST "$ENDPOINT" -H "x-aegis-device-id: ${device}")"
+        fi
+        grep -q "\"${want_err}\"" <<<"$body" && { capped=1; break; }
+    done
+    if [[ "$capped" == "1" ]]; then
+        echo "  PASS  ${label}: capped with ${want_err} within slack"
         PASS=$((PASS + 1))
     else
-        echo "  FAIL  ${label}: expected error ${want_err}, got ${body}"
+        echo "  FAIL  ${label}: expected ${want_err} within ${slack} calls, got ${body}"
         FAIL=$((FAIL + 1))
     fi
 }
@@ -101,20 +108,23 @@ for _ in $(seq 1 60); do
 done
 grep -q "Ready on" "$LOG" || { echo "wrangler dev never came up:"; tail -20 "$LOG"; exit 1; }
 
-TRIAL_CAP="$(grep -E '^TRIAL_TURNS_CAP' wrangler.toml | grep -oE '[0-9]+')"
+# Cartesia mint budgets: trial from TRIAL_DAILY_BUDGET.cartesia, recruiter from
+# the mint script's DAILY_CARTESIA default.
+TRIAL_CAP="$(grep -A6 'TRIAL_DAILY_BUDGET' src/constants.ts | grep -oE 'cartesia: *[0-9_]+' | grep -oE '[0-9]+' | head -1)"
+RECRUITER_CAP="$(grep -oE 'DAILY_CARTESIA=[0-9]+' scripts/mint-code.sh | grep -oE '[0-9]+')"
 
 echo
-echo "── trial tier (no code, cap=${TRIAL_CAP}) ──"
+echo "── trial tier (no code, daily cartesia cap=${TRIAL_CAP}) ──"
 assert_cap "trial" "$TRIAL_CAP" "trial_exhausted" "$(uuid)"
 
 echo
-echo "── recruiter tier (10-use code, cap=30) ──"
+echo "── recruiter tier (minted code, daily cartesia cap=${RECRUITER_CAP}) ──"
 MINT_OUT="$(bash scripts/mint-code.sh TESTTIER 10 5 --local 2>&1)"
 CODE="$(grep -E '^Code:' <<<"$MINT_OUT" | awk '{print $2}')"
 [[ -n "$CODE" ]] || { echo "mint failed:"; echo "$MINT_OUT"; exit 1; }
 echo "  minted ${CODE}"
 DEV_A="$(uuid)"
-assert_cap "recruiter" 30 "code_exhausted" "$DEV_A" "$CODE"
+assert_cap "recruiter" "$RECRUITER_CAP" "code_exhausted" "$DEV_A" "$CODE"
 
 echo
 echo "── per-device counter (same code, new device) ──"

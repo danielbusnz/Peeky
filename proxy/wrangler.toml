@@ -2,12 +2,9 @@ name = "aegis-proxy"
 main = "src/index.ts"
 compatibility_date = "2026-05-15"
 
-# Trial tier: lifetime call cap per device, bumped on every endpoint call.
-# 9 = 3 voice queries at 3 calls per query (STT, Claude, TTS). Marketing
-# language is "3 free tries" where a try = one voice query. Recruiter codes
-# raise this cap per code (see scripts/mint-code.sh).
-[vars]
-TRIAL_TURNS_CAP = "9"
+# Trial and demo tiers meter against per-UTC-day budgets, not a lifetime turn
+# count. The trial default budget lives in src/constants.ts (TRIAL_DAILY_BUDGET);
+# demo budgets come from each invite record's daily_* fields.
 
 # KV namespace for per-device usage counters. Create with:
 #   wrangler kv namespace create USAGE_KV

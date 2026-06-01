@@ -1,60 +1,81 @@
-// Per-device usage metering backed by KV. Both tiers run on one mechanism: a
-// lifetime call counter, keyed per device (trial) or per code+device (demo).
-// An invite code just raises the cap; it does not change how metering works.
+// Per-device usage metering backed by KV. Both tiers run on one model: a daily
+// budget (Anthropic tokens, Deepgram/Cartesia mint counts) keyed per UTC day,
+// per device (trial) or per code+device (demo). The date in the key is the
+// reset boundary; a short TTL lets each day's entry expire on its own.
 
-import { TURN_KV_TTL_SECONDS } from "./constants";
-import type { Tier, TurnUsage } from "./types";
-
-export function trialUsageKey(deviceId: string): string {
-    return `usage:trial:${deviceId}`;
-}
-
-export function demoUsageKey(code: string, deviceId: string): string {
-    return `usage:demo:${code}:${deviceId}`;
-}
-
-/** The counter key for whichever tier this request resolved to. */
-export function usageKey(tier: Tier, deviceId: string): string {
-    return tier.kind === "trial"
-        ? trialUsageKey(deviceId)
-        : demoUsageKey(tier.code, deviceId);
-}
+import { DAILY_USAGE_TTL_SECONDS } from "./constants";
+import type { DailyBudget, DailyUsage, Tier } from "./types";
 
 export function utcDateKey(d: Date): string {
     return d.toISOString().slice(0, 10);
 }
 
-export function parseCap(value: string | undefined, fallback: number): number {
-    const n = parseInt(value ?? "", 10);
-    return Number.isFinite(n) && n > 0 ? n : fallback;
+/** The usage key for this (tier, device) on a given UTC day. */
+export function dailyUsageKey(tier: Tier, deviceId: string, date: string): string {
+    return tier.kind === "trial"
+        ? `usage:trial:${deviceId}:${date}`
+        : `usage:demo:${tier.code}:${deviceId}:${date}`;
 }
 
-async function readTurnUsage(kv: KVNamespace, key: string): Promise<TurnUsage> {
+function numOr0(v: unknown): number {
+    return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
+
+export async function readDailyUsage(kv: KVNamespace, key: string): Promise<DailyUsage> {
     const raw = await kv.get(key);
-    if (!raw) return { turns: 0 };
-    try {
-        const parsed = JSON.parse(raw) as Partial<TurnUsage>;
-        return { turns: typeof parsed.turns === "number" ? parsed.turns : 0 };
-    } catch {
-        return { turns: 0 };
-    }
+    const p = (() => {
+        if (!raw) return {};
+        try {
+            return JSON.parse(raw) as Partial<DailyUsage>;
+        } catch {
+            return {};
+        }
+    })();
+    return {
+        input_tokens: numOr0(p.input_tokens),
+        output_tokens: numOr0(p.output_tokens),
+        deepgram: numOr0(p.deepgram),
+        cartesia: numOr0(p.cartesia),
+    };
 }
 
 /**
- * Read-modify-write: returns true and bumps the counter if the device has
- * calls left under `cap`, false otherwise. The write refreshes the TTL, so an
- * active device's count persists while an idle one's expires (soft reset).
- * Small race window where two concurrent requests both succeed at the cap
- * boundary is acceptable.
+ * Whether the device has any Anthropic budget left today. A turn's real cost
+ * isn't known before the call, so this only rejects once a budget is already
+ * met; the in-flight turn that crosses the line is allowed, then recorded. A
+ * small overshoot at the boundary is acceptable.
  */
-export async function consumeTurn(
+export function anthropicExhausted(usage: DailyUsage, budget: DailyBudget): boolean {
+    return usage.input_tokens >= budget.input_tokens || usage.output_tokens >= budget.output_tokens;
+}
+
+/** Whether the device has any Deepgram mint budget left today. */
+export function deepgramExhausted(usage: DailyUsage, budget: DailyBudget): boolean {
+    return usage.deepgram >= budget.deepgram;
+}
+
+/** Whether the device has any Cartesia mint budget left today. */
+export function cartesiaExhausted(usage: DailyUsage, budget: DailyBudget): boolean {
+    return usage.cartesia >= budget.cartesia;
+}
+
+/**
+ * Add `delta` to today's usage and persist. Read-modify-write with a small race
+ * window: two concurrent turns can both read the pre-write value, so a device
+ * may slip slightly past budget. Meant for ctx.waitUntil so the write stays off
+ * the hot path.
+ */
+export async function recordUsage(
     kv: KVNamespace,
     key: string,
-    cap: number,
-): Promise<boolean> {
-    const existing = await readTurnUsage(kv, key);
-    if (existing.turns >= cap) return false;
-    existing.turns += 1;
-    await kv.put(key, JSON.stringify(existing), { expirationTtl: TURN_KV_TTL_SECONDS });
-    return true;
+    delta: Partial<DailyUsage>,
+): Promise<void> {
+    const cur = await readDailyUsage(kv, key);
+    const next: DailyUsage = {
+        input_tokens: cur.input_tokens + (delta.input_tokens ?? 0),
+        output_tokens: cur.output_tokens + (delta.output_tokens ?? 0),
+        deepgram: cur.deepgram + (delta.deepgram ?? 0),
+        cartesia: cur.cartesia + (delta.cartesia ?? 0),
+    };
+    await kv.put(key, JSON.stringify(next), { expirationTtl: DAILY_USAGE_TTL_SECONDS });
 }

@@ -2,17 +2,17 @@
 # Mint an invite code and register it in Cloudflare KV.
 #
 # Usage:
-#   ./scripts/mint-code.sh <label> [uses] [max_devices] [--local]
+#   ./scripts/mint-code.sh <label> [days] [max_devices] [--local]
 #
 # Args:
-#   label        Human tag baked into the code. Uppercase A-Z and 0-9 only.
+#   label        Human tag baked into the code. Uppercase A-Z, 0-9, dashes.
 #                Example: "RECRUITER-ACME"
-#   uses         Lifetime voice queries this code grants. Default 10. Stored as
-#                turns_cap = uses * 3 (each query bills STT + Claude + TTS).
+#   days         Days until the code expires. Default 30.
 #   max_devices  Number of distinct devices this code allows. Default 2.
 #
-# Codes do not expire. They run until their lifetime uses are spent, using the
-# same per-device counter as the free trial, just a higher cap.
+# Codes meter against per-UTC-day budgets (Anthropic tokens, Deepgram/Cartesia
+# mint counts), not a lifetime turn count. The daily budgets default to the
+# values below; edit them here if a code needs more or less headroom.
 #
 # Requirements:
 #   - wrangler logged in to the right Cloudflare account
@@ -24,12 +24,12 @@
 set -euo pipefail
 
 if [[ $# -lt 1 || $# -gt 4 ]]; then
-    echo "usage: $0 <label> [uses] [max_devices] [--local]" >&2
+    echo "usage: $0 <label> [days] [max_devices] [--local]" >&2
     exit 64
 fi
 
 LABEL="${1^^}"
-USES="${2:-10}"
+DAYS="${2:-30}"
 MAX_DEVICES="${3:-2}"
 LOCAL_FLAG=""
 for arg in "$@"; do
@@ -40,8 +40,8 @@ if ! [[ "$LABEL" =~ ^[A-Z0-9-]+$ ]]; then
     echo "error: label must be uppercase A-Z, 0-9, and dashes only" >&2
     exit 64
 fi
-if ! [[ "$USES" =~ ^[0-9]+$ ]]; then
-    echo "error: uses must be a positive integer" >&2
+if ! [[ "$DAYS" =~ ^[0-9]+$ ]]; then
+    echo "error: days must be a positive integer" >&2
     exit 64
 fi
 if ! [[ "$MAX_DEVICES" =~ ^[0-9]+$ ]]; then
@@ -49,17 +49,28 @@ if ! [[ "$MAX_DEVICES" =~ ^[0-9]+$ ]]; then
     exit 64
 fi
 
-# Each voice query bills three calls (STT, Claude, TTS), so the call cap is
-# uses * 3. Mirrors the TRIAL_TURNS_CAP convention in wrangler.toml.
-TURNS_CAP=$((USES * 3))
+# Per-day budgets. Anthropic in estimated tokens (the Worker charges a flat
+# per-turn estimate); Deepgram/Cartesia in token mints (one mint per session
+# thanks to client caching). Roughly 100 voice turns/day at the current
+# estimate. Edit per code if needed.
+DAILY_INPUT_TOKENS=600000
+DAILY_OUTPUT_TOKENS=60000
+DAILY_DEEPGRAM=100
+DAILY_CARTESIA=100
+
+EXPIRES_AT=$(date -u -d "+${DAYS} days" +%Y-%m-%dT%H:%M:%SZ)
 
 SUFFIX=$(openssl rand -hex 3 | tr 'a-z' 'A-Z')
 CODE="${LABEL}-${SUFFIX}"
 
 PAYLOAD=$(cat <<EOF
 {
-  "turns_cap": ${TURNS_CAP},
+  "daily_input_tokens": ${DAILY_INPUT_TOKENS},
+  "daily_output_tokens": ${DAILY_OUTPUT_TOKENS},
+  "daily_deepgram_tokens": ${DAILY_DEEPGRAM},
+  "daily_cartesia_tokens": ${DAILY_CARTESIA},
   "max_devices": ${MAX_DEVICES},
+  "expires_at": "${EXPIRES_AT}",
   "devices_seen": []
 }
 EOF
@@ -81,9 +92,10 @@ npx wrangler kv key put ${LOCAL_FLAG} ${REMOTE_FLAG} \
     "invite:${CODE}" \
     "${PAYLOAD}" >/dev/null
 
-echo "Code:        ${CODE}"
-echo "Uses:        ${USES} (${TURNS_CAP} calls)"
-echo "Max devices: ${MAX_DEVICES}"
+echo "Code:         ${CODE}"
+echo "Expires:      ${EXPIRES_AT} (${DAYS} days)"
+echo "Max devices:  ${MAX_DEVICES}"
+echo "Daily budget: ${DAILY_INPUT_TOKENS} in / ${DAILY_OUTPUT_TOKENS} out tokens, ${DAILY_DEEPGRAM} STT / ${DAILY_CARTESIA} TTS mints"
 echo
 echo "Send the recipient:"
 echo "  Paste this code into Aegis settings: ${CODE}"

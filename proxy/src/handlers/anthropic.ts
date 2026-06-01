@@ -1,15 +1,19 @@
-import { ANTHROPIC_URL } from "../constants";
+import {
+    ANTHROPIC_URL,
+    EST_INPUT_TOKENS_PER_TURN,
+    EST_OUTPUT_TOKENS_PER_TURN,
+} from "../constants";
 import { cors, jsonResponse, passthroughHeaders, requireDeviceId } from "../http";
 import { resolveTier } from "../tiers";
 import type { Env } from "../types";
-import { consumeTurn, usageKey } from "../usage";
+import { anthropicExhausted, dailyUsageKey, readDailyUsage, recordUsage, utcDateKey } from "../usage";
 
 /**
- * Full HTTP proxy for Anthropic's Messages API. Charges one call against the
- * device's lifetime counter up front, then streams the SSE response through
- * untouched.
+ * Full HTTP proxy for Anthropic's Messages API. Checks the device's daily token
+ * budget, then streams the SSE response through untouched. Charges a flat
+ * per-turn token estimate against the budget, recorded off the hot path.
  */
-export async function handleAnthropic(request: Request, env: Env): Promise<Response> {
+export async function handleAnthropic(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const deviceId = requireDeviceId(request);
     if (deviceId instanceof Response) return deviceId;
 
@@ -27,20 +31,31 @@ export async function handleAnthropic(request: Request, env: Env): Promise<Respo
         return cors(jsonResponse(400, { error: "stream: true required" }));
     }
 
-    const consumed = await consumeTurn(env.USAGE_KV, usageKey(tier, deviceId), tier.turnsCap);
-    if (!consumed) {
+    const key = dailyUsageKey(tier, deviceId, utcDateKey(new Date()));
+    const usage = await readDailyUsage(env.USAGE_KV, key);
+    if (anthropicExhausted(usage, tier.budget)) {
         return cors(
             jsonResponse(429, {
                 error: tier.kind === "trial" ? "trial_exhausted" : "code_exhausted",
                 message:
                     tier.kind === "trial"
-                        ? "Free trial spent. Use your own API keys (BYOK) or contact us for an invite code."
-                        : "This invite code's uses are spent.",
+                        ? "Free trial spent for today. Use your own API keys (BYOK) or contact us for an invite code."
+                        : "This invite code's daily budget is spent. It resets at 00:00 UTC.",
                 provider: "anthropic",
                 tier: tier.kind,
             }),
         );
     }
+
+    // Charge a flat per-turn estimate off the hot path. The write runs after we
+    // return below, via ctx.waitUntil, so it never blocks time-to-first-token.
+    // Charged on attempt, not on success.
+    ctx.waitUntil(
+        recordUsage(env.USAGE_KV, key, {
+            input_tokens: EST_INPUT_TOKENS_PER_TURN,
+            output_tokens: EST_OUTPUT_TOKENS_PER_TURN,
+        }),
+    );
 
     const upstreamHeaders: Record<string, string> = {
         "x-api-key": env.ANTHROPIC_API_KEY,

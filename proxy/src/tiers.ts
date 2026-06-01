@@ -2,10 +2,9 @@
 // as trial (no code) or demo (valid code), and serves the read-only verify
 // endpoint the onboarding UI calls.
 
-import { CODE_RE } from "./constants";
+import { CODE_RE, TRIAL_DAILY_BUDGET } from "./constants";
 import { cors, jsonResponse, requireDeviceId } from "./http";
 import type { Env, InviteCode, InviteLookup, Tier } from "./types";
-import { parseCap } from "./usage";
 
 /**
  * Read-only validation of an invite code: format, existence, and device-slot
@@ -36,6 +35,12 @@ export async function lookupInvite(
         return cors(jsonResponse(500, { error: "invite_code_corrupt" }));
     }
 
+    // Reject expired codes. A malformed date parses to NaN, and `NaN <= now` is
+    // false, so a bad date leaves the code usable rather than bricking it.
+    if (Date.parse(invite.expires_at) <= Date.now()) {
+        return cors(jsonResponse(403, { error: "invite_code_expired" }));
+    }
+
     return {
         normalized,
         invite,
@@ -57,7 +62,7 @@ export async function resolveTier(
 ): Promise<Tier | Response> {
     const code = request.headers.get("x-aegis-invite-code");
     if (!code) {
-        return { kind: "trial", turnsCap: parseCap(env.TRIAL_TURNS_CAP, 18) };
+        return { kind: "trial", budget: TRIAL_DAILY_BUDGET };
     }
 
     const lookup = await lookupInvite(env, code, deviceId);
@@ -80,7 +85,16 @@ export async function resolveTier(
         await env.USAGE_KV.put(`invite:${normalized}`, JSON.stringify(invite));
     }
 
-    return { kind: "demo", code: normalized, turnsCap: invite.turns_cap };
+    return {
+        kind: "demo",
+        code: normalized,
+        budget: {
+            input_tokens: invite.daily_input_tokens,
+            output_tokens: invite.daily_output_tokens,
+            deepgram: invite.daily_deepgram_tokens,
+            cartesia: invite.daily_cartesia_tokens,
+        },
+    };
 }
 
 /**
@@ -114,8 +128,10 @@ export async function handleInviteVerify(request: Request, env: Env): Promise<Re
     return cors(
         jsonResponse(200, {
             ok: true,
-            turns_cap: lookup.invite.turns_cap,
             max_devices: lookup.invite.max_devices,
+            expires_at: lookup.invite.expires_at,
+            daily_input_tokens: lookup.invite.daily_input_tokens,
+            daily_output_tokens: lookup.invite.daily_output_tokens,
         }),
     );
 }
