@@ -20,6 +20,7 @@
   <img alt="Aegis Demo" src="aegis/assets/demo.gif" width="800">
 </p>
 
+<p align="center">
 Built in Rust. Primary target is Linux; macOS and Windows on the way.
 
 ## Get started with Claude Code
