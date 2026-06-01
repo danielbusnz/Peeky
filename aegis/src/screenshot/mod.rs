@@ -7,10 +7,6 @@
 
 mod backend;
 mod shared;
-// Screen Recording (TCC) permission handling lives with the capture code it
-// gates. macOS-only: other platforms have no equivalent grant.
-#[cfg(target_os = "macos")]
-pub mod macos_permission;
 pub use backend::ScreenshotBackend;
 // Re-exported for callers; not every binary that links this module uses it
 // (e.g. demo_win), so the unused-in-some-bins lint is expected.

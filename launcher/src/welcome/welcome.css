@@ -287,14 +287,6 @@
   font-size: 18px;
 }
 
-.howto-note {
-  margin: 0;
-  max-width: 320px;
-  color: rgba(255,255,255,0.5);
-  font-size: 13px;
-  line-height: 1.4;
-}
-
 #hotkey-combo {
   display: inline-block;
   background: rgba(255,255,255,0.1);
