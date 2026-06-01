@@ -68,3 +68,39 @@ pub fn capture_for_claude(
 ) -> Result<(String, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
     crossplatform::Backend::capture_for_claude(x, y, width, height)
 }
+
+/// Ensure macOS Screen Recording permission, prompting once if it's missing.
+/// Returns true if access is already granted.
+///
+/// Uses the TCC API (macOS 11+): `CGPreflightScreenCaptureAccess` checks
+/// without a prompt, and `CGRequestScreenCaptureAccess` shows the system
+/// prompt once per launch and registers Aegis in the Screen Recording list so
+/// the user only has to flip the toggle. This replaces the old
+/// dummy-screenshot trigger, which was non-deterministic on modern macOS.
+///
+/// Note: a freshly granted permission only takes effect after Aegis relaunches.
+#[cfg(target_os = "macos")]
+pub fn ensure_screen_recording_access() -> bool {
+    // Declared directly rather than via objc2-core-graphics so we don't depend
+    // on a specific feature flag. Both are no-argument CoreGraphics calls that
+    // return a C bool.
+    #[link(name = "CoreGraphics", kind = "framework")]
+    unsafe extern "C" {
+        fn CGPreflightScreenCaptureAccess() -> bool;
+        fn CGRequestScreenCaptureAccess() -> bool;
+    }
+    // SAFETY: simple no-argument C calls into CoreGraphics; safe at startup.
+    if unsafe { CGPreflightScreenCaptureAccess() } {
+        return true;
+    }
+    unsafe { CGRequestScreenCaptureAccess() }
+}
+
+/// Open System Settings at the Screen Recording privacy pane so the user can
+/// grant access in one click instead of hunting through menus.
+#[cfg(target_os = "macos")]
+pub fn open_screen_recording_settings() {
+    let _ = std::process::Command::new("open")
+        .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+        .spawn();
+}

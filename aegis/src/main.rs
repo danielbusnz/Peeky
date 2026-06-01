@@ -45,12 +45,22 @@ fn main() {
     actions::init_input_executor();
     actions::check_input_injection_available();
 
-    // Trigger screen recording and microphone permission prompts on macOS.
-    // This runs early so the permission dialogs don't interrupt the voice flow.
+    // Request macOS permissions early so the system dialogs don't interrupt a
+    // voice turn. Screen Recording uses the TCC API: it prompts once and
+    // registers Aegis in the Screen Recording list. If it's not granted yet we
+    // point the user at the exact Settings pane; the grant only takes effect
+    // after a relaunch, so we say so.
     #[cfg(target_os = "macos")]
     {
-        let _ = screenshot::capture_for_claude(0, 0, 100, 100);
-        eprintln!("[startup] screen recording permission check triggered");
+        if screenshot::ensure_screen_recording_access() {
+            eprintln!("[startup] screen recording permission granted");
+        } else {
+            eprintln!(
+                "[startup] screen recording not granted yet. Enable Aegis under \
+                 System Settings > Privacy & Security > Screen Recording, then relaunch Aegis."
+            );
+            screenshot::open_screen_recording_settings();
+        }
         audio::trigger_mic_permission();
     }
 
