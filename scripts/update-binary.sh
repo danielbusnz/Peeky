@@ -17,7 +17,9 @@ BINARY_NAME="aegis-$TARGET"
 
 echo "Building aegis (release) for $TARGET..."
 cd "$REPO_ROOT"
-cargo build --release -p aegis --no-default-features --features "winit-window"
+# On macOS the default `hyprland` feature is a Linux-only no-op, so the
+# default build takes the winit path (same as the release.yml macOS job).
+cargo build --release -p aegis --bin aegis
 
 echo "Copying binary to launcher..."
 cp "$REPO_ROOT/target/release/aegis" "$BINARY_DIR/$BINARY_NAME"
