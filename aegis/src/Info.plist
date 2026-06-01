@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>com.aegis.agent</string>
+	<key>CFBundleName</key>
+	<string>Aegis</string>
+	<key>CFBundleDisplayName</key>
+	<string>Aegis</string>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>Aegis reads your screen so it can point at, click, and answer questions about what you are looking at.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Aegis listens to your voice commands while you hold the push-to-talk key.</string>
+</dict>
+</plist>

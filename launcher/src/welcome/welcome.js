@@ -114,34 +114,30 @@ function showHowTo() {
     document.querySelector(".window").classList.add("show-howto");
 }
 
-// macOS only: prompt for the agent's TCC permissions while the launcher is
-// still in the foreground, so the agent inherits them on spawn instead of
-// triggering prompts mid-session and forcing a restart. Mic + screen are
+// macOS only: prompt for the agent's mic + accessibility permissions while the
+// launcher is still in the foreground. Screen Recording is deliberately NOT
+// requested here: we spawn the agent (aegis) detached and exit, so aegis is its
+// own TCC responsible process and a launcher-side grant would land on the wrong
+// identity (com.aegis.settings instead of the agent). aegis requests Screen
+// Recording itself on first run and self-relaunches once granted. Mic is
 // API-grantable; accessibility can't be auto-granted, so we open its pane and
 // continue (the hotkey starts working once the user toggles it). Commands come
 // from tauri-plugin-macos-permissions.
 //
-// Returns true if a relaunch is needed (permissions were just granted and
-// require app restart to take effect).
+// Returns true if a relaunch is needed (mic was just granted and requires an
+// app restart to take effect).
 async function requestMacPermissions(invoke) {
     let needsRelaunch = false;
 
     // Check current state before requesting
     let hadMic = false;
-    let hadScreen = false;
     try {
         hadMic = await invoke("plugin:macos-permissions|check_microphone_permission");
-    } catch (_) {}
-    try {
-        hadScreen = await invoke("plugin:macos-permissions|check_screen_recording_permission");
     } catch (_) {}
 
     // Request permissions
     try {
         await invoke("plugin:macos-permissions|request_microphone_permission");
-    } catch (_) {}
-    try {
-        await invoke("plugin:macos-permissions|request_screen_recording_permission");
     } catch (_) {}
     try {
         const granted = await invoke("plugin:macos-permissions|check_accessibility_permission");
@@ -150,18 +146,13 @@ async function requestMacPermissions(invoke) {
         }
     } catch (_) {}
 
-    // Check if permissions changed (were just granted)
+    // Check if mic was just granted (needs a relaunch to take effect)
     let hasMic = false;
-    let hasScreen = false;
     try {
         hasMic = await invoke("plugin:macos-permissions|check_microphone_permission");
     } catch (_) {}
-    try {
-        hasScreen = await invoke("plugin:macos-permissions|check_screen_recording_permission");
-    } catch (_) {}
 
-    // If any permission was just granted, we need to relaunch for it to take effect
-    if ((!hadMic && hasMic) || (!hadScreen && hasScreen)) {
+    if (!hadMic && hasMic) {
         needsRelaunch = true;
     }
 

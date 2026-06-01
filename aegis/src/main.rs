@@ -5,6 +5,16 @@ use aegis::{
 #[cfg(target_os = "macos")]
 use aegis::screenshot;
 
+// Embed an Info.plist into this binary's `__TEXT,__info_plist` section so the
+// standalone executable carries a stable macOS identity. Without it codesign
+// falls back to the filename ("aegis"), so the Screen Recording grant lands on
+// a weak, unnamed entry that doesn't persist across reinstalls. CFBundleIdentifier
+// makes the TCC entry stable; NSScreenCaptureUsageDescription is the prompt's reason.
+#[cfg(target_os = "macos")]
+#[used]
+#[unsafe(link_section = "__TEXT,__info_plist")]
+static INFO_PLIST: [u8; include_bytes!("Info.plist").len()] = *include_bytes!("Info.plist");
+
 fn main() {
     // Tee stdout/stderr to a rotating log file before anything prints, so a
     // release build launched from the .app (no terminal) stays inspectable and
@@ -45,12 +55,14 @@ fn main() {
     actions::init_input_executor();
     actions::check_input_injection_available();
 
-    // Trigger screen recording and microphone permission prompts on macOS.
-    // This runs early so the permission dialogs don't interrupt the voice flow.
+    // Ensure macOS Screen Recording + mic access early, before the voice flow
+    // needs them. ensure_access() returns immediately when already granted;
+    // otherwise it surfaces the system prompt and self-relaunches once the user
+    // enables it (a denied process stays blind until relaunch). See
+    // screenshot::macos_permission.
     #[cfg(target_os = "macos")]
     {
-        let _ = screenshot::capture_for_claude(0, 0, 100, 100);
-        eprintln!("[startup] screen recording permission check triggered");
+        screenshot::macos_permission::ensure_access();
         audio::trigger_mic_permission();
     }
 
