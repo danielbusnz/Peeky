@@ -46,16 +46,25 @@ fn redactors() -> &'static Redactors {
 /// memory assign-cue rule, which is intent-dependent and storage-only.
 ///
 /// Rules in order (earlier rules can consume text that later rules never see):
-///   1. Secret keyword tail: keep the keyword, mask everything after it.
-///   2. Email addresses -> `<EMAIL>`.
-///   3. Runs of 4+ digits -> `<NUM>`.
+///   1. Lowercase, to match the all-lowercase training corpus.
+///   2. Strip trailing whitespace and terminal `.!?` that STT appends.
+///   3. Secret keyword tail: keep the keyword, mask everything after it.
+///   4. Email addresses -> `<EMAIL>`.
+///   5. Runs of 4+ digits -> `<NUM>`.
 pub(super) fn preprocess(text: &str) -> String {
     let r = redactors();
 
-    // Rule 1: "password is hunter2" -> "password <SECRET>".
+    // Rules 1-2: lowercase, then trim trailing whitespace and terminal `.!?`.
+    // The training corpus is all lowercase with no terminal punctuation; STT
+    // output is mixed-case and punctuated, so this closes the surface skew.
+    let lowered = text.to_lowercase();
+    let normalized =
+        lowered.trim_end_matches(|c: char| matches!(c, '.' | '!' | '?') || c.is_whitespace());
+
+    // Rule 3: "password is hunter2" -> "password <SECRET>".
     let s = r
         .secret_keyword
-        .replace(text, |caps: &regex::Captures| {
+        .replace(normalized, |caps: &regex::Captures| {
             format!("{} <SECRET>", &caps[1])
         })
         .into_owned();
