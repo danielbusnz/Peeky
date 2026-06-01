@@ -20,7 +20,7 @@
   <img alt="Aegis Demo" src="aegis/assets/demo.gif" width="800">
 </p>
 
-Built in Rust. Primary target is Linux/Hyprland; macOS and Windows build flag-free from the same `cargo run`.
+Built in Rust. Primary target is Linux; macOS and Windows on the way.
 
 ## Get started with Claude Code
 
@@ -38,11 +38,11 @@ hotkey into my Hyprland config, and (optionally) pointing it at my own API
 keys instead of the hosted proxy. Walk me through it.
 ```
 
-That's it. It clones the repo, reads the docs, and walks you through the whole setup. Once you're running you can keep talking to it: build features, fix bugs, whatever.
+That's it. It clones the repo, reads the docs, and walks you through the whole setup. 
 
 ## Manual setup
 
-If you want to do it yourself, here's the deal.
+If you want to do it yourself.
 
 **Prerequisites**
 
@@ -91,7 +91,7 @@ Every voice turn picks one of five paths based on what you said. Each path has a
 | `memory` | "remember my X is Y", "what's my Z" | Local JSONL store at `~/.config/aegis/memory.jsonl` |
 | `agent` | Multi-step chains: "open YouTube, search for X, play the top result" | Full agent loop with iterative screenshots |
 
-A hybrid classifier picks the path: sub-millisecond keyword match for clear cases (~80%), LLM fallback (~700ms) for ambiguous ones. Total release → action is typically ~1.2s.
+A hybrid classifier picks the path: sub-millisecond keyword match for clear cases (~80%), LLM fallback (~700ms) for ambiguous ones. Total release → action is typically ~1.2s for on device keys, 1.5s with proxy.
 
 ## Demos and benchmarks
 
