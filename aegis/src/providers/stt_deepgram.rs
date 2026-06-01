@@ -13,7 +13,14 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
+use super::token_cache::TokenCache;
+use crate::tuning::PROXY_TOKEN_REFRESH_MARGIN_SECS;
+
 const PROXY_URL: &str = "https://aegis-proxy.danielbusnz.workers.dev/v1/deepgram/token";
+
+/// Fallback TTL (seconds) if the proxy omits `expires_in`. Conservative so a
+/// missing field never makes us treat a token as longer-lived than it is.
+const TOKEN_TTL_FALLBACK_SECS: u64 = 60;
 
 /// Streaming Speech-to-Text via Deepgram's WebSocket endpoint.
 ///
@@ -24,6 +31,9 @@ const PROXY_URL: &str = "https://aegis-proxy.danielbusnz.workers.dev/v1/deepgram
 pub struct SttDeepgram {
     pub http: reqwest::Client,
     pub mode: SttMode,
+    /// Caches the proxy-minted Bearer header so we don't mint per turn. Unused
+    /// in direct mode, where the key is an in-memory string.
+    token_cache: TokenCache,
 }
 
 /// Auth mode. In proxy mode aegis fetches a short-lived JWT from aegis-proxy
@@ -53,6 +63,7 @@ impl SttDeepgram {
             return Ok(Self {
                 http,
                 mode: SttMode::Direct { api_key },
+                token_cache: TokenCache::new(),
             });
         }
 
@@ -63,14 +74,14 @@ impl SttDeepgram {
                 token_url: PROXY_URL.to_string(),
                 device_id,
             },
+            token_cache: TokenCache::new(),
         })
     }
 
     /// Pre-open HTTPS connections so the first real STT session doesn't
     /// pay TCP+TLS handshake cost. Warms both api.deepgram.com and the
-    /// proxy auth endpoint (if using proxy mode). In proxy mode we do a
-    /// real auth call (with device_id) to fully warm the path; the token
-    /// is discarded since it's short-lived.
+    /// proxy auth endpoint (if using proxy mode). In proxy mode we mint a
+    /// real token and seed the cache, so the first turn skips the mint too.
     pub async fn warm(&self) {
         // Warm Deepgram API connection
         let dg = self
@@ -79,21 +90,20 @@ impl SttDeepgram {
             .header("Authorization", "Token warm")
             .send();
 
-        // In proxy mode, do a real auth call to fully warm the path
+        // In proxy mode, mint a token now and cache it so the first real turn
+        // pays neither the TLS handshake nor the mint round trip.
         match &self.mode {
             SttMode::Proxy {
                 token_url,
                 device_id,
             } => {
-                let mut req = self
-                    .http
-                    .post(token_url)
-                    .header(super::proxy_contract::DEVICE_ID_HEADER, device_id);
-                if let Some(code) = super::invite_code::load() {
-                    req = req.header(super::proxy_contract::INVITE_CODE_HEADER, code);
-                }
-                let proxy = req.send();
-                let _ = tokio::join!(dg, proxy);
+                let seed = async {
+                    if let Ok((header, ttl)) = self.mint_token(token_url, device_id).await {
+                        self.token_cache
+                            .put(header, ttl, PROXY_TOKEN_REFRESH_MARGIN_SECS);
+                    }
+                };
+                let _ = tokio::join!(dg, seed);
             }
             SttMode::Direct { .. } => {
                 let _ = dg.await;
@@ -112,29 +122,48 @@ impl SttDeepgram {
                 token_url,
                 device_id,
             } => {
-                // Re-read the invite code on every mint so the onboarding
-                // window can change it without an aegis restart.
-                let mut req = self
-                    .http
-                    .post(token_url)
-                    .header(super::proxy_contract::DEVICE_ID_HEADER, device_id);
-                if let Some(code) = super::invite_code::load() {
-                    req = req.header(super::proxy_contract::INVITE_CODE_HEADER, code);
+                if let Some(header) = self.token_cache.get() {
+                    return Ok(header);
                 }
-                let resp = req.send().await?;
-                if !resp.status().is_success() {
-                    let status = resp.status();
-                    let body = resp.text().await.unwrap_or_default();
-                    return Err(format!("deepgram token mint failed {}: {}", status, body).into());
-                }
-                let json: serde_json::Value = resp.json().await?;
-                let token = json["token"]
-                    .as_str()
-                    .ok_or("deepgram token response missing 'token' field")?
-                    .to_string();
-                Ok(format!("Bearer {}", token))
+                let (header, ttl) = self.mint_token(token_url, device_id).await?;
+                self.token_cache
+                    .put(header.clone(), ttl, PROXY_TOKEN_REFRESH_MARGIN_SECS);
+                Ok(header)
             }
         }
+    }
+
+    /// POST to aegis-proxy for a fresh Deepgram JWT. Returns the ready-to-send
+    /// `Bearer <jwt>` header value and the token's TTL in seconds.
+    async fn mint_token(
+        &self,
+        token_url: &str,
+        device_id: &str,
+    ) -> Result<(String, u64), Box<dyn std::error::Error + Send + Sync>> {
+        // Re-read the invite code on every mint so the onboarding window can
+        // change it without an aegis restart.
+        let mut req = self
+            .http
+            .post(token_url)
+            .header(super::proxy_contract::DEVICE_ID_HEADER, device_id);
+        if let Some(code) = super::invite_code::load() {
+            req = req.header(super::proxy_contract::INVITE_CODE_HEADER, code);
+        }
+        let resp = req.send().await?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(format!("deepgram token mint failed {}: {}", status, body).into());
+        }
+        let json: serde_json::Value = resp.json().await?;
+        let token = json["token"]
+            .as_str()
+            .ok_or("deepgram token response missing 'token' field")?
+            .to_string();
+        let ttl = json["expires_in"]
+            .as_u64()
+            .unwrap_or(TOKEN_TTL_FALLBACK_SECS);
+        Ok((format!("Bearer {}", token), ttl))
     }
 
     /// Open a WebSocket session, pump audio chunks from `audio_rx`, return
@@ -160,9 +189,9 @@ impl SttDeepgram {
             sample_rate, channels
         );
 
-        // Resolve the auth header. In proxy mode this hits aegis-proxy for a
-        // short-lived JWT first (~50ms HTTPS round-trip). In direct mode it's
-        // an in-memory string lookup.
+        // Resolve the auth header. In proxy mode this is a cached token (minted
+        // at warm-up), and only hits aegis-proxy when the cache is cold or near
+        // expiry. In direct mode it's an in-memory string lookup.
         let t_auth = std::time::Instant::now();
         let auth = self.auth_header().await?;
         eprintln!("[deepgram-debug] auth_header → {:?}", t_auth.elapsed());

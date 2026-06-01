@@ -8,6 +8,13 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use futures_util::StreamExt;
 
+use super::token_cache::TokenCache;
+use crate::tuning::PROXY_TOKEN_REFRESH_MARGIN_SECS;
+
+/// Fallback TTL (seconds) if the proxy omits `expires_in`. Conservative so a
+/// missing field never makes us treat a token as longer-lived than it is.
+const TOKEN_TTL_FALLBACK_SECS: u64 = 60;
+
 /// Voice fallback when CARTESIA_VOICE_ID isn't set. "Barbershop Man" is
 /// a calm masculine voice that reads aegis's terse replies well.
 const DEFAULT_VOICE_ID: &str = "a0e99841-438c-4a64-b679-ae501e7d6091";
@@ -28,6 +35,9 @@ pub struct TtsCartesia {
     pub voice_id: String,
     pub http: reqwest::Client,
     pub mode: TtsMode,
+    /// Caches the proxy-minted token so multi-sentence turns don't mint per
+    /// sentence. Unused in direct mode, where the key is an in-memory string.
+    token_cache: TokenCache,
 }
 
 /// Auth mode. Default routes through aegis-proxy (no Cartesia key locally).
@@ -69,26 +79,44 @@ impl TtsCartesia {
             voice_id,
             http,
             mode,
+            token_cache: TokenCache::new(),
         })
     }
 
     /// Pre-open the HTTPS connection to api.cartesia.ai so the first real
-    /// synthesis request doesn't pay TLS handshake cost.
+    /// synthesis request doesn't pay TLS handshake cost. In proxy mode, also
+    /// mint a token and seed the cache so the first sentence skips the mint.
     pub async fn warm(&self) {
-        let _ = self
+        let warm_conn = self
             .http
             .get("https://api.cartesia.ai/voices/")
             .header("X-API-Key", "warm")
             .header("Cartesia-Version", "2026-03-01")
-            .send()
-            .await;
+            .send();
+
+        match &self.mode {
+            TtsMode::Proxy {
+                token_url,
+                device_id,
+            } => {
+                let seed = async {
+                    if let Ok((token, ttl)) = self.mint_token(token_url, device_id).await {
+                        self.token_cache
+                            .put(token, ttl, PROXY_TOKEN_REFRESH_MARGIN_SECS);
+                    }
+                };
+                let _ = tokio::join!(warm_conn, seed);
+            }
+            TtsMode::Direct { .. } => {
+                let _ = warm_conn.await;
+            }
+        }
     }
 
     /// Returns the Bearer token to send to Cartesia. In direct mode it's the
-    /// raw API key. In proxy mode it's a short-lived JWT minted by aegis-proxy
-    /// on each call (~50ms HTTPS round-trip per synthesis). Per-call (vs. per-
-    /// turn) minting is wasteful when a turn produces many sentences; revisit
-    /// if Cartesia daily caps trip in practice.
+    /// raw API key. In proxy mode it's a cached short-lived JWT, re-minted only
+    /// when the cache is cold or near expiry, so multi-sentence turns reuse one
+    /// token instead of minting per synthesis.
     async fn bearer_token(&self) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         match &self.mode {
             TtsMode::Direct { api_key } => Ok(api_key.clone()),
@@ -96,29 +124,48 @@ impl TtsCartesia {
                 token_url,
                 device_id,
             } => {
-                // Re-read the invite code on every mint so the onboarding
-                // window can change it without an aegis restart.
-                let mut req = self
-                    .http
-                    .post(token_url)
-                    .header(super::proxy_contract::DEVICE_ID_HEADER, device_id);
-                if let Some(code) = super::invite_code::load() {
-                    req = req.header(super::proxy_contract::INVITE_CODE_HEADER, code);
+                if let Some(token) = self.token_cache.get() {
+                    return Ok(token);
                 }
-                let resp = req.send().await?;
-                if !resp.status().is_success() {
-                    let status = resp.status();
-                    let body = resp.text().await.unwrap_or_default();
-                    return Err(format!("cartesia token mint failed {}: {}", status, body).into());
-                }
-                let json: serde_json::Value = resp.json().await?;
-                let token = json["token"]
-                    .as_str()
-                    .ok_or("cartesia token response missing 'token' field")?
-                    .to_string();
+                let (token, ttl) = self.mint_token(token_url, device_id).await?;
+                self.token_cache
+                    .put(token.clone(), ttl, PROXY_TOKEN_REFRESH_MARGIN_SECS);
                 Ok(token)
             }
         }
+    }
+
+    /// POST to aegis-proxy for a fresh Cartesia token. Returns the raw token and
+    /// its TTL in seconds.
+    async fn mint_token(
+        &self,
+        token_url: &str,
+        device_id: &str,
+    ) -> Result<(String, u64), Box<dyn std::error::Error + Send + Sync>> {
+        // Re-read the invite code on every mint so the onboarding window can
+        // change it without an aegis restart.
+        let mut req = self
+            .http
+            .post(token_url)
+            .header(super::proxy_contract::DEVICE_ID_HEADER, device_id);
+        if let Some(code) = super::invite_code::load() {
+            req = req.header(super::proxy_contract::INVITE_CODE_HEADER, code);
+        }
+        let resp = req.send().await?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(format!("cartesia token mint failed {}: {}", status, body).into());
+        }
+        let json: serde_json::Value = resp.json().await?;
+        let token = json["token"]
+            .as_str()
+            .ok_or("cartesia token response missing 'token' field")?
+            .to_string();
+        let ttl = json["expires_in"]
+            .as_u64()
+            .unwrap_or(TOKEN_TTL_FALLBACK_SECS);
+        Ok((token, ttl))
     }
 }
 

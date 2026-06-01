@@ -51,6 +51,13 @@ pub const ROUTELET_CONFIDENCE_THRESHOLD: f32 = 0.95;
 /// ↓ steadier trickle of small requests. more task wakeups.
 pub const ROUTELET_UPLOAD_BATCH_MAX: usize = 32;
 
+/// Seconds to retire a proxy-minted STT/TTS token before its real TTL, so a
+/// turn never opens a stream with a token that expires mid-flight. The proxy
+/// mints 3600s tokens, so the cache effectively lasts a session minus this.
+/// ↑ re-mints sooner (safer against clock skew and long turns, more mints).
+/// ↓ squeezes more reuse out of each token (fewer mints, tighter expiry race).
+pub const PROXY_TOKEN_REFRESH_MARGIN_SECS: u64 = 120;
+
 // ────── Claude agent loop ──────
 
 /// Hard cap on agent loop iterations per turn.
