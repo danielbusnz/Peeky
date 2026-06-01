@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-    hold the hotkey. Ask a Question. Cursor handles the rest.
+    hold the hotkey. Ask a Question. Aegis handles the rest.
 
 <p align="center">
   <img alt="Aegis Demo" src="aegis/assets/demo.gif" width="800">
