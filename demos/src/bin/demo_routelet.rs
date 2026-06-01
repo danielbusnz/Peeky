@@ -43,6 +43,13 @@ fn main() {
             phrase: "open youtube, search for lofi and play the first result",
             expected: "Agent",
         },
+        // Regression: capitalized, punctuated STT output of a greeting used to
+        // score integration@0.96 and fire Gmail. Normalized in preprocess, it
+        // now lands on Chat (below threshold -> Claude fallback).
+        Case {
+            phrase: "Hey. Can you hear me?",
+            expected: "Chat",
+        },
     ];
 
     let mut passed = 0usize;
