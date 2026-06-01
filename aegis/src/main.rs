@@ -6,6 +6,13 @@ use aegis::{
 use aegis::screenshot;
 
 fn main() {
+    // Tee stdout/stderr to a rotating log file before anything prints, so a
+    // release build launched from the .app (no terminal) stays inspectable and
+    // startup panics land on disk. Best effort: a no-op if it can't set up.
+    if let Some(path) = aegis::logging::init() {
+        eprintln!("[startup] logging to {}", path.display());
+    }
+
     // Shared reqwest::Client. Internal Arc means clones reuse the same
     // connection pool: TLS sessions, HTTP/2 multiplexing, and no per-call
     // handshake cost after the first.

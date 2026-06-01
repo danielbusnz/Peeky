@@ -14,6 +14,7 @@ pub mod hotkey;
 pub mod input;
 pub mod integrations;
 pub mod intent;
+pub mod logging;
 pub mod mouse_position;
 pub mod orchestrator;
 pub mod painter;
