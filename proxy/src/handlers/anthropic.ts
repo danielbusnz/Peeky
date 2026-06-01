@@ -10,8 +10,8 @@ import { anthropicExhausted, dailyUsageKey, readDailyUsage, recordUsage, utcDate
 
 /**
  * Full HTTP proxy for Anthropic's Messages API. Checks the device's daily token
- * budget, then streams the SSE response through untouched. Charges a flat
- * per-turn token estimate against the budget, recorded off the hot path.
+ * budget, then streams the request body up and the SSE response back through
+ * untouched. Charges a flat per-turn token estimate, recorded off the hot path.
  */
 export async function handleAnthropic(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const deviceId = requireDeviceId(request);
@@ -19,17 +19,6 @@ export async function handleAnthropic(request: Request, env: Env, ctx: Execution
 
     const tier = await resolveTier(request, env, deviceId);
     if (tier instanceof Response) return tier;
-
-    const rawBody = await request.text();
-    let parsed: { stream?: boolean };
-    try {
-        parsed = JSON.parse(rawBody);
-    } catch {
-        return cors(jsonResponse(400, { error: "request body must be JSON" }));
-    }
-    if (parsed.stream !== true) {
-        return cors(jsonResponse(400, { error: "stream: true required" }));
-    }
 
     const key = dailyUsageKey(tier, deviceId, utcDateKey(new Date()));
     const usage = await readDailyUsage(env.USAGE_KV, key);
@@ -65,11 +54,17 @@ export async function handleAnthropic(request: Request, env: Env, ctx: Execution
     const beta = request.headers.get("anthropic-beta");
     if (beta) upstreamHeaders["anthropic-beta"] = beta;
 
+    // Stream the request body straight through instead of buffering it. The
+    // aegis client always sends stream:true, so we skip parsing the body just
+    // to check that. For screenshot turns this overlaps the client->edge and
+    // edge->Anthropic uploads instead of doing them back to back. `duplex` is
+    // required when the body is a stream and isn't in the DOM RequestInit type.
     const upstream = await fetch(ANTHROPIC_URL, {
         method: "POST",
         headers: upstreamHeaders,
-        body: rawBody,
-    });
+        body: request.body,
+        duplex: "half",
+    } as RequestInit & { duplex: "half" });
 
     return cors(
         new Response(upstream.body, {
