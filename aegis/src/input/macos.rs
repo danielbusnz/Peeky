@@ -54,14 +54,23 @@ impl InputInjector for Backend {
             (text, false)
         };
 
-        // DEBUG: surface exactly what we're injecting and confirm the action
-        // reached OS-level execution (not just the queue in actions.rs).
-        eprintln!(
-            "[input:type] injecting {} char(s): {:?} (enter={})",
-            text_to_type.chars().count(),
-            text_to_type,
-            needs_enter
-        );
+        // Confirm the action reached OS-level execution (not just the queue in
+        // actions.rs). The literal text is only logged under AEGIS_INPUT_DEBUG,
+        // since it can contain anything the user types, passwords included.
+        if std::env::var("AEGIS_INPUT_DEBUG").is_ok() {
+            eprintln!(
+                "[input:type] injecting {} char(s): {:?} (enter={})",
+                text_to_type.chars().count(),
+                text_to_type,
+                needs_enter
+            );
+        } else {
+            eprintln!(
+                "[input:type] injecting {} char(s) (enter={})",
+                text_to_type.chars().count(),
+                needs_enter
+            );
+        }
 
         // Type one character at a time, posting a key-down AND a key-up for
         // each with the unicode string set on both. A single event carrying
