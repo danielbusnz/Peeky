@@ -16,6 +16,10 @@ serde_json = "1"
 dirs = "5.0"
 reqwest = { version = "0.13", features = ["json"] }
 uuid = { version = "1.10", features = ["v4"] }
+# Open the system browser for the OAuth handoff.
+open = "5"
+# Poll sleep between OAuth session checks; tauri's async runtime is tokio.
+tokio = { version = "1", features = ["time"] }
 # Native secret store per OS: Keychain (macOS), Credential Manager (Windows),
 # Secret Service (Linux). sync-secret-service is pure-Rust (zbus), no libsecret.
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }

@@ -1,7 +1,14 @@
+// Sign-in window. A "Continue with GitHub" button invokes the launcher's
+// github_sign_in command, which opens the system browser and polls the proxy
+// until the session token lands in the OS keychain. The browser holds the
+// OAuth dance; this window just kicks it off and reflects the result.
+
+const { invoke } = window.__TAURI__.core;
+
 // Auto-fit the Tauri window to the sign-in card. Reads the card's rendered
 // box once Tailwind has applied its classes, then resizes the OS window to
-// match plus a small margin. Means we never have to hardcode pixel numbers
-// in tauri.conf.json: tweak the card and the window follows.
+// match plus a small margin, so the card size drives the window, not pixels
+// hardcoded in tauri.conf.json.
 const MARGIN = 16;
 
 async function fitWindowToCard() {
@@ -17,15 +24,61 @@ async function fitWindowToCard() {
   );
 }
 
-// Tailwind via CDN applies styles after the script runs; wait one frame so
+const els = {
+  btn: document.getElementById("github-btn"),
+  label: document.getElementById("github-label"),
+  status: document.getElementById("status"),
+  signedIn: document.getElementById("signed-in"),
+  signedInEmail: document.getElementById("signed-in-email"),
+  signOut: document.getElementById("signout-btn"),
+};
+
+function showSignedIn(email) {
+  els.signedInEmail.textContent = email || "your account";
+  els.signedIn.classList.remove("hidden");
+  els.btn.classList.add("hidden");
+  els.status.textContent = "";
+  fitWindowToCard();
+}
+
+function showSignedOut() {
+  els.signedIn.classList.add("hidden");
+  els.btn.classList.remove("hidden");
+  els.btn.disabled = false;
+  els.label.textContent = "Continue with GitHub";
+  els.status.textContent = "";
+  fitWindowToCard();
+}
+
+els.btn.addEventListener("click", async () => {
+  els.btn.disabled = true;
+  els.label.textContent = "Waiting for GitHub…";
+  els.status.textContent = "Finish signing in in your browser.";
+  try {
+    const account = await invoke("github_sign_in");
+    showSignedIn(account.email);
+  } catch (err) {
+    els.status.textContent = String(err);
+    els.btn.disabled = false;
+    els.label.textContent = "Continue with GitHub";
+  }
+});
+
+els.signOut.addEventListener("click", async () => {
+  await invoke("sign_out");
+  showSignedOut();
+});
+
+// On open, reflect any existing session so a returning user sees it.
+(async () => {
+  try {
+    const status = await invoke("account_status");
+    if (status.signed_in) showSignedIn(status.email);
+  } catch {
+    // No session yet; leave the default signed-out UI.
+  }
+})();
+
+// Tailwind via CDN applies styles after this script runs; wait one frame so
 // the card has its final layout before we measure.
 requestAnimationFrame(() => requestAnimationFrame(fitWindowToCard));
-
-// Form handler. Real auth flows through the proxy backend once it exists.
-document.getElementById("signin-form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  const email = document.getElementById("email").value;
-  const password = document.getElementById("password").value;
-  // TODO: post to /auth/signin on the proxy backend.
-  console.log("[signin] would submit:", { email, passwordLen: password.length });
-});
