@@ -21,5 +21,22 @@ id = "cdfd0f967d61437d8a4833b18899e343"
 binding = "ROUTELET_R2"
 bucket_name = "aegis-routelet-samples"
 
+# D1 accounts database (users; later synced settings + subscription tier).
+# Create with:
+#   wrangler d1 create aegis-accounts
+# then paste the returned database_id below. Apply the schema with:
+#   wrangler d1 migrations apply aegis-accounts --local   (local dev)
+#   wrangler d1 migrations apply aegis-accounts --remote   (production)
+[[d1_databases]]
+binding = "DB"
+database_name = "aegis-accounts"
+database_id = "02e5cac9-8d3d-4ab5-95ab-39c2c86cf211"
+migrations_dir = "migrations"
+
 # Secrets (set out-of-band, never committed):
 #   wrangler secret put ANTHROPIC_API_KEY
+#   wrangler secret put DEEPGRAM_API_KEY
+#   wrangler secret put CARTESIA_API_KEY
+#   wrangler secret put GITHUB_CLIENT_ID
+#   wrangler secret put GITHUB_CLIENT_SECRET
+#   wrangler secret put JWT_SECRET

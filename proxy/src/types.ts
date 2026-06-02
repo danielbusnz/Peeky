@@ -24,6 +24,18 @@ export interface Env {
      * Opt-in on the client; the bucket only ever sees redacted text.
      */
     ROUTELET_R2: R2Bucket;
+    /**
+     * Accounts database. Holds users (social identities), and later the synced
+     * settings blob and subscription tier. Bound via [[d1_databases]] in
+     * wrangler.toml. See migrations/.
+     */
+    DB: D1Database;
+    /** GitHub OAuth app client id. `wrangler secret put GITHUB_CLIENT_ID`. */
+    GITHUB_CLIENT_ID: string;
+    /** GitHub OAuth app client secret. `wrangler secret put GITHUB_CLIENT_SECRET`. */
+    GITHUB_CLIENT_SECRET: string;
+    /** HS256 signing secret for aegis session JWTs. `wrangler secret put JWT_SECRET`. */
+    JWT_SECRET: string;
 }
 
 /**
