@@ -21,6 +21,7 @@ pub mod painter;
 pub mod providers;
 pub mod routelet;
 pub mod screenshot;
+pub mod single_instance;
 pub mod tray;
 pub mod tuning;
 pub mod voice_session;

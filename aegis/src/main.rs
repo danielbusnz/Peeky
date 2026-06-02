@@ -13,6 +13,10 @@ fn main() {
         eprintln!("[startup] logging to {}", path.display());
     }
 
+    // Kill any aegis left over from a prior launch (e.g. a relaunch after the
+    // user granted Screen Recording) so only one instance ever runs.
+    aegis::single_instance::enforce();
+
     // Shared reqwest::Client. Internal Arc means clones reuse the same
     // connection pool: TLS sessions, HTTP/2 multiplexing, and no per-call
     // handshake cost after the first.
