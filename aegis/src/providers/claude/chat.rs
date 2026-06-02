@@ -48,6 +48,20 @@ impl Claude {
                 "cache_control": { "type": "ephemeral" }
             }));
         }
+        // Conversation handoff from the Claude Code session that launched Aegis
+        // (what the user was working on), if any. Cached so it's cheap per turn.
+        if let Some(handoff) = crate::handoff::get() {
+            system_blocks.push(serde_json::json!({
+                "type": "text",
+                "text": format!(
+                    "Context from the Claude Code session that just launched you. \
+                     This is what the user was working on; use it to answer \
+                     follow-ups like \"what were we doing?\" or to continue the task:\n{}",
+                    handoff
+                ),
+                "cache_control": { "type": "ephemeral" }
+            }));
+        }
 
         let body = serde_json::json!({
             "model": "claude-haiku-4-5",

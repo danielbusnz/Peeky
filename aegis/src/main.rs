@@ -26,6 +26,10 @@ fn main() {
     // user granted Screen Recording) so only one instance ever runs.
     aegis::single_instance::enforce();
 
+    // Consume any conversation handoff left by the Claude Code `/aegis` command
+    // so the chat path can reference what the user was working on.
+    aegis::handoff::init();
+
     // Shared reqwest::Client. Internal Arc means clones reuse the same
     // connection pool: TLS sessions, HTTP/2 multiplexing, and no per-call
     // handshake cost after the first.
