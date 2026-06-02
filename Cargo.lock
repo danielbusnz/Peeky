@@ -1101,6 +1101,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "console"
+version = "0.1.0"
+dependencies = [
+ "dirs 5.0.1",
+ "keyring",
+ "open",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-macos-permissions",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "convert_case"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3819,23 +3836,6 @@ checksum = "558bf9508a558512042d3095138b1f7b8fe90c5467d94f9f1da28b3731c5dbd1"
 dependencies = [
  "serde",
  "static_assertions",
-]
-
-[[package]]
-name = "launcher"
-version = "0.1.0"
-dependencies = [
- "dirs 5.0.1",
- "keyring",
- "open",
- "reqwest",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-macos-permissions",
- "tokio",
- "uuid",
 ]
 
 [[package]]
@@ -7890,6 +7890,7 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.61.2",

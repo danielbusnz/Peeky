@@ -1,5 +1,5 @@
 /* Shared base styles for every page in the app. Page-specific overrides
-   live in welcome/welcome.css and auth/auth.css. */
+   live in onboarding/onboarding.css and the app/ pages. */
 
 html, body {
   margin: 0;

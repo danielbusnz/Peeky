@@ -41,7 +41,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      # Limit to the aegis package; the launcher pulls webkit2gtk and isn't
+      # Limit to the aegis package; the console pulls webkit2gtk and isn't
       # worth testing here. The memex tool is also out of scope.
       - name: Type-check aegis (winit / portable path)
         run: cargo check -p aegis --no-default-features

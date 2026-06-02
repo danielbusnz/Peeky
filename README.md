@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="aegis cursor" src="launcher/src/welcome/cursor.svg" width="128">
+  <img alt="aegis cursor" src="console/ui/shared/cursor.svg" width="128">
 </p>
 
 <h1 align="center">Aegis</h1>

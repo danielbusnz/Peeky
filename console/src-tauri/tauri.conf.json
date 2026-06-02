@@ -4,15 +4,15 @@
   "version": "0.1.10",
   "identifier": "com.aegis.settings",
   "build": {
-    "frontendDist": "../src"
+    "frontendDist": "../ui"
   },
   "app": {
     "macOSPrivateApi": true,
     "withGlobalTauri": true,
     "windows": [
       {
-        "label": "main",
-        "url": "welcome/index.html",
+        "label": "onboarding",
+        "url": "onboarding/index.html",
         "title": "Aegis",
         "width": 600,
         "height": 620,
@@ -25,9 +25,9 @@
         "center": true
       },
       {
-        "label": "auth",
-        "url": "auth/signin.html",
-        "title": "Aegis Sign In",
+        "label": "settings",
+        "url": "settings-ui/signin.html",
+        "title": "Aegis",
         "width": 500,
         "height": 540,
         "resizable": false,

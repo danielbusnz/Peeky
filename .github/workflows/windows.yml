@@ -16,7 +16,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      # Scope to the aegis crate. The launcher (Tauri) needs an icon.ico
+      # Scope to the aegis crate. The console (Tauri) needs an icon.ico
       # we don't have committed yet; until it does, including it here
       # breaks the windows build.
       - name: Type-check aegis (default = winit on Windows)

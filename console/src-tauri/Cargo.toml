@@ -1,10 +1,10 @@
 [package]
-name = "launcher"
+name = "console"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"
-description = "Aegis launcher and onboarding window"
+description = "Aegis console: onboarding, sign-in, and settings GUI"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -18,8 +18,9 @@ reqwest = { version = "0.13", features = ["json"] }
 uuid = { version = "1.10", features = ["v4"] }
 # Open the system browser for the OAuth handoff.
 open = "5"
-# Poll sleep between OAuth session checks; tauri's async runtime is tokio.
-tokio = { version = "1", features = ["time"] }
+# Poll sleep between OAuth session checks + async subprocess for the aegis
+# integrations-status shell-out; tauri's async runtime is tokio.
+tokio = { version = "1", features = ["time", "process"] }
 # Native secret store per OS: Keychain (macOS), Credential Manager (Windows),
 # Secret Service (Linux). sync-secret-service is pure-Rust (zbus), no libsecret.
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
