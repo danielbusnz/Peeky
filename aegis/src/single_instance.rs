@@ -12,7 +12,9 @@ use std::process::Command;
 /// blocking startup. Unix-only (uses `ps`/`kill`); a no-op elsewhere.
 #[cfg(unix)]
 pub fn enforce() {
-    let Some(dir) = dirs::config_dir() else { return };
+    let Some(dir) = dirs::config_dir() else {
+        return;
+    };
     let pid_path = dir.join("aegis").join("aegis.pid");
     let me = std::process::id();
 
