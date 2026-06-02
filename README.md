@@ -42,6 +42,8 @@ keys instead of the hosted proxy. Walk me through it.
 
 That's it. It clones the repo, reads the docs, and walks you through the whole setup. 
 
+Once it's built, type `/aegis` in Claude Code to spawn the agent.
+
 ## Manual setup
 
 If you want to do it yourself.
