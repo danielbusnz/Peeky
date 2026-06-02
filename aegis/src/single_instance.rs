@@ -18,15 +18,15 @@ pub fn enforce() {
     let pid_path = dir.join("aegis").join("aegis.pid");
     let me = std::process::id();
 
-    if let Ok(contents) = std::fs::read_to_string(&pid_path) {
-        if let Ok(old) = contents.trim().parse::<u32>() {
-            // Only signal a live process that is actually an aegis, so a reused
-            // pid can't take down something unrelated.
-            if old != me && is_aegis(old) {
-                let _ = Command::new("kill").arg(old.to_string()).status();
-                eprintln!("[singleton] terminated previous aegis (pid {old})");
-            }
-        }
+    // Only signal a live process that is actually an aegis, so a reused pid
+    // can't take down something unrelated.
+    if let Ok(contents) = std::fs::read_to_string(&pid_path)
+        && let Ok(old) = contents.trim().parse::<u32>()
+        && old != me
+        && is_aegis(old)
+    {
+        let _ = Command::new("kill").arg(old.to_string()).status();
+        eprintln!("[singleton] terminated previous aegis (pid {old})");
     }
 
     if let Some(parent) = pid_path.parent() {
