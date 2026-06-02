@@ -35,6 +35,7 @@
 // This file is the router only. Handlers live in handlers/, the metering layer
 // in usage.ts, tier resolution in tiers.ts, shared plumbing in http.ts.
 
+import { handleGithubCallback, handleGithubSession, handleGithubStart } from "./auth/github";
 import { handleAnthropic } from "./handlers/anthropic";
 import { handleRouteletSample } from "./handlers/routelet";
 import { handleCartesiaToken, handleDeepgramToken } from "./handlers/tokens";
@@ -65,6 +66,20 @@ export default {
             }
             if (url.pathname === "/v1/routelet/sample") {
                 return handleRouteletSample(request, env);
+            }
+        }
+
+        // GitHub sign-in. start + callback are browser redirects; session is
+        // polled by the desktop client (via reqwest, so no CORS needed).
+        if (request.method === "GET") {
+            if (url.pathname === "/auth/github/start") {
+                return handleGithubStart(request, env);
+            }
+            if (url.pathname === "/auth/github/callback") {
+                return handleGithubCallback(request, env);
+            }
+            if (url.pathname === "/auth/github/session") {
+                return handleGithubSession(request, env);
             }
         }
 
