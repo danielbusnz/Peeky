@@ -42,9 +42,14 @@ The app ships without API keys. By default every provider call routes through th
 | `/v1/cartesia/token` | POST | Cartesia | Mints a short-lived TTS token; client connects directly |
 | `/v1/invite/verify` | POST | KV | Validates an invite code (exists, not expired, device slot free) |
 | `/v1/routelet/sample` | POST | R2 | Stores one redacted distillation sample (opt-in telemetry, no metering) |
+| `/auth/github/start` | GET | none | Stashes `state` in KV, 302s to GitHub OAuth |
+| `/auth/github/callback` | GET | GitHub | Exchanges the code, upserts the user in D1, parks an aegis JWT under `state` |
+| `/auth/github/session` | GET | KV | Poll target: returns `pending`, or the JWT once the callback lands (single-use) |
 | `OPTIONS *` | OPTIONS | none | CORS preflight |
 
-Deepgram and Cartesia never sit on the data path: the Worker only mints a token, then the client streams to them directly. Worker secrets: `ANTHROPIC_API_KEY`, `DEEPGRAM_API_KEY`, `CARTESIA_API_KEY`. Source and deploy notes: `proxy/src/index.ts` and `proxy/README.md`.
+Deepgram and Cartesia never sit on the data path: the Worker only mints a token, then the client streams to them directly. Worker secrets: `ANTHROPIC_API_KEY`, `DEEPGRAM_API_KEY`, `CARTESIA_API_KEY`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `JWT_SECRET`. Source and deploy notes: `proxy/src/index.ts` and `proxy/README.md`.
+
+Accounts (social sign-in for billing + settings sync) live in a D1 database (`DB` binding, `proxy/migrations/`). Sign-in is Worker-mediated GitHub OAuth so the client secret never ships in the desktop binary; the launcher opens the browser and polls `/auth/github/session`, then stores the JWT in the OS keychain. Integration tokens stay on the device and are never stored server-side.
 
 ## Key Files
 
