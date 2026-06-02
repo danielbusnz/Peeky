@@ -296,7 +296,9 @@ const SESSION_EMAIL_ACCOUNT: &str = "session_email";
 
 fn keychain_set(account: &str, value: &str) -> Result<(), String> {
     let entry = keyring::Entry::new(KEYRING_SERVICE, account).map_err(|e| e.to_string())?;
-    entry.set_password(value).map_err(|e| format!("save {account}: {e}"))
+    entry
+        .set_password(value)
+        .map_err(|e| format!("save {account}: {e}"))
 }
 
 #[derive(serde::Serialize)]
@@ -338,12 +340,21 @@ async fn github_sign_in() -> Result<Account, String> {
         }
         let body: serde_json::Value = resp.json().await.unwrap_or(serde_json::Value::Null);
         if body.get("status").and_then(|v| v.as_str()) == Some("done") {
-            let token = body.get("token").and_then(|v| v.as_str()).unwrap_or_default();
+            let token = body
+                .get("token")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
             if token.is_empty() {
                 return Err("sign-in failed: empty token".to_string());
             }
-            let email = body.get("email").and_then(|v| v.as_str()).map(str::to_string);
-            let name = body.get("name").and_then(|v| v.as_str()).map(str::to_string);
+            let email = body
+                .get("email")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+            let name = body
+                .get("name")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
             keychain_set(SESSION_JWT_ACCOUNT, token)?;
             if let Some(e) = &email {
                 keychain_set(SESSION_EMAIL_ACCOUNT, e)?;
@@ -393,7 +404,10 @@ async fn integrations_status() -> Result<serde_json::Value, String> {
         .map_err(|e| format!("failed to run aegis: {e}"))?;
 
     if !output.status.success() {
-        return Err(format!("aegis integrations-status exited with {}", output.status));
+        return Err(format!(
+            "aegis integrations-status exited with {}",
+            output.status
+        ));
     }
 
     serde_json::from_slice(&output.stdout).map_err(|e| format!("bad status json: {e}"))
