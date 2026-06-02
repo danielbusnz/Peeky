@@ -3827,12 +3827,14 @@ version = "0.1.0"
 dependencies = [
  "dirs 5.0.1",
  "keyring",
+ "open",
  "reqwest",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-macos-permissions",
+ "tokio",
  "uuid",
 ]
 
