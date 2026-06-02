@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-// Wire constants for the Cloudflare Worker proxy. The launcher does not depend
+// Wire constants for the Cloudflare Worker proxy. The console does not depend
 // on the aegis crate, so the headers are duplicated here and code_format_valid
 // mirrors CODE_RE from proxy/src/index.ts. If the wire values ever change,
 // update proxy/src/index.ts first, then this module and
@@ -34,22 +34,24 @@ use tauri::Manager;
 /// Launch the actual aegis cursor + voice agent as a child process.
 ///
 /// Path lookup order:
-/// 1. Sibling of the launcher executable. In a shipped `.app`/`.msi`
+/// 1. Sibling of the console executable. In a shipped `.app`/`.msi`
 ///    bundle, Tauri's `externalBin` config drops the aegis binary next
-///    to the launcher in `Contents/MacOS/` (macOS) or alongside the
-///    launcher exe (Windows/Linux). This is the production path.
+///    to the console in `Contents/MacOS/` (macOS) or alongside the
+///    console exe (Windows/Linux). This is the production path.
 /// 2. `../../target/{debug,release}/aegis`: workspace dev layout, used
-///    by `cargo tauri dev` where the launcher's cwd is
-///    `launcher/src-tauri/`.
+///    by `cargo tauri dev` where the console's cwd is
+///    `console/src-tauri/`.
 /// 3. `target/{debug,release}/aegis`: workspace root cwd, used if the
-///    launcher is launched directly from the project root.
-#[tauri::command]
-fn spawn_aegis() -> Result<(), String> {
+///    console is launched directly from the project root.
+/// Candidate paths to the aegis binary, best-first: the shipped-bundle sidecar
+/// (sibling of the console exe), then the workspace dev layouts. Shared by
+/// spawn_aegis and the integrations-status shell-out.
+fn aegis_candidates() -> Vec<std::path::PathBuf> {
     use std::path::PathBuf;
 
     let mut candidates: Vec<PathBuf> = Vec::new();
 
-    // 1. Sibling of the launcher exe (the shipped-bundle sidecar).
+    // 1. Sibling of the console exe (the shipped-bundle sidecar).
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             candidates.push(dir.join("aegis"));
@@ -70,18 +72,24 @@ fn spawn_aegis() -> Result<(), String> {
         .map(PathBuf::from),
     );
 
+    candidates
+}
+
+#[tauri::command]
+fn spawn_aegis() -> Result<(), String> {
+    let candidates = aegis_candidates();
     let routelet_dir = resolve_routelet_dir();
 
     for path in &candidates {
         if path.exists() {
-            eprintln!("[launcher] spawning aegis from: {}", path.display());
+            eprintln!("[console] spawning aegis from: {}", path.display());
             let mut cmd = Command::new(path);
             cmd.stdin(Stdio::null())
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit());
             apply_byok_env(&mut cmd);
             if let Some(dir) = &routelet_dir {
-                eprintln!("[launcher] AEGIS_ROUTELET_DIR={}", dir.display());
+                eprintln!("[console] AEGIS_ROUTELET_DIR={}", dir.display());
                 cmd.env("AEGIS_ROUTELET_DIR", dir);
             }
             #[cfg(unix)]
@@ -126,12 +134,12 @@ fn resolve_routelet_dir() -> Option<std::path::PathBuf> {
             candidates.push(dir.join("../Resources/models/routelet"));
             // Linux/Windows bundles: resources next to the exe.
             candidates.push(dir.join("resources/models/routelet"));
-            // Dev: target/{debug,release}/<launcher> -> workspace/models/routelet
+            // Dev: target/{debug,release}/<console> -> workspace/models/routelet
             candidates.push(dir.join("../../models/routelet"));
         }
     }
 
-    // `cargo tauri dev` cwd is launcher/src-tauri/; workspace-root cwd is "".
+    // `cargo tauri dev` cwd is console/src-tauri/; workspace-root cwd is "".
     candidates.push(PathBuf::from("../../models/routelet"));
     candidates.push(PathBuf::from("models/routelet"));
 
@@ -140,7 +148,7 @@ fn resolve_routelet_dir() -> Option<std::path::PathBuf> {
         .find(|p| p.join("embedder.onnx").exists())
 }
 
-/// OS keychain service the launcher stores the user's own provider keys
+/// OS keychain service the console stores the user's own provider keys
 /// under. Each provider is a separate account.
 const KEYRING_SERVICE: &str = "com.aegis.settings";
 
@@ -217,7 +225,7 @@ fn validate_code(code: &str) -> Result<(), &'static str> {
 const VERIFY_URL: &str = "https://aegis-proxy.danielbusnz.workers.dev/v1/invite/verify";
 
 /// Returns this install's device id, creating + persisting one if absent.
-/// Mirrors aegis/src/providers/device_id.rs so the launcher and the agent
+/// Mirrors aegis/src/providers/device_id.rs so the console and the agent
 /// agree on the same id at `~/.config/aegis/device_id`.
 fn device_id() -> Result<String, String> {
     let path = dirs::config_dir()
@@ -366,6 +374,31 @@ fn sign_out() -> Result<(), String> {
     Ok(())
 }
 
+/// Per-integration status for the settings UI. Shells out to the aegis binary's
+/// `integrations-status` subcommand (which runs the same health probes the
+/// agent uses) and returns its JSON array of `{name, state, detail}`. The child
+/// inherits this process's env, so e.g. the Gmail OAuth client id/secret are
+/// visible to the probe.
+#[tauri::command]
+async fn integrations_status() -> Result<serde_json::Value, String> {
+    let path = aegis_candidates()
+        .into_iter()
+        .find(|p| p.exists())
+        .ok_or("aegis binary not found")?;
+
+    let output = tokio::process::Command::new(path)
+        .arg("integrations-status")
+        .output()
+        .await
+        .map_err(|e| format!("failed to run aegis: {e}"))?;
+
+    if !output.status.success() {
+        return Err(format!("aegis integrations-status exited with {}", output.status));
+    }
+
+    serde_json::from_slice(&output.stdout).map_err(|e| format!("bad status json: {e}"))
+}
+
 /// Live-validate the user's own provider keys by hitting each provider's
 /// auth the same way aegis does in direct mode. Returns a per-provider map
 /// of whether the key works. An empty key is reported `false`. Used by the
@@ -495,7 +528,7 @@ fn main() {
     // If already onboarded, spawn aegis directly and exit (no UI).
     if !show_signin && is_onboarded() {
         if let Err(e) = spawn_aegis() {
-            eprintln!("[launcher] {e}");
+            eprintln!("[console] {e}");
         }
         return;
     }
@@ -520,18 +553,19 @@ fn main() {
             verify_api_keys,
             github_sign_in,
             account_status,
-            sign_out
+            sign_out,
+            integrations_status
         ])
         .setup(move |app| {
-            // With the dev flag, surface the (normally hidden) auth window and
-            // hide the welcome window, so the launcher opens straight to login.
+            // With the dev flag, surface the (normally hidden) settings window
+            // and hide the onboarding window, so the console opens straight to login.
             if show_signin {
-                if let Some(auth) = app.get_webview_window("auth") {
-                    let _ = auth.show();
-                    let _ = auth.set_focus();
+                if let Some(settings) = app.get_webview_window("settings") {
+                    let _ = settings.show();
+                    let _ = settings.set_focus();
                 }
-                if let Some(main) = app.get_webview_window("main") {
-                    let _ = main.hide();
+                if let Some(onboarding) = app.get_webview_window("onboarding") {
+                    let _ = onboarding.hide();
                 }
             }
             Ok(())
@@ -545,7 +579,7 @@ fn main() {
 
     builder
         .run(tauri::generate_context!())
-        .expect("error running launcher");
+        .expect("error running console");
 }
 
 #[cfg(test)]

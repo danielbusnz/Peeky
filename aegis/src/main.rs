@@ -6,6 +6,15 @@ use aegis::{
 use aegis::screenshot;
 
 fn main() {
+    // Lightweight subcommand: print integration status as JSON and exit. Runs
+    // before logging, the single-instance guard, and all heavy init, so it
+    // never touches a running agent or needs a mic/model. The console settings
+    // UI shells out to this.
+    if std::env::args().nth(1).as_deref() == Some("integrations-status") {
+        println!("{}", integrations::health::status_json());
+        return;
+    }
+
     // Tee stdout/stderr to a rotating log file before anything prints, so a
     // release build launched from the .app (no terminal) stays inspectable and
     // startup panics land on disk. Best effort: a no-op if it can't set up.

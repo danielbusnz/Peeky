@@ -20,7 +20,7 @@ A single voice turn flows like this:
 
 ## Architecture
 
-**Workspace** (`Cargo.toml`). Three Rust members: `aegis` (the agent binary plus its library), `demos` (hand-run dev tools and benchmarks), and `launcher/src-tauri` (the Tauri onboarding app). The `proxy/` directory is **not** a workspace member: it is a TypeScript Cloudflare Worker.
+**Workspace** (`Cargo.toml`). Three Rust members: `aegis` (the agent binary plus its library), `demos` (hand-run dev tools and benchmarks), and `console/src-tauri` (the Tauri desktop GUI: onboarding, sign-in, settings). The `proxy/` directory is **not** a workspace member: it is a TypeScript Cloudflare Worker.
 
 **The `aegis` crate** splits into `lib.rs` (every subsystem exposed as a public module) and a thin `main.rs`, so the out-of-tree `demos` crate builds against the same modules. Default feature is `hyprland`; the winit/X11 path builds with `--no-default-features`.
 
@@ -28,7 +28,7 @@ A single voice turn flows like this:
 
 **Sibling crates and services:**
 
-- **launcher** (`launcher/src-tauri/`): Tauri 2 first-run onboarding. Collects an invite code or the user's own API keys (stored in the OS keychain), requests macOS TCC permissions, then spawns the `aegis` binary as a child with the right env. If `~/.config/aegis/onboarded` exists, it spawns silently and exits.
+- **console** (`console/src-tauri/`): Tauri 2 desktop GUI. Frontend pages under `console/ui/` (`onboarding/` one-time setup, `settings/` the signed-in surface, `shared/`, `icons/`). First-run onboarding collects an invite code or the user's own API keys (stored in the OS keychain), requests macOS TCC permissions, then spawns the `aegis` binary as a child with the right env. If `~/.config/aegis/onboarded` exists, it spawns silently and exits. Also hosts GitHub sign-in and (soon) the settings/integrations surface.
 - **proxy** (`proxy/src/index.ts`): the Cloudflare Worker that holds the real API keys and enforces per-tier usage caps. Deployed with Wrangler. See routes below.
 
 ## API Proxy
@@ -49,7 +49,7 @@ The app ships without API keys. By default every provider call routes through th
 
 Deepgram and Cartesia never sit on the data path: the Worker only mints a token, then the client streams to them directly. Worker secrets: `ANTHROPIC_API_KEY`, `DEEPGRAM_API_KEY`, `CARTESIA_API_KEY`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `JWT_SECRET`. Source and deploy notes: `proxy/src/index.ts` and `proxy/README.md`.
 
-Accounts (social sign-in for billing + settings sync) live in a D1 database (`DB` binding, `proxy/migrations/`). Sign-in is Worker-mediated GitHub OAuth so the client secret never ships in the desktop binary; the launcher opens the browser and polls `/auth/github/session`, then stores the JWT in the OS keychain. Integration tokens stay on the device and are never stored server-side.
+Accounts (social sign-in for billing + settings sync) live in a D1 database (`DB` binding, `proxy/migrations/`). Sign-in is Worker-mediated GitHub OAuth so the client secret never ships in the desktop binary; the console opens the browser and polls `/auth/github/session`, then stores the JWT in the OS keychain. Integration tokens stay on the device and are never stored server-side.
 
 ## Key Files
 

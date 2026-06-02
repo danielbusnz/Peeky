@@ -1,8 +1,8 @@
 /**
- * Tests for launcher/src/welcome/welcome.js
+ * Tests for console/ui/onboarding/onboarding.js
  *
  * Strategy: rebuild the DOM from the real index.html body and re-evaluate
- * welcome.js as a plain script on each test so listeners are attached to the
+ * onboarding.js as a plain script on each test so listeners are attached to the
  * fresh DOM, matching exactly how Tauri loads the file.
  */
 
@@ -43,7 +43,7 @@ const HTML_BODY = `
 `;
 
 const WELCOME_JS = readFileSync(
-  resolve(__dirname, "../src/welcome/welcome.js"),
+  resolve(__dirname, "../ui/onboarding/onboarding.js"),
   "utf8"
 );
 

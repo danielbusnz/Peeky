@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en" class="h-full bg-[#1a1a1a]">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aegis · Settings</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="h-full text-gray-100">
+    <!-- The window is frameless (decorations:false), so this top bar doubles as
+         the drag handle. -->
+    <header
+      data-tauri-drag-region
+      class="flex items-center gap-3 border-b border-white/10 px-5 py-3"
+    >
+      <img src="../shared/cursor.svg" alt="Aegis" class="h-7 w-auto" />
+      <h1 class="text-base font-semibold tracking-tight">Settings</h1>
+      <div class="ml-auto flex items-center gap-3 text-sm">
+        <span id="account-email" class="text-gray-400"></span>
+        <button id="signout-btn" class="font-semibold text-[#ff8c00] hover:text-[#ffa500]">
+          Sign out
+        </button>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-2xl space-y-8 px-6 py-6">
+      <!-- Integrations -->
+      <section>
+        <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-400">Integrations</h2>
+        <p class="mt-1 text-sm text-gray-500">
+          Connect apps for Aegis. Credentials stay on this device.
+        </p>
+        <ul id="integrations" class="mt-4 divide-y divide-white/5 rounded-lg bg-white/5">
+          <!-- rows injected by settings.js -->
+        </ul>
+      </section>
+
+      <!-- Cursor settings (placeholder until runtime config lands) -->
+      <section>
+        <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-400">Cursor</h2>
+        <div class="mt-4 rounded-lg bg-white/5 px-4 py-6 text-center text-sm text-gray-500">
+          Cursor and voice settings are coming soon.
+        </div>
+      </section>
+    </main>
+
+    <script src="settings.js" defer></script>
+  </body>
+</html>

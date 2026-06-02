@@ -221,21 +221,21 @@ jobs:
           echo "APPLE_SIGNING_IDENTITY=$CERT_ID" >> "$GITHUB_ENV"
           echo "Signing identity: $CERT_ID"
 
-      # Tauri's build.rs in launcher/src-tauri copies the aegis binary with the
+      # Tauri's build.rs in console/src-tauri copies the aegis binary with the
       # right target-triple suffix, then `cargo tauri build` bundles it as a
       # sidecar inside Aegis.app and produces a .dmg. With a real Developer ID
       # identity Tauri signs (hardened runtime); with APPLE_SIGNING_IDENTITY="-"
       # from the detect step it ad-hoc signs. Notarization is intentionally a
       # separate step below, not done here.
-      - name: Build launcher .app + .dmg
-        working-directory: launcher
+      - name: Build console .app + .dmg
+        working-directory: console
         run: cargo tauri build
 
       - name: Locate .dmg
         run: |
           mkdir -p dist
           # Cargo workspace: the bundle lands in the workspace-root target dir
-          # (target/release/bundle), not under launcher/src-tauri. Filename
+          # (target/release/bundle), not under console/src-tauri. Filename
           # includes version + arch and varies, so glob rather than hardcode.
           DMG=$(find target/release/bundle -name '*.dmg' | head -1)
           if [ -z "$DMG" ]; then

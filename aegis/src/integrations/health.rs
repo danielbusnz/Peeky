@@ -24,9 +24,9 @@ struct Report {
     status: Status,
 }
 
-/// Run every integration's health probe in parallel and print a table.
-/// Call once at startup; takes ~the slowest probe's wall time.
-pub fn check_and_print() {
+/// Run every integration's health probe in parallel. Returns reports sorted
+/// by name; total wall time is ~the slowest probe, not their sum.
+fn run_probes() -> Vec<Report> {
     type ProbeFn = fn() -> Status;
     let probes: Vec<(&'static str, ProbeFn)> = vec![
         ("github", probe_github),
@@ -35,7 +35,6 @@ pub fn check_and_print() {
         ("youtube", probe_youtube),
     ];
 
-    let t0 = Instant::now();
     let handles: Vec<_> = probes
         .into_iter()
         .map(|(name, probe)| {
@@ -56,7 +55,14 @@ pub fn check_and_print() {
         .map(|h| h.join().expect("health probe thread panicked"))
         .collect();
     reports.sort_by_key(|r| r.name);
+    reports
+}
 
+/// Run every integration's health probe in parallel and print a table.
+/// Call once at startup; takes ~the slowest probe's wall time.
+pub fn check_and_print() {
+    let t0 = Instant::now();
+    let reports = run_probes();
     eprintln!(
         "[health] integration checks ({}ms total):",
         t0.elapsed().as_millis()
@@ -72,6 +78,25 @@ pub fn check_and_print() {
             r.name, tag, r.elapsed_ms, detail
         );
     }
+}
+
+/// Same probes as `check_and_print`, but returned as a JSON array for the
+/// console settings UI. Each entry is `{name, state, detail}` where state is
+/// "connected" (Ok), "not_connected" (Skip: not installed/configured), or
+/// "error" (Err: present but the live check failed).
+pub fn status_json() -> String {
+    let entries: Vec<serde_json::Value> = run_probes()
+        .iter()
+        .map(|r| {
+            let (state, detail) = match &r.status {
+                Status::Ok(d) => ("connected", d.as_str()),
+                Status::Err(d) => ("error", d.as_str()),
+                Status::Skip(d) => ("not_connected", d.as_str()),
+            };
+            serde_json::json!({ "name": r.name, "state": state, "detail": detail })
+        })
+        .collect();
+    serde_json::to_string(&entries).unwrap_or_else(|_| "[]".to_string())
 }
 
 // ── github ────────────────────────────────────────────────────────────────

@@ -22,7 +22,7 @@ ignore = [
     "RUSTSEC-2025-0098",
     # gtk-rs GTK3 bindings are unmaintained (the whole atk/gdk/gdk-pixbuf/gtk
     # batch). Pulled in transitively via global-hotkey (Linux) and the Tauri
-    # launcher; no maintained replacement exists.
+    # console; no maintained replacement exists.
     "RUSTSEC-2024-0411",
     "RUSTSEC-2024-0412",
     "RUSTSEC-2024-0413",

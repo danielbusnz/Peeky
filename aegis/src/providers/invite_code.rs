@@ -2,7 +2,7 @@
 //! proxy requests as `x-aegis-invite-code`, promoting them from the trial
 //! tier to the demo tier (see proxy/README.md).
 //!
-//! Written by the launcher's onboarding flow to:
+//! Written by the console's onboarding flow to:
 //!   Linux:   $XDG_CONFIG_HOME/aegis/invite_code  (or ~/.config/aegis/invite_code)
 //!   Windows: %APPDATA%\aegis\invite_code
 //!   macOS:   ~/Library/Application Support/aegis/invite_code

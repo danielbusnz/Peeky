@@ -1,7 +1,7 @@
 //! Single-instance guard.
 //!
 //! A relaunch (e.g. after the user grants Screen Recording, which only takes
-//! effect on restart) spawns a fresh aegis, but the launcher never kills the
+//! effect on restart) spawns a fresh aegis, but the console never kills the
 //! previous one, so two instances would run at once. On startup we terminate
 //! the previously-recorded instance, then record our own pid as the live one.
 
