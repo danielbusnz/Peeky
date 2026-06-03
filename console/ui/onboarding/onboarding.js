@@ -1,6 +1,6 @@
-// Onboarding screen. Enrolls the user with an invite code or their own
-// provider keys, gates "start" until one of those checks out, shows the
-// push-to-talk hotkey, then spawns the aegis agent and closes.
+// Onboarding screen. A blank invite code starts the free trial tier; an
+// entered code or the user's own provider keys are verified before they take
+// effect. Shows the push-to-talk hotkey, then spawns the aegis agent and closes.
 
 // TODO: Pop sound disabled - not working on macOS (see GitHub issue)
 // const popSound = new Audio("pop.mp3");
@@ -133,24 +133,24 @@ async function requestMacPermissions(invoke) {
     let hadMic = false;
     try {
         hadMic = await invoke("plugin:macos-permissions|check_microphone_permission");
-    } catch (_) {}
+    } catch (_) { }
 
     // Request permissions
     try {
         await invoke("plugin:macos-permissions|request_microphone_permission");
-    } catch (_) {}
+    } catch (_) { }
     try {
         const granted = await invoke("plugin:macos-permissions|check_accessibility_permission");
         if (!granted) {
             await invoke("plugin:macos-permissions|request_accessibility_permission");
         }
-    } catch (_) {}
+    } catch (_) { }
 
     // Check if mic was just granted (needs a relaunch to take effect)
     let hasMic = false;
     try {
         hasMic = await invoke("plugin:macos-permissions|check_microphone_permission");
-    } catch (_) {}
+    } catch (_) { }
 
     if (!hadMic && hasMic) {
         needsRelaunch = true;
@@ -164,10 +164,10 @@ function inBYOK() {
     return document.querySelector(".window").classList.contains("show-byok");
 }
 
-// The gate. Resolves true only when the active path has working credentials:
-// the invite code verified against the proxy, or all three provider keys
-// live-checked. Paints the relevant fields so a bad code or typo'd key shows
-// why it was blocked instead of silently advancing.
+// The gate. Resolves true for the trial path (blank invite code), or when the
+// active path has working credentials: an entered invite code verified against
+// the proxy, or all three provider keys live-checked. Paints the relevant
+// fields so a bad code or typo'd key shows why it was blocked.
 async function hasValidCredentials(invoke) {
     if (inBYOK()) {
         const keys = {
@@ -208,9 +208,9 @@ async function hasValidCredentials(invoke) {
 
     const code = codeInput.value.trim().toUpperCase();
     if (!code) {
-        setHint("Enter an access code, or use your own API keys.");
-        shake(codeInput);
-        return false;
+        // No code = trial tier. The proxy defaults a device with no invite
+        // code to the per-day trial budget, so let the user start without one.
+        return true;
     }
     codeInput.value = code;
     setInviteState("checking");
