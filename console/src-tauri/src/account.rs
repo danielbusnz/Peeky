@@ -90,12 +90,21 @@ pub async fn github_sign_in() -> Result<Account, String> {
         }
         let body: serde_json::Value = resp.json().await.unwrap_or(serde_json::Value::Null);
         if body.get("status").and_then(|v| v.as_str()) == Some("done") {
-            let token = body.get("token").and_then(|v| v.as_str()).unwrap_or_default();
+            let token = body
+                .get("token")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
             if token.is_empty() {
                 return Err("sign-in failed: empty token".to_string());
             }
-            let email = body.get("email").and_then(|v| v.as_str()).map(str::to_string);
-            let name = body.get("name").and_then(|v| v.as_str()).map(str::to_string);
+            let email = body
+                .get("email")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+            let name = body
+                .get("name")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
             // The file is what the running agent reads, so it's the required
             // write: a sign-in that doesn't land here didn't really happen.
             write_session_jwt_file(token)?;
@@ -118,8 +127,8 @@ pub async fn github_sign_in() -> Result<Account, String> {
 /// absent on setups without a Secret Service even when signed in.
 #[tauri::command]
 pub fn account_status() -> SessionStatus {
-    let signed_in =
-        session_jwt_path().is_some_and(|p| p.exists()) || keychain_get(SESSION_JWT_ACCOUNT).is_some();
+    let signed_in = session_jwt_path().is_some_and(|p| p.exists())
+        || keychain_get(SESSION_JWT_ACCOUNT).is_some();
     SessionStatus {
         signed_in,
         email: keychain_get(SESSION_EMAIL_ACCOUNT),

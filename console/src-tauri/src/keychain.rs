@@ -20,7 +20,9 @@ pub(crate) fn keychain_get(account: &str) -> Option<String> {
 /// Store `value` under `account`. Errors carry the account name for context.
 pub(crate) fn keychain_set(account: &str, value: &str) -> Result<(), String> {
     let entry = keyring::Entry::new(KEYRING_SERVICE, account).map_err(|e| e.to_string())?;
-    entry.set_password(value).map_err(|e| format!("save {account}: {e}"))
+    entry
+        .set_password(value)
+        .map_err(|e| format!("save {account}: {e}"))
 }
 
 /// Delete `account` if present. Best-effort: a missing entry or unavailable

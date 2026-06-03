@@ -21,7 +21,10 @@ pub async fn integrations_status() -> Result<serde_json::Value, String> {
         .map_err(|e| format!("failed to run aegis: {e}"))?;
 
     if !output.status.success() {
-        return Err(format!("aegis integrations-status exited with {}", output.status));
+        return Err(format!(
+            "aegis integrations-status exited with {}",
+            output.status
+        ));
     }
 
     serde_json::from_slice(&output.stdout).map_err(|e| format!("bad status json: {e}"))
