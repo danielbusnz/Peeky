@@ -388,16 +388,16 @@ describe("api_keys_status prefill on load", () => {
 // ============================================================
 
 describe("gate: invite flow", () => {
-  test("empty invite code → blocked, hint set, #invite-code shakes, no save called", async () => {
-    const { invokeFn, codeInput, gateHint, cursorBtn, win } = await setup();
+  test("empty invite code → starts trial, advances to howto, no shake, no save", async () => {
+    const { invokeFn, codeInput, cursorBtn, win } = await setup();
 
     codeInput().value = "";
     click(cursorBtn());
     await new Promise((r) => setTimeout(r, 0));
 
-    expect(win().classList.contains("show-howto")).toBe(false);
-    expect(gateHint().textContent).toBeTruthy();
-    expect(codeInput().classList.contains("shake")).toBe(true);
+    // Blank code is the free trial: advance to the hotkey card, no error shake.
+    expect(win().classList.contains("show-howto")).toBe(true);
+    expect(codeInput().classList.contains("shake")).toBe(false);
 
     const saveCalls = invokeFn.mock.calls.filter(([cmd]) => cmd === "save_invite_code");
     expect(saveCalls).toHaveLength(0);
