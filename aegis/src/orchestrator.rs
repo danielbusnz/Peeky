@@ -339,7 +339,7 @@ fn run_one_turn(
     // ────── phase 4: branch on intent ──────
     let cancel_claude = barge_in.token();
     print!("claude: ");
-    rt.block_on(async {
+    let reply = rt.block_on(async {
         match intent {
             Intent::FindAction => {
                 eprintln!("[intent] → FindAction for: {:?}", transcript);
@@ -388,6 +388,7 @@ fn run_one_turn(
                     claude,
                     &transcript,
                     memory,
+                    working,
                     release_t,
                     &cancel_claude,
                     &sentence_tx,
@@ -415,6 +416,13 @@ fn run_one_turn(
             Intent::None => unreachable!("Intent::None is handled before dispatch"),
         }
     });
+    // Record the completed turn into the live working context for every intent,
+    // not just chat, so the next turn can reference what was said or done. None
+    // means a barge-in or error turn, which we skip.
+    if let Some(reply) = &reply {
+        working.record(&transcript, reply);
+        spawn_compaction(working, claude);
+    }
     // A turn that hit the trial wall during dispatch swallows its own Claude
     // error, so speak the upgrade line through the live TTS pipeline before we
     // close it. The browser sign-in was already kicked off at the call site.
@@ -472,7 +480,7 @@ async fn run_find_action(
     early_exit: &CancellationToken,
     cancel_claude: &CancellationToken,
     sentence_tx: &tokio::sync::mpsc::UnboundedSender<String>,
-) {
+) -> Option<String> {
     let early_exit_action = early_exit.clone();
     let action_cb = move |action| {
         eprintln!("[timing] claude first response → {:?}", release_t.elapsed());
@@ -489,14 +497,22 @@ async fn run_find_action(
         _ = cancel_claude.cancelled() => {
             eprintln!("[barge-in] find_action aborted at {:?}", release_t.elapsed());
             let _ = sentence_tx;
+            None
         }
         result = claude.find_action(
             transcript, screenshot_b64,
             x as i64, y as i64, w as i64, h as i64,
             action_cb,
         ) => {
-            if let Err(e) = result {
-                eprintln!("[find_action] failed: {e}");
+            match result {
+                Ok(actions) if !actions.is_empty() => {
+                    Some("(performed an on-screen action)".to_string())
+                }
+                Ok(_) => None,
+                Err(e) => {
+                    eprintln!("[find_action] failed: {e}");
+                    None
+                }
             }
         }
     }
@@ -514,7 +530,7 @@ async fn run_chat(
     release_t: std::time::Instant,
     cancel_claude: &CancellationToken,
     sentence_tx: &tokio::sync::mpsc::UnboundedSender<String>,
-) {
+) -> Option<String> {
     let profile = memory.as_prompt_block();
     let convo = working.as_prompt_block();
     let mut helper = StreamHelper::new(sentence_tx.clone(), release_t);
@@ -522,6 +538,7 @@ async fn run_chat(
         biased;
         _ = cancel_claude.cancelled() => {
             eprintln!("[barge-in] chat aborted at {:?}", release_t.elapsed());
+            None
         }
         result = claude.chat(
             transcript, screenshot_b64, profile.as_deref(), convo.as_deref(),
@@ -533,14 +550,12 @@ async fn run_chat(
                     use std::io::Write;
                     std::io::stdout().flush().ok();
                     helper.flush_tail();
-                    // Record the completed turn into the live working context so
-                    // the next turn can reference it. Off the action path (the
-                    // reply has already streamed to TTS). Barge-in / error turns
-                    // fall through here and are intentionally not recorded.
-                    working.record(transcript, &final_text);
-                    spawn_compaction(working, claude);
+                    Some(final_text)
                 }
-                Err(e) => eprintln!("[chat] failed: {e}"),
+                Err(e) => {
+                    eprintln!("[chat] failed: {e}");
+                    None
+                }
             }
         }
     }
@@ -582,7 +597,7 @@ async fn run_integration(
     release_t: std::time::Instant,
     cancel_claude: &CancellationToken,
     sentence_tx: &tokio::sync::mpsc::UnboundedSender<String>,
-) {
+) -> Option<String> {
     let profile = memory.as_prompt_block();
     let mut helper = StreamHelper::new(sentence_tx.clone(), release_t);
     let dispatch = |name: &str, input: &serde_json::Value| {
@@ -596,6 +611,7 @@ async fn run_integration(
         biased;
         _ = cancel_claude.cancelled() => {
             eprintln!("[barge-in] integration aborted at {:?}", release_t.elapsed());
+            None
         }
         result = claude.integration(
             transcript,
@@ -610,8 +626,12 @@ async fn run_integration(
                     use std::io::Write;
                     std::io::stdout().flush().ok();
                     helper.flush_tail();
+                    Some(final_text)
                 }
-                Err(e) => eprintln!("[integration] failed: {e}"),
+                Err(e) => {
+                    eprintln!("[integration] failed: {e}");
+                    None
+                }
             }
         }
     }
@@ -624,25 +644,32 @@ async fn run_memory(
     claude: &Claude,
     transcript: &str,
     memory: &crate::providers::claude::MemoryStore,
+    working: &crate::providers::claude::WorkingContext,
     release_t: std::time::Instant,
     cancel_claude: &CancellationToken,
     sentence_tx: &tokio::sync::mpsc::UnboundedSender<String>,
-) {
+) -> Option<String> {
+    let convo = working.as_prompt_block();
     let mut helper = StreamHelper::new(sentence_tx.clone(), release_t);
     tokio::select! {
         biased;
         _ = cancel_claude.cancelled() => {
             eprintln!("[barge-in] memory aborted at {:?}", release_t.elapsed());
+            None
         }
-        result = claude.memory(transcript, memory, |delta| helper.push_delta(delta)) => {
+        result = claude.memory(transcript, memory, convo.as_deref(), |delta| helper.push_delta(delta)) => {
             match result {
                 Ok(final_text) => {
                     print!("{final_text}");
                     use std::io::Write;
                     std::io::stdout().flush().ok();
                     helper.flush_tail();
+                    Some(final_text)
                 }
-                Err(e) => eprintln!("[memory] failed: {e}"),
+                Err(e) => {
+                    eprintln!("[memory] failed: {e}");
+                    None
+                }
             }
         }
     }
@@ -665,7 +692,7 @@ async fn run_agent(
     early_exit: &CancellationToken,
     cancel_claude: &CancellationToken,
     sentence_tx: &tokio::sync::mpsc::UnboundedSender<String>,
-) {
+) -> Option<String> {
     let take_screenshot = move || -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let (cx, cy, cw, ch) = screenshot::active_workspace_geometry()
             .map(|g| (g.0, g.1, g.2 as i32, g.3 as i32))
@@ -725,6 +752,7 @@ async fn run_agent(
         biased;
         _ = cancel_claude.cancelled() => {
             eprintln!("[barge-in] agent aborted at {:?}", release_t.elapsed());
+            None
         }
         result = cursor_task => {
             match result {
@@ -733,8 +761,12 @@ async fn run_agent(
                     use std::io::Write;
                     std::io::stdout().flush().ok();
                     helper.flush_tail();
+                    Some(final_text)
                 }
-                Err(e) => eprintln!("[agent-loop] failed: {e}"),
+                Err(e) => {
+                    eprintln!("[agent-loop] failed: {e}");
+                    None
+                }
             }
         }
     }

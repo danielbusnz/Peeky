@@ -163,6 +163,7 @@ impl Claude {
         &self,
         transcript: &str,
         store: &MemoryStore,
+        conversation: Option<&str>,
         mut on_text_delta: T,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>>
     where
@@ -214,6 +215,13 @@ impl Claude {
                         },
                         "required": ["key"]
                     }
+                },
+                {
+                    "name": "recall_conversation",
+                    "description": "User is asking about the conversation you are having right \
+                        now, not a stored fact. E.g. 'what did I just ask you', 'what were we \
+                        talking about', 'what did you just say'. Takes no input.",
+                    "input_schema": { "type": "object", "properties": {} }
                 }
             ],
             "tool_choice": { "type": "any" },
@@ -338,6 +346,10 @@ impl Claude {
                 on_text_delta(&reply);
                 Ok(reply)
             }
+            Some("recall_conversation") => {
+                self.answer_from_conversation(transcript, conversation, on_text_delta)
+                    .await
+            }
             other => {
                 let reply = format!(
                     "I wasn't sure what to do with that (router returned {:?}). Try \
@@ -348,6 +360,84 @@ impl Claude {
                 Ok(reply)
             }
         }
+    }
+
+    /// Answer a question about the live conversation from the working-context
+    /// buffer, not the facts store. A second text-only Claude call: the router
+    /// already spent one deciding this was conversational recall.
+    async fn answer_from_conversation<T>(
+        &self,
+        transcript: &str,
+        conversation: Option<&str>,
+        mut on_text_delta: T,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>>
+    where
+        T: FnMut(&str),
+    {
+        let convo = conversation.unwrap_or("");
+        if convo.trim().is_empty() {
+            let reply = "We just started talking, so there isn't anything earlier to recall yet.";
+            on_text_delta(reply);
+            return Ok(reply.to_string());
+        }
+        let body = serde_json::json!({
+            "model": "claude-haiku-4-5",
+            "max_tokens": 300,
+            "stream": true,
+            "system": [{
+                "type": "text",
+                "text": format!(
+                    "You are aegis, a voice assistant. The user is asking about the conversation \
+                     you have been having with them. Answer from the transcript below in one or two \
+                     short spoken sentences, plain prose, no markdown. If the answer is not in it, \
+                     say so briefly.\n\nConversation so far:\n{}",
+                    convo
+                )
+            }],
+            "messages": [{ "role": "user", "content": transcript }]
+        });
+
+        let response = self
+            .apply_auth(self.http.post(&self.endpoint))
+            .header("anthropic-version", "2023-06-01")
+            .header("content-type", "application/json")
+            .json(&body)
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let body_text = response.text().await.unwrap_or_default();
+            crate::upgrade::on_proxy_error(status.as_u16(), &body_text);
+            return Err(format!("recall_conversation API error {}: {}", status, body_text).into());
+        }
+
+        let mut stream = response.bytes_stream();
+        let mut buffer = String::new();
+        let mut text = String::new();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk?;
+            let s = std::str::from_utf8(&chunk)?;
+            buffer.push_str(s);
+            while let Some(idx) = buffer.find("\n\n") {
+                let frame: String = buffer.drain(..idx + 2).collect();
+                for line in frame.lines() {
+                    let Some(data) = line.strip_prefix("data: ") else {
+                        continue;
+                    };
+                    let Ok(event) = serde_json::from_str::<serde_json::Value>(data) else {
+                        continue;
+                    };
+                    if event["type"].as_str() == Some("content_block_delta")
+                        && event["delta"]["type"].as_str() == Some("text_delta")
+                        && let Some(t) = event["delta"]["text"].as_str()
+                    {
+                        text.push_str(t);
+                        on_text_delta(t);
+                    }
+                }
+            }
+        }
+        Ok(text)
     }
 }
 
@@ -364,6 +454,9 @@ value.\n\
 - recall_fact(key): user is asking \"what's my X\" or \"what did I tell \
 you about X\". Provide the snake_case key you'd expect a prior store \
 to have used.\n\
+- recall_conversation(): user is asking about the conversation happening \
+right now, not a stored fact. E.g. \"what did I just ask you\", \"what \
+were we talking about\", \"what did you just say\".\n\
 \n\
 Examples:\n\
   \"remember my favorite color is blue\" → store_fact(favorite_color, blue)\n\
@@ -372,6 +465,8 @@ Examples:\n\
   \"what's my favorite color\" → recall_fact(favorite_color)\n\
   \"where do I live\" → recall_fact(home_city)\n\
   \"what am I allergic to\" → recall_fact(allergic_to)\n\
+  \"what did I just ask you\" → recall_conversation()\n\
+  \"what were we talking about\" → recall_conversation()\n\
 \n\
 Always call a tool. Never respond with plain text."
 }
