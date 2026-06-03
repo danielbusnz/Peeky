@@ -54,18 +54,44 @@ impl InputInjector for Backend {
             (text, false)
         };
 
-        // Create a keyboard event and set unicode string
-        if let Some(event) = CGEvent::new_keyboard_event(None, 0, true) {
-            // Convert text to UTF-16 for CoreGraphics
-            let utf16: Vec<u16> = text_to_type.encode_utf16().collect();
-            unsafe {
-                CGEvent::keyboard_set_unicode_string(
-                    Some(&event),
-                    utf16.len() as u64,
-                    utf16.as_ptr(),
-                );
+        // Confirm the action reached OS-level execution (not just the queue in
+        // actions.rs). The literal text is only logged under AEGIS_INPUT_DEBUG,
+        // since it can contain anything the user types, passwords included.
+        if std::env::var("AEGIS_INPUT_DEBUG").is_ok() {
+            eprintln!(
+                "[input:type] injecting {} char(s): {:?} (enter={})",
+                text_to_type.chars().count(),
+                text_to_type,
+                needs_enter
+            );
+        } else {
+            eprintln!(
+                "[input:type] injecting {} char(s) (enter={})",
+                text_to_type.chars().count(),
+                needs_enter
+            );
+        }
+
+        // Type one character at a time, posting a key-down AND a key-up for
+        // each with the unicode string set on both. A single event carrying
+        // the whole string is unreliable (some apps take only the first char),
+        // and a key-down with no matching key-up often isn't committed by the
+        // receiving app, which is why bulk typing silently dropped text.
+        for ch in text_to_type.chars() {
+            let mut buf = [0u16; 2];
+            let utf16 = ch.encode_utf16(&mut buf);
+            for key_down in [true, false] {
+                if let Some(event) = CGEvent::new_keyboard_event(None, 0, key_down) {
+                    unsafe {
+                        CGEvent::keyboard_set_unicode_string(
+                            Some(&event),
+                            utf16.len() as u64,
+                            utf16.as_ptr(),
+                        );
+                    }
+                    CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&event));
+                }
             }
-            CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&event));
         }
 
         // Press Enter if text ended with newline
@@ -79,6 +105,8 @@ impl InputInjector for Backend {
                 CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&up));
             }
         }
+
+        eprintln!("[input:type] injection complete");
     }
 
     fn exec_key(combo: &str) {

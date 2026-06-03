@@ -49,10 +49,24 @@ impl Claude {
                 "cache_control": { "type": "ephemeral" }
             }));
         }
+        // Conversation handoff from the Claude Code session that launched Aegis
+        // (what the user was working on), if any. Cached so it's cheap per turn.
+        if let Some(handoff) = crate::handoff::get() {
+            system_blocks.push(serde_json::json!({
+                "type": "text",
+                "text": format!(
+                    "Context from the Claude Code session that just launched you. \
+                     This is what the user was working on; use it to answer \
+                     follow-ups like \"what were we doing?\" or to continue the task:\n{}",
+                    handoff
+                ),
+                "cache_control": { "type": "ephemeral" }
+            }));
+        }
         // Live conversation context (recent turns + running summary). It changes
         // every turn, so it carries NO cache_control and sits after the cached
-        // blocks above: the behavioral prompt and profile stay cached while only
-        // this tail is reprocessed each turn.
+        // blocks above (behavioral prompt, profile, handoff), so only this tail
+        // is reprocessed each turn.
         if let Some(convo) = conversation.filter(|c| !c.trim().is_empty()) {
             system_blocks.push(serde_json::json!({
                 "type": "text",

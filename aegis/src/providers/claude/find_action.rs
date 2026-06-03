@@ -10,11 +10,12 @@
 //!   * Smaller tool set (no gmail/spotify/github/youtube). The classifier
 //!     already routed those to the Integration path; including them here
 //!     would just tempt Claude away from the cursor tool.
-//!   * Short, decisive system prompt: "pick one tool, no preamble".
-//!   * No agent loop. Single Claude call, action fires, we're done.
+//!   * Short, decisive system prompt: "call the tool(s) you need, no preamble".
+//!   * No agent loop: one Claude call. Each tool's action fires as it finishes
+//!     streaming, so a click-then-type sequence runs in order.
 //!
-//! `on_action` fires the moment Claude finishes streaming the tool's
-//! input JSON, so the cursor can move while we're still receiving bytes.
+//! `on_action` fires the moment Claude finishes streaming each tool's input
+//! JSON, so the cursor can move while we're still receiving bytes.
 
 use super::parsing::parse_tool_call;
 use super::{Action, Claude};
@@ -22,12 +23,12 @@ use crate::screenshot::pick_declared_resolution;
 use futures_util::StreamExt;
 
 impl Claude {
-    /// Pick a single cursor action for a visual query.
+    /// Pick and fire the cursor action(s) for a visual query.
     ///
-    /// Returns `Some(Action)` if Claude picked a tool we know how to
-    /// dispatch, `None` if Claude emitted a tool we couldn't parse
-    /// (shouldn't happen with the tool list we send). Network or API
-    /// errors return Err.
+    /// Claude may emit more than one tool (e.g. click an input, then type into
+    /// it); each fires via `on_action` as it streams. Returns the list of
+    /// dispatched actions (empty if none parsed). Network or API errors
+    /// return Err.
     #[allow(clippy::too_many_arguments)]
     pub async fn find_action<F>(
         &self,
@@ -38,16 +39,16 @@ impl Claude {
         window_width: i64,
         window_height: i64,
         mut on_action: F,
-    ) -> Result<Option<Action>, Box<dyn std::error::Error + Send + Sync>>
+    ) -> Result<Vec<Action>, Box<dyn std::error::Error + Send + Sync>>
     where
         F: FnMut(Action),
     {
         let (declared_w, declared_h) = pick_declared_resolution(window_width, window_height);
 
         let user_prompt = format!(
-            "The user said: \"{}\". Pick the single best tool for this request \
-             and call it. Skip directly to the tool call. No preamble, no \
-             description.",
+            "The user said: \"{}\". Call the tool(s) needed to do it — to put \
+             text in a field, click the field first, then type. Skip directly \
+             to the tool call(s). No preamble, no description.",
             prompt
         );
 
@@ -103,15 +104,14 @@ impl Claude {
             return Err(format!("find_action API error {}: {}", status, body_text).into());
         }
 
-        // Stream parse: extract the single tool_use that Claude was forced
-        // to emit. We only care about the first one. The prompt says
-        // "single best tool," so multiple calls in one response would be a
-        // model misbehavior we'd want to see in logs but not act on twice.
+        // Stream parse: dispatch every tool_use Claude emits, in order. A
+        // typing request is a click-then-type pair, so we fire each action as
+        // its block closes rather than keeping only the first.
         let mut stream = response.bytes_stream();
         let mut buffer = String::new();
         let mut current_tool_name: Option<String> = None;
         let mut tool_json_buffer = String::new();
-        let mut emitted: Option<Action> = None;
+        let mut emitted: Vec<Action> = Vec::new();
         let mut first_byte_logged = false;
         let t_stream_start = std::time::Instant::now();
 
@@ -154,9 +154,7 @@ impl Claude {
                             }
                         }
                         Some("content_block_stop") => {
-                            if emitted.is_none()
-                                && let Some(name) = current_tool_name.take()
-                            {
+                            if let Some(name) = current_tool_name.take() {
                                 let input_json = if tool_json_buffer.is_empty() {
                                     "{}".to_string()
                                 } else {
@@ -176,7 +174,7 @@ impl Claude {
                                         window_height,
                                     ) {
                                         on_action(action.clone());
-                                        emitted = Some(action);
+                                        emitted.push(action);
                                     } else {
                                         // Log why the action failed
                                         if name == "computer"
