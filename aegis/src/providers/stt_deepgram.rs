@@ -140,14 +140,18 @@ impl SttDeepgram {
         token_url: &str,
         device_id: &str,
     ) -> Result<(String, u64), Box<dyn std::error::Error + Send + Sync>> {
-        // Re-read the invite code on every mint so the onboarding window can
-        // change it without an aegis restart.
+        // Re-read the invite code and session token on every mint so an
+        // onboarding change or a fresh sign-in takes effect without restarting
+        // aegis. They pick the proxy tier (code = demo, token = account).
         let mut req = self
             .http
             .post(token_url)
             .header(super::proxy_contract::DEVICE_ID_HEADER, device_id);
         if let Some(code) = super::invite_code::load() {
             req = req.header(super::proxy_contract::INVITE_CODE_HEADER, code);
+        }
+        if let Some(jwt) = super::session_jwt::load() {
+            req = req.header(reqwest::header::AUTHORIZATION, format!("Bearer {jwt}"));
         }
         let resp = req.send().await?;
         if !resp.status().is_success() {

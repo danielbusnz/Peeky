@@ -11,6 +11,7 @@ mod integration;
 mod memory;
 mod parsing;
 mod prompt;
+mod working_context;
 
 // Re-exports for the aegis binary's use. Examples that pull in providers/
 // via #[path] but don't touch Intent or MemoryStore see these as unused;
@@ -22,6 +23,8 @@ pub use classifier::Intent;
 pub use history::HistoryStore;
 #[allow(unused_imports)]
 pub use memory::MemoryStore;
+#[allow(unused_imports)]
+pub use working_context::WorkingContext;
 
 /// A side-effecting action Claude requested via one of the tools in
 /// `run_agent_loop`. The streaming parser surfaces these in real time so the
@@ -73,10 +76,10 @@ pub struct Claude {
     /// when routed through the proxy, or ("x-api-key", anthropic_key) in
     /// direct mode.
     pub auth: (String, String),
-    /// True when this Claude is routed through the proxy. Controls whether
-    /// we look for an invite code on each request. Direct mode skips the
-    /// lookup since Anthropic ignores unknown headers and there's no point
-    /// in the file read.
+    /// True when this Claude is routed through the proxy. Controls whether we
+    /// look for an invite code and a session token on each request. Direct mode
+    /// skips the lookups since Anthropic ignores unknown headers and there's no
+    /// point in the file reads.
     pub via_proxy: bool,
 }
 
@@ -86,20 +89,25 @@ const PROXY_URL: &str = "https://aegis-proxy.danielbusnz.workers.dev/v1/anthropi
 const DIRECT_URL: &str = "https://api.anthropic.com/v1/messages";
 
 impl Claude {
-    /// Adds the auth header (always) and the invite code header (when set
-    /// and in proxy mode). Reads the invite code from disk on every call so
-    /// onboarding-time changes take effect on the very next request without
-    /// restarting aegis. File read is ~100us cold and free hot; cheap given
-    /// it's hit a handful of times per voice turn.
+    /// Adds the auth header (always), plus the invite code and session-token
+    /// headers when set and in proxy mode. Both are re-read from disk on every
+    /// call so an onboarding code change or a fresh sign-in takes effect on the
+    /// very next request without restarting aegis. The proxy resolves the tier
+    /// from these: an invite code wins (demo), else a valid token (account),
+    /// else trial. File reads are ~100us cold and free hot; cheap given it's
+    /// hit a handful of times per voice turn.
     pub fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        let req = req.header(&self.auth.0, &self.auth.1);
+        let mut req = req.header(&self.auth.0, &self.auth.1);
         if !self.via_proxy {
             return req;
         }
-        match super::invite_code::load() {
-            Some(code) => req.header(crate::providers::proxy_contract::INVITE_CODE_HEADER, code),
-            None => req,
+        if let Some(code) = super::invite_code::load() {
+            req = req.header(crate::providers::proxy_contract::INVITE_CODE_HEADER, code);
         }
+        if let Some(jwt) = super::session_jwt::load() {
+            req = req.header(reqwest::header::AUTHORIZATION, format!("Bearer {jwt}"));
+        }
+        req
     }
 
     /// Open the HTTPS connection to our endpoint so the first real voice

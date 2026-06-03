@@ -6,7 +6,14 @@ import {
 import { cors, jsonResponse, passthroughHeaders, requireDeviceId } from "../http";
 import { resolveTier } from "../tiers";
 import type { Env } from "../types";
-import { anthropicExhausted, dailyUsageKey, readDailyUsage, recordUsage, utcDateKey } from "../usage";
+import {
+    anthropicExhausted,
+    dailyUsageKey,
+    exhaustionBody,
+    readDailyUsage,
+    recordUsage,
+    utcDateKey,
+} from "../usage";
 
 /**
  * Full HTTP proxy for Anthropic's Messages API. Checks the device's daily token
@@ -23,17 +30,7 @@ export async function handleAnthropic(request: Request, env: Env, ctx: Execution
     const key = dailyUsageKey(tier, deviceId, utcDateKey(new Date()));
     const usage = await readDailyUsage(env.USAGE_KV, key);
     if (anthropicExhausted(usage, tier.budget)) {
-        return cors(
-            jsonResponse(429, {
-                error: tier.kind === "trial" ? "trial_exhausted" : "code_exhausted",
-                message:
-                    tier.kind === "trial"
-                        ? "Free trial spent for today. Use your own API keys (BYOK) or contact us for an invite code."
-                        : "This invite code's daily budget is spent. It resets at 00:00 UTC.",
-                provider: "anthropic",
-                tier: tier.kind,
-            }),
-        );
+        return cors(jsonResponse(429, exhaustionBody(tier, "anthropic")));
     }
 
     // Charge a flat per-turn estimate off the hot path. The write runs after we

@@ -76,3 +76,19 @@ pub const AGENT_SETTLE_MS: u64 = 600;
 /// ↑ more visual context across steps. bigger requests.
 /// ↓ tighter request bodies. less long-range visual memory.
 pub const AGENT_KEEP_RECENT_SCREENSHOTS: usize = 3;
+
+// ────── Working context (Tier 0) ──────
+
+/// Recent voice turns kept verbatim in the live working context and replayed
+/// into chat/agent requests.
+/// ↑ better in-conversation recall. more tokens + latency per turn.
+/// ↓ leaner requests. shorter conversational memory.
+pub const WORKING_CONTEXT_RECENT_TURNS: usize = 6;
+
+/// Turn count that triggers compaction: once `recent` exceeds this, the turns
+/// older than RECENT_TURNS are folded into the running summary off the hot
+/// path. Kept above RECENT_TURNS for hysteresis, so it does not compact every
+/// turn.
+/// ↑ compact less often. larger peak request before it kicks in.
+/// ↓ compact sooner. more frequent summarizer calls.
+pub const WORKING_CONTEXT_COMPACT_AT: usize = 10;

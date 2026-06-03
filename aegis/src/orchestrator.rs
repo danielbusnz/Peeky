@@ -76,6 +76,7 @@ fn run_one_turn(
     let claude = &session.claude;
     let cartesia = &session.cartesia;
     let memory = &session.memory;
+    let working = &session.working;
     let routelet = &session.routelet;
 
     // ────── phase 1: record + transcribe ──────
@@ -255,12 +256,11 @@ fn run_one_turn(
     // error. This also guarantees the dispatch below only sees real intents.
     let intent = match intent_result {
         Some(Intent::None) | None => {
-            return speak_error(
-                rt,
-                cartesia,
-                audio_out,
-                "I'm not sure how to handle that. Try rephrasing.",
-            );
+            // If the classifier call hit the trial wall, say so (and let the
+            // sign-in flow it kicked off run) instead of the generic miss.
+            let line = crate::upgrade::take_announcement()
+                .unwrap_or("I'm not sure how to handle that. Try rephrasing.");
+            return speak_error(rt, cartesia, audio_out, line);
         }
         Some(i) => i,
     };
@@ -365,6 +365,7 @@ fn run_one_turn(
                     &transcript,
                     &resized_b64,
                     memory,
+                    working,
                     release_t,
                     &cancel_claude,
                     &sentence_tx,
@@ -414,6 +415,12 @@ fn run_one_turn(
             Intent::None => unreachable!("Intent::None is handled before dispatch"),
         }
     });
+    // A turn that hit the trial wall during dispatch swallows its own Claude
+    // error, so speak the upgrade line through the live TTS pipeline before we
+    // close it. The browser sign-in was already kicked off at the call site.
+    if let Some(line) = crate::upgrade::take_announcement() {
+        let _ = sentence_tx.send(line.to_string());
+    }
     println!();
     drop(sentence_tx);
 
@@ -502,11 +509,13 @@ async fn run_chat(
     transcript: &str,
     screenshot_b64: &str,
     memory: &crate::providers::claude::MemoryStore,
+    working: &crate::providers::claude::WorkingContext,
     release_t: std::time::Instant,
     cancel_claude: &CancellationToken,
     sentence_tx: &tokio::sync::mpsc::UnboundedSender<String>,
 ) {
     let profile = memory.as_prompt_block();
+    let convo = working.as_prompt_block();
     let mut helper = StreamHelper::new(sentence_tx.clone(), release_t);
     tokio::select! {
         biased;
@@ -514,7 +523,7 @@ async fn run_chat(
             eprintln!("[barge-in] chat aborted at {:?}", release_t.elapsed());
         }
         result = claude.chat(
-            transcript, screenshot_b64, profile.as_deref(),
+            transcript, screenshot_b64, profile.as_deref(), convo.as_deref(),
             |delta| helper.push_delta(delta),
         ) => {
             match result {
@@ -523,11 +532,43 @@ async fn run_chat(
                     use std::io::Write;
                     std::io::stdout().flush().ok();
                     helper.flush_tail();
+                    // Record the completed turn into the live working context so
+                    // the next turn can reference it. Off the action path (the
+                    // reply has already streamed to TTS). Barge-in / error turns
+                    // fall through here and are intentionally not recorded.
+                    working.record(transcript, &final_text);
+                    spawn_compaction(working, claude);
                 }
                 Err(e) => eprintln!("[chat] failed: {e}"),
             }
         }
     }
+}
+
+/// Kick off Tier 0 compaction off the hot path: if the working context has
+/// grown past the threshold and no compaction is already running, spawn a task
+/// that summarizes the overflow turns into the running summary. Returns
+/// immediately so the turn loop is free for the next utterance.
+fn spawn_compaction(working: &crate::providers::claude::WorkingContext, claude: &Claude) {
+    if !working.needs_compaction() {
+        return;
+    }
+    let Some(guard) = working.try_begin_compaction() else {
+        return; // one already in flight
+    };
+    let working = working.clone();
+    let claude = claude.clone();
+    tokio::spawn(async move {
+        let _guard = guard; // released when this task ends
+        let Some((overflow, drained)) = working.overflow() else {
+            return;
+        };
+        let prior = working.summary();
+        match claude.summarize_conversation(&prior, &overflow).await {
+            Ok(summary) => working.fold(summary, drained),
+            Err(e) => eprintln!("[working-context] compaction failed: {e}"),
+        }
+    });
 }
 
 /// Dispatch the Integration path. Two Claude calls (pick tool, then

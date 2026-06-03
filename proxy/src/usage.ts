@@ -10,11 +10,20 @@ export function utcDateKey(d: Date): string {
     return d.toISOString().slice(0, 10);
 }
 
-/** The usage key for this (tier, device) on a given UTC day. */
+/**
+ * The usage key for this tier on a given UTC day. Trial and demo meter per
+ * device; account meters per user id, so usage follows a signed-in user across
+ * devices and survives a reinstall.
+ */
 export function dailyUsageKey(tier: Tier, deviceId: string, date: string): string {
-    return tier.kind === "trial"
-        ? `usage:trial:${deviceId}:${date}`
-        : `usage:demo:${tier.code}:${deviceId}:${date}`;
+    switch (tier.kind) {
+        case "trial":
+            return `usage:trial:${deviceId}:${date}`;
+        case "account":
+            return `usage:account:${tier.userId}:${date}`;
+        case "demo":
+            return `usage:demo:${tier.code}:${deviceId}:${date}`;
+    }
 }
 
 function numOr0(v: unknown): number {
@@ -57,6 +66,27 @@ export function deepgramExhausted(usage: DailyUsage, budget: DailyBudget): boole
 /** Whether the device has any Cartesia mint budget left today. */
 export function cartesiaExhausted(usage: DailyUsage, budget: DailyBudget): boolean {
     return usage.cartesia >= budget.cartesia;
+}
+
+/**
+ * The 429 JSON body for a tier that has spent its daily budget. The `error`
+ * code is what the client switches on (e.g. aegis pops the sign-in window on
+ * `trial_exhausted`); the message is human-facing fallback copy.
+ */
+export function exhaustionBody(tier: Tier, provider: string): Record<string, unknown> {
+    const error =
+        tier.kind === "trial"
+            ? "trial_exhausted"
+            : tier.kind === "account"
+                ? "account_exhausted"
+                : "code_exhausted";
+    const message =
+        tier.kind === "trial"
+            ? "Free trial spent for today. Sign in to keep going, or use your own API keys."
+            : tier.kind === "account"
+                ? "Daily limit reached. It resets at 00:00 UTC."
+                : "This invite code's daily budget is spent. It resets at 00:00 UTC.";
+    return { error, message, provider, tier: tier.kind };
 }
 
 /**

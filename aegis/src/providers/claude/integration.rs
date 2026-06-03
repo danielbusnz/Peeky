@@ -72,6 +72,7 @@ impl Claude {
         if !pick_response.status().is_success() {
             let status = pick_response.status();
             let body_text = pick_response.text().await.unwrap_or_default();
+            crate::upgrade::on_proxy_error(status.as_u16(), &body_text);
             return Err(format!("integration pick API error {}: {}", status, body_text).into());
         }
 
@@ -201,6 +202,7 @@ impl Claude {
         if !summary_response.status().is_success() {
             let status = summary_response.status();
             let body_text = summary_response.text().await.unwrap_or_default();
+            crate::upgrade::on_proxy_error(status.as_u16(), &body_text);
             return Err(format!("integration summary API error {}: {}", status, body_text).into());
         }
 

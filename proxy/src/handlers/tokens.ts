@@ -18,24 +18,15 @@ import {
     cartesiaExhausted,
     dailyUsageKey,
     deepgramExhausted,
+    exhaustionBody,
     readDailyUsage,
     recordUsage,
     utcDateKey,
 } from "../usage";
 
-/** 429 body for a device that has spent its lifetime calls. */
+/** 429 body for a tier that has spent its daily budget. */
 function exhausted(tier: Tier, provider: string): Response {
-    return cors(
-        jsonResponse(429, {
-            error: tier.kind === "trial" ? "trial_exhausted" : "code_exhausted",
-            message:
-                tier.kind === "trial"
-                    ? "Free trial spent. Use your own API keys (BYOK) or contact us for an invite code."
-                    : "This invite code's uses are spent.",
-            provider,
-            tier: tier.kind,
-        }),
-    );
+    return cors(jsonResponse(429, exhaustionBody(tier, provider)));
 }
 
 /**

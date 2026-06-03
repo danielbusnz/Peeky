@@ -5,7 +5,7 @@
 //! because `cpal::Stream` is `!Send`.
 
 use crate::audio;
-use crate::providers::claude::{Claude, MemoryStore};
+use crate::providers::claude::{Claude, MemoryStore, WorkingContext};
 use crate::providers::stt_deepgram::SttDeepgram;
 use crate::providers::tts_cartesia::TtsCartesia;
 use crate::routelet::Routelet;
@@ -18,6 +18,9 @@ pub struct VoiceSession {
     pub claude: Claude,
     pub cartesia: TtsCartesia,
     pub memory: MemoryStore,
+    /// Live conversation context for this session (Tier 0): recent turns plus
+    /// a running summary, injected into chat/agent. Fresh each launch.
+    pub working: WorkingContext,
     pub routelet: Routelet,
 }
 
@@ -63,6 +66,10 @@ impl VoiceSession {
         // ~/.config/aegis/memory.jsonl.
         let memory = MemoryStore::open_default().expect("could not open aegis memory store");
 
+        // Fresh live conversation context each launch; the durable record
+        // lives in the Tier 2 history log, not here.
+        let working = WorkingContext::new();
+
         VoiceSession {
             rt,
             mic: running_mic,
@@ -71,6 +78,7 @@ impl VoiceSession {
             claude,
             cartesia,
             memory,
+            working,
             routelet,
         }
     }

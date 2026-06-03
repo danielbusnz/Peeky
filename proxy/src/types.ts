@@ -77,6 +77,7 @@ export type InviteCode = {
 
 export type Tier =
     | { kind: "trial"; budget: DailyBudget }
+    | { kind: "account"; userId: string; budget: DailyBudget }
     | { kind: "demo"; code: string; budget: DailyBudget };
 
 /** Successful read-only resolution of an invite code against KV. */
