@@ -101,15 +101,15 @@ fn console_candidates() -> Vec<PathBuf> {
     if let Ok(p) = std::env::var("AEGIS_CONSOLE_BIN") {
         candidates.push(PathBuf::from(p));
     }
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            candidates.push(dir.join("console"));
-            candidates.push(dir.join("Aegis"));
-            #[cfg(windows)]
-            {
-                candidates.push(dir.join("console.exe"));
-                candidates.push(dir.join("Aegis.exe"));
-            }
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(dir) = exe.parent()
+    {
+        candidates.push(dir.join("console"));
+        candidates.push(dir.join("Aegis"));
+        #[cfg(windows)]
+        {
+            candidates.push(dir.join("console.exe"));
+            candidates.push(dir.join("Aegis.exe"));
         }
     }
     for p in [
