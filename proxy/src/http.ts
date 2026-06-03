@@ -16,7 +16,7 @@ export function cors(res: Response): Response {
     headers.set("access-control-allow-methods", "POST, OPTIONS");
     headers.set(
         "access-control-allow-headers",
-        "content-type, anthropic-version, anthropic-beta, x-aegis-device-id, x-aegis-invite-code",
+        "content-type, authorization, anthropic-version, anthropic-beta, x-aegis-device-id, x-aegis-invite-code",
     );
     return new Response(res.body, { status: res.status, headers });
 }

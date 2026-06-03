@@ -2,7 +2,8 @@
 // as trial (no code) or demo (valid code), and serves the read-only verify
 // endpoint the onboarding UI calls.
 
-import { CODE_RE, TRIAL_DAILY_BUDGET } from "./constants";
+import { verifyJwt } from "./auth/jwt";
+import { ACCOUNT_DAILY_BUDGET, CODE_RE, TRIAL_DAILY_BUDGET } from "./constants";
 import { cors, jsonResponse, requireDeviceId } from "./http";
 import type { Env, InviteCode, InviteLookup, Tier } from "./types";
 
@@ -62,6 +63,17 @@ export async function resolveTier(
 ): Promise<Tier | Response> {
     const code = request.headers.get("x-aegis-invite-code");
     if (!code) {
+        // No invite code: a valid session JWT upgrades to the account tier;
+        // anyone else gets the anonymous trial. An invalid or expired token
+        // falls through to trial rather than 401, so a stale session still
+        // runs on the free tier instead of being blocked mid-turn.
+        const auth = request.headers.get("authorization");
+        if (auth?.startsWith("Bearer ")) {
+            const claims = await verifyJwt(auth.slice("Bearer ".length), env.JWT_SECRET);
+            if (claims) {
+                return { kind: "account", userId: claims.sub, budget: ACCOUNT_DAILY_BUDGET };
+            }
+        }
         return { kind: "trial", budget: TRIAL_DAILY_BUDGET };
     }
 

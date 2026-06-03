@@ -19,12 +19,22 @@ export const CARTESIA_API_VERSION = "2026-03-01";
 export const DAILY_USAGE_TTL_SECONDS = 2 * 24 * 60 * 60;
 
 // Default per-day budget for trial devices (no invite code). Mirrors the
-// invite-record fields so trial and demo run on one metering model.
+// invite-record fields so trial and demo run on one metering model. Sized for
+// ~20 voice turns/day against the flat per-turn estimates below.
 export const TRIAL_DAILY_BUDGET = {
-    input_tokens: 60_000,
-    output_tokens: 6_000,
-    deepgram: 10,
-    cartesia: 10,
+    input_tokens: 120_000,
+    output_tokens: 12_000,
+    deepgram: 20,
+    cartesia: 20,
+};
+
+// Per-day budget for signed-in accounts (valid session JWT, no invite code).
+// The upgrade tier the trial wall points users toward. Sized for ~50 turns/day.
+export const ACCOUNT_DAILY_BUDGET = {
+    input_tokens: 300_000,
+    output_tokens: 30_000,
+    deepgram: 50,
+    cartesia: 50,
 };
 
 // Per-turn token estimates charged against the Anthropic budget. We charge a

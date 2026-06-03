@@ -30,6 +30,23 @@ FAIL=0
 
 uuid() { cat /proc/sys/kernel/random/uuid; }
 
+# Mint an HS256 session JWT the way auth/jwt.ts does, signed with the local dev
+# secret from .dev.vars so the account-tier path verifies it. $1 = user id.
+JWT_SECRET="$(grep -E '^JWT_SECRET=' .dev.vars | cut -d= -f2-)"
+mint_jwt() {
+    local sub="$1"
+    node -e '
+        const c = require("crypto");
+        const b = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+        const [secret, sub] = process.argv.slice(1);
+        const now = Math.floor(Date.now() / 1000);
+        const h = b({ alg: "HS256", typ: "JWT" });
+        const p = b({ sub, email: null, tier: "free", iat: now, exp: now + 3600 });
+        const sig = c.createHmac("sha256", secret).update(h + "." + p).digest("base64url");
+        console.log(`${h}.${p}.${sig}`);
+    ' "$JWT_SECRET" "$sub"
+}
+
 # POST one metered call, echo the HTTP status. $1 = device id, $2 = invite code
 # (optional).
 hit() {
@@ -41,6 +58,12 @@ hit() {
         curl -s -o /dev/null -w "%{http_code}" -X POST "$ENDPOINT" \
             -H "x-aegis-device-id: ${device}"
     fi
+}
+
+# POST one metered call as a signed-in account. $1 = device id, $2 = bearer JWT.
+hit_jwt() {
+    curl -s -o /dev/null -w "%{http_code}" -X POST "$ENDPOINT" \
+        -H "x-aegis-device-id: ${1}" -H "authorization: Bearer ${2}"
 }
 
 check() {
@@ -57,14 +80,19 @@ check() {
 # Drive `cap` calls (expect all admitted, since the budget covers them) then
 # keep going until a 429 appears within a little slack, and confirm its body
 # carries the expected error code. Slack absorbs the deferred-write lag. $1
-# label, $2 cap, $3 expected error, $4 device, $5 invite (optional).
+# label, $2 cap, $3 expected error, $4 device, $5 invite (optional), $6 bearer
+# JWT (optional; mutually exclusive with an invite code).
 assert_cap() {
-    local label="$1" cap="$2" want_err="$3" device="$4" code="${5:-}"
+    local label="$1" cap="$2" want_err="$3" device="$4" code="${5:-}" bearer="${6:-}"
     local slack=3
 
     local i status admitted=1
     for ((i = 1; i <= cap; i++)); do
-        status="$(hit "$device" "$code")"
+        if [[ -n "$bearer" ]]; then
+            status="$(hit_jwt "$device" "$bearer")"
+        else
+            status="$(hit "$device" "$code")"
+        fi
         [[ "$status" != "429" ]] || { admitted=0; break; }
     done
     check "${label}: ${cap} calls admitted" "$admitted" "1"
@@ -72,7 +100,9 @@ assert_cap() {
     # Within `slack` more calls, one must 429. Capture that 429's body.
     local body="" capped=0
     for ((i = 1; i <= slack; i++)); do
-        if [[ -n "$code" ]]; then
+        if [[ -n "$bearer" ]]; then
+            body="$(curl -s -X POST "$ENDPOINT" -H "x-aegis-device-id: ${device}" -H "authorization: Bearer ${bearer}")"
+        elif [[ -n "$code" ]]; then
             body="$(curl -s -X POST "$ENDPOINT" -H "x-aegis-device-id: ${device}" -H "x-aegis-invite-code: ${code}")"
         else
             body="$(curl -s -X POST "$ENDPOINT" -H "x-aegis-device-id: ${device}")"
@@ -108,9 +138,10 @@ for _ in $(seq 1 60); do
 done
 grep -q "Ready on" "$LOG" || { echo "wrangler dev never came up:"; tail -20 "$LOG"; exit 1; }
 
-# Cartesia mint budgets: trial from TRIAL_DAILY_BUDGET.cartesia, recruiter from
+# Cartesia mint budgets: trial and account from constants.ts, recruiter from
 # the mint script's DAILY_CARTESIA default.
 TRIAL_CAP="$(grep -A6 'TRIAL_DAILY_BUDGET' src/constants.ts | grep -oE 'cartesia: *[0-9_]+' | grep -oE '[0-9]+' | head -1)"
+ACCOUNT_CAP="$(grep -A6 'ACCOUNT_DAILY_BUDGET' src/constants.ts | grep -oE 'cartesia: *[0-9_]+' | grep -oE '[0-9]+' | head -1)"
 RECRUITER_CAP="$(grep -oE 'DAILY_CARTESIA=[0-9]+' scripts/mint-code.sh | grep -oE '[0-9]+')"
 
 echo
@@ -136,6 +167,26 @@ if [[ "$DEV_B_STATUS" != "429" ]]; then
     PASS=$((PASS + 1))
 else
     echo "  FAIL  recruiter: device B capped (429), counter not per-device"
+    FAIL=$((FAIL + 1))
+fi
+
+echo
+echo "── account tier (session JWT, daily cartesia cap=${ACCOUNT_CAP}) ──"
+ACCT_USER="$(uuid)"
+ACCT_JWT="$(mint_jwt "$ACCT_USER")"
+[[ -n "$ACCT_JWT" ]] || { echo "jwt mint failed"; exit 1; }
+assert_cap "account" "$ACCOUNT_CAP" "account_exhausted" "$(uuid)" "" "$ACCT_JWT"
+
+echo
+echo "── per-user counter (same JWT, new device) ──"
+# A second device using the same account must stay capped, proving the counter
+# is keyed per user id, not per device: usage follows the user across machines.
+DEV_C_STATUS="$(hit_jwt "$(uuid)" "$ACCT_JWT")"
+if [[ "$DEV_C_STATUS" == "429" ]]; then
+    echo "  PASS  account: new device still capped (per-user counter)"
+    PASS=$((PASS + 1))
+else
+    echo "  FAIL  account: new device admitted (${DEV_C_STATUS}), counter not per-user"
     FAIL=$((FAIL + 1))
 fi
 
