@@ -24,4 +24,5 @@ pub mod screenshot;
 pub mod single_instance;
 pub mod tray;
 pub mod tuning;
+pub mod upgrade;
 pub mod voice_session;

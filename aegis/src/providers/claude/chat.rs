@@ -27,6 +27,7 @@ impl Claude {
         transcript: &str,
         screenshot_b64: &str,
         user_profile: Option<&str>,
+        conversation: Option<&str>,
         mut on_text_delta: T,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>>
     where
@@ -46,6 +47,16 @@ impl Claude {
                 "type": "text",
                 "text": format!("User profile (facts the user told you to remember):\n{}", profile),
                 "cache_control": { "type": "ephemeral" }
+            }));
+        }
+        // Live conversation context (recent turns + running summary). It changes
+        // every turn, so it carries NO cache_control and sits after the cached
+        // blocks above: the behavioral prompt and profile stay cached while only
+        // this tail is reprocessed each turn.
+        if let Some(convo) = conversation.filter(|c| !c.trim().is_empty()) {
+            system_blocks.push(serde_json::json!({
+                "type": "text",
+                "text": format!("Conversation so far:\n{}", convo)
             }));
         }
 
@@ -83,6 +94,7 @@ impl Claude {
         if !response.status().is_success() {
             let status = response.status();
             let body_text = response.text().await.unwrap_or_default();
+            crate::upgrade::on_proxy_error(status.as_u16(), &body_text);
             return Err(format!("chat API error {}: {}", status, body_text).into());
         }
 

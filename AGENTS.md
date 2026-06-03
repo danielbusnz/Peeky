@@ -33,7 +33,7 @@ A single voice turn flows like this:
 
 ## API Proxy
 
-The app ships without API keys. By default every provider call routes through the Worker, which holds the secrets and meters usage (free trial turns, or per-day caps under an invite code). Each provider can be pointed straight at its upstream with an `AEGIS_*_DIRECT=1` env var plus the matching key (see "Use your own API keys" in the README).
+The app ships without API keys. By default every provider call routes through the Worker, which holds the secrets and meters usage against a per-UTC-day budget. The tier is resolved per request: an invite code (`x-aegis-invite-code`) is the demo tier, else a valid session token (`Authorization: Bearer`) is the account tier for signed-in users, else the anonymous trial tier. When the trial budget is spent the agent speaks an upgrade prompt and opens GitHub sign-in in the browser (`aegis/src/upgrade.rs`); a successful login writes the session token the agent reads on its next turn, no restart. Each provider can be pointed straight at its upstream with an `AEGIS_*_DIRECT=1` env var plus the matching key (see "Use your own API keys" in the README).
 
 | Route | Method | Upstream | Purpose |
 | --- | --- | --- | --- |
@@ -83,7 +83,7 @@ Providers and I/O:
 | --- | --- |
 | `aegis/src/providers/stt_deepgram.rs` | Deepgram websocket STT (proxy token or direct key). |
 | `aegis/src/providers/tts_cartesia.rs` | Cartesia streaming TTS (proxy token or direct key). |
-| `aegis/src/providers/device_id.rs`, `invite_code.rs` | Persisted identifiers for proxy auth, re-read per request. |
+| `aegis/src/providers/device_id.rs`, `invite_code.rs`, `session_jwt.rs` | Persisted identifiers for proxy auth (device id, invite code, signed-in session token), re-read per request. |
 | `aegis/src/audio/input.rs`, `output.rs` | `cpal` mic capture and `rodio` playback. |
 | `aegis/src/actions.rs` | Serialized executor draining Claude's input actions to the platform input backend. |
 | `aegis/src/input/`, `desktop/`, `screenshot/`, `mouse_position/` | Platform backends: input injection, window/app management, capture, cursor position. |

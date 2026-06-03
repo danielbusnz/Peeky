@@ -99,6 +99,7 @@ impl Claude {
         if !response.status().is_success() {
             let status = response.status();
             let body_text = response.text().await.unwrap_or_default();
+            crate::upgrade::on_proxy_error(status.as_u16(), &body_text);
             return Err(format!("find_action API error {}: {}", status, body_text).into());
         }
 
