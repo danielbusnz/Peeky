@@ -339,8 +339,8 @@ fn run_one_turn(
     // ────── phase 4: branch on intent ──────
     let cancel_claude = barge_in.token();
     print!("claude: ");
-    let reply = rt.block_on(async {
-        match intent {
+    rt.block_on(async {
+        let reply = match intent {
             Intent::FindAction => {
                 eprintln!("[intent] → FindAction for: {:?}", transcript);
                 run_find_action(
@@ -414,15 +414,15 @@ fn run_one_turn(
             // Unreachable: `Intent::None` is collapsed into the speak-error path
             // above, so only the five real intents reach dispatch.
             Intent::None => unreachable!("Intent::None is handled before dispatch"),
+        };
+        // Record every turn (not just chat) into the working context. Inside the
+        // runtime so spawn_compaction's background summarizer has a reactor to
+        // spawn on. None means a barge-in or error turn, which we skip.
+        if let Some(reply) = &reply {
+            working.record(&transcript, reply);
+            spawn_compaction(working, claude);
         }
     });
-    // Record the completed turn into the live working context for every intent,
-    // not just chat, so the next turn can reference what was said or done. None
-    // means a barge-in or error turn, which we skip.
-    if let Some(reply) = &reply {
-        working.record(&transcript, reply);
-        spawn_compaction(working, claude);
-    }
     // A turn that hit the trial wall during dispatch swallows its own Claude
     // error, so speak the upgrade line through the live TTS pipeline before we
     // close it. The browser sign-in was already kicked off at the call site.
