@@ -504,6 +504,7 @@ async fn run_find_action(
 
 /// Dispatch the Chat path. Now includes screenshot for visual context.
 /// Text deltas land in the sentence channel which the TTS task pulls from.
+#[allow(clippy::too_many_arguments)]
 async fn run_chat(
     claude: &Claude,
     transcript: &str,
