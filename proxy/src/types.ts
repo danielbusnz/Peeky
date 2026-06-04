@@ -9,8 +9,14 @@ export interface Env {
     DEEPGRAM_API_KEY: string;
     /** Cartesia API key. Set via `wrangler secret put CARTESIA_API_KEY`. */
     CARTESIA_API_KEY: string;
-    /** Stripe API key. Set via 'wrangler secret put STRIPE_SECRET_KEY'. */
+    /** Stripe secret key (sk_...). Set via `wrangler secret put STRIPE_SECRET_KEY`. */
     STRIPE_SECRET_KEY: string;
+    /**
+     * Recurring Price id (price_...) for the aegis subscription. Not a secret, a
+     * plain var so test and live can differ. Set in wrangler.toml [vars] (or
+     * .dev.vars for local dev).
+     */
+    STRIPE_PRICE_ID: string;
     /**
      * Shared namespace for usage counters and invite codes. Keys:
      *   usage:trial:{deviceId}:{utcDate}        -> DailyUsage (~2d TTL)
