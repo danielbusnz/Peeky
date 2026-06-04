@@ -22,11 +22,66 @@
 </p>
 
 <p align="center">
-Built in Rust. Primary target is Linux; macOS and Windows on the way.
+Built in Rust. Runs on macOS and Linux. Windows on the way.
 
-## Get started with Claude Code
+## Get started (macOS)
 
-The fastest way to get Aegis running is with Claude Code. Open it in an empty directory and paste this:
+### With Claude Code
+
+Open Claude Code in an empty directory and paste this:
+
+```
+Hi Claude. Get Aegis running on my Mac.
+
+Download the latest aegis-macos-aarch64.dmg from
+https://github.com/danielbusnz-lgtm/aegis/releases/latest, install it to
+Applications, and walk me through first launch.
+```
+
+### Manual
+
+1. Download **`aegis-macos-aarch64.dmg`** from [Releases](https://github.com/danielbusnz-lgtm/Aegis/releases/latest).
+2. Open it, drag **Aegis** into Applications.
+3. Launch it. Blocked as unverified? Right-click the app and choose **Open**.
+
+First launch handles the rest: free-trial code or your own keys, then your push-to-talk hotkey. Done.
+
+### Bring your own keys
+
+Skip the hosted trial. On first launch, choose **use my own API keys** and paste your Anthropic, Deepgram, and Cartesia keys. They're stored in your OS keychain, every call goes straight to the provider, and nothing routes through our proxy or gets metered.
+
+## Linux (Hyprland)
+
+**Prerequisites**
+
+- Rust (stable) via [rustup](https://rustup.rs)
+- Hyprland (or any X11 WM, see below)
+- PipeWire for audio capture (`pw-record`)
+
+**Build and run**
+
+```bash
+git clone https://github.com/danielbusnz-lgtm/aegis.git
+cd aegis
+cargo run --release -p aegis
+```
+
+All API calls route through a hosted Cloudflare Worker by default, so no keys are needed locally to try it. Prefer not to build? Grab the raw `aegis` binary from the [Releases page](https://github.com/danielbusnz-lgtm/Aegis/releases/latest).
+
+**Hotkey (Hyprland)**
+
+Add the push-to-talk bind to `~/.config/hypr/hyprland.conf`:
+
+```conf
+bind  = , insert, exec, pkill -SIGUSR1 -f "target/(debug|release)/(aegis|test_)"
+bindr = , insert, exec, pkill -SIGUSR2 -f "target/(debug|release)/(aegis|test_)"
+```
+
+Then `hyprctl reload`. Hold INSERT, ask something, release. For X11 or another WM, build the winit path instead of Hyprland with `--no-default-features`.
+
+**With Claude Code**
+
+Open Claude Code in an empty directory and paste:
 
 ```
 Hi Claude.
@@ -39,49 +94,6 @@ Help me set up everything: building it with cargo, wiring the push-to-talk
 hotkey into my Hyprland config, and (optionally) pointing it at my own API
 keys instead of the hosted proxy. Walk me through it.
 ```
-
-That's it. It clones the repo, reads the docs, and walks you through the whole setup. 
-
-Once it's built, type `/aegis` in Claude Code to spawn the agent.
-
-## Manual setup
-
-If you want to do it yourself.
-
-**Prerequisites**
-
-- Rust (stable) via [rustup](https://rustup.rs)
-- Linux with Hyprland (or any X11 WM, see below), macOS, or Windows
-- PipeWire for audio capture (`pw-record`)
-
-**Build and run**
-
-```bash
-git clone https://github.com/danielbusnz-lgtm/aegis.git
-cd aegis
-cargo run --release -p aegis
-```
-
-All API calls route through a hosted Cloudflare Worker by default, so no keys are needed locally to try it.
-
-**Hotkey (Hyprland)**
-
-Add the push-to-talk bind to `~/.config/hypr/hyprland.conf`:
-
-```conf
-bind  = , insert, exec, pkill -SIGUSR1 -f "target/(debug|release)/(aegis|test_)"
-bindr = , insert, exec, pkill -SIGUSR2 -f "target/(debug|release)/(aegis|test_)"
-```
-
-Then `hyprctl reload`. Hold INSERT, ask something, release.
-
-**Other platforms**
-
-macOS and Windows build flag-free from the same `cargo run --release -p aegis`; the backend is picked by target OS. On Linux, build the winit/X11 path instead of Hyprland with `--no-default-features`.
-
-**Prebuilt binaries**
-
-Prefer not to build? Grab one from the [Releases page](https://github.com/danielbusnz-lgtm/Aegis/releases/latest). On macOS (Apple Silicon), download `aegis-macos-aarch64.dmg`, open it, and drag Aegis into Applications. If macOS blocks it as unverified, right-click the app and choose Open, or run `xattr -dr com.apple.quarantine /Applications/Aegis.app`. First launch walks you through onboarding (access code or your own API keys), then shows the push-to-talk hotkey. Linux and Windows releases ship the raw `aegis` binary.
 
 ## How it routes
 
@@ -118,9 +130,17 @@ Each reports per-stage latency.
 
 Knobs include: pre-roll buffer length, STT quiescence window, TTS first-flush minimum, agent loop step cap and settle time, screenshot history depth.
 
-## Use your own API keys
+## Clone and run with your own keys
 
-To bypass the proxy and call the providers directly, drop a `.env`:
+Build from source and call the providers directly, no proxy, nothing metered.
+
+```bash
+git clone https://github.com/danielbusnz-lgtm/aegis.git
+cd aegis
+cargo run --release -p aegis
+```
+
+Drop a `.env` in the repo root with your keys:
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
@@ -131,7 +151,7 @@ AEGIS_DEEPGRAM_DIRECT=1
 AEGIS_CARTESIA_DIRECT=1
 ```
 
-Each `_DIRECT=1` opts that provider out of the proxy. Mix and match.
+Each `_DIRECT=1` opts that provider out of the proxy. Mix and match, e.g. your own Anthropic key but the proxy for the rest.
 
 ## Privacy
 
