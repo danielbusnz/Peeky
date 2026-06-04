@@ -26,7 +26,7 @@ Built in Rust. Runs on macOS and Linux. Windows on the way.
 
 ## Get started (macOS)
 
-**[Download Aegis for macOS](https://countdown.si9num.com)** , open the `.dmg`, drag **Aegis** into Applications, launch it. First launch walks you through the free trial (or your own keys) and your push-to-talk hotkey. That's it.
+To get started, go to **[Download Aegis for macOS](https://countdown.si9num.com)** , press download (enter email for more free access) drag **Aegis** into Applications, and launch it. First launch walks you through the free trial (or your own keys) and your push-to-talk hotkey. That's it. 
 
 Blocked as unverified? Right-click the app and choose **Open**.
 
