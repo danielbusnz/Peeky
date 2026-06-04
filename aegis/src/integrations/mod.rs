@@ -24,6 +24,7 @@
 //! Spotify tool if spotify_player isn't installed. No "tool failed at
 //! runtime" surprises.
 
+pub mod applescript;
 pub mod github;
 pub mod gmail;
 pub mod health;
