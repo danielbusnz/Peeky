@@ -9,7 +9,8 @@
 !/models/routelet/head.json
 !/models/routelet/tokenizer.json
 .env
-launcher/src-tauri/gen/
+console/src-tauri/gen/
+.cargo/
 *.wav
 aegis/evals/results/
 node_modules/
