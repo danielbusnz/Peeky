@@ -9,6 +9,8 @@ export interface Env {
     DEEPGRAM_API_KEY: string;
     /** Cartesia API key. Set via `wrangler secret put CARTESIA_API_KEY`. */
     CARTESIA_API_KEY: string;
+    /** Stripe API key. Set via 'wrangler secret put STRIPE_SECRET_KEY'. */
+    STRIPE_SECRET_KEY: string;
     /**
      * Shared namespace for usage counters and invite codes. Keys:
      *   usage:trial:{deviceId}:{utcDate}        -> DailyUsage (~2d TTL)
