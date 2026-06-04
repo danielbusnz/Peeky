@@ -3,7 +3,7 @@
 </p>
 
 <h1 align="center">Aegis</h1>
-<p align="center">visit https://countdown.si9num.com for free trial</p>
+<h1 align="center"> visit https://countdown.si9num.com for free download</h1>
 <p align="center">
   <img alt="Rust" src="https://img.shields.io/badge/Rust-orange?logo=rust&logoColor=white">
   <img alt="License" src="https://img.shields.io/badge/License-MIT-blue">
