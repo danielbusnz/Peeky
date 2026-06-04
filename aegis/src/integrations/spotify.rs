@@ -12,6 +12,8 @@
 
 use std::process::Command;
 
+use super::applescript;
+
 /// True if the `spotify_player` binary is on PATH. We re-check on every
 /// agent-loop iteration so installing the tool mid-session works without
 /// restarting aegis.
@@ -152,25 +154,55 @@ fn play(query: &str) -> String {
     }
 }
 
+/// True when the AppleScript backend should drive Spotify: macOS, where the
+/// `osascript` runner talks to the desktop app with no install. Other platforms
+/// fall back to the `spotify_player` CLI.
+fn applescript_backend() -> bool {
+    cfg!(target_os = "macos")
+}
+
+/// Run a transport command on whichever backend is active. The two backends
+/// name verbs differently (CLI `next` vs AppleScript `next track`), so the
+/// AppleScript arm translates before building the script.
 fn control(subcommand: &str) -> String {
-    eprintln!("[integration:spotify] playback {}", subcommand);
-    // `output()` (not `spawn()`) so we actually wait for the result and can
-    // report failures back to Claude. The control subcommands are quick.
-    match Command::new("spotify_player")
-        .args(["playback", subcommand])
-        .output()
-    {
-        Ok(o) if o.status.success() => "{}".to_string(),
-        Ok(o) => {
-            let stderr = String::from_utf8_lossy(&o.stderr);
-            let msg = format!("playback {} failed: {}", subcommand, stderr.trim());
-            eprintln!("[integration:spotify] {}", msg);
-            err_body(&msg)
+    if applescript_backend() {
+        let verb = match subcommand {
+            "play" => "play",
+            "pause" => "pause",
+            "next" => "next track",
+            "previous" => "previous track",
+            other => other,
+        };
+        let script = format!("tell application \"Spotify\" to {verb}");
+        eprintln!("[integration:spotify] applescript: {verb}");
+        match applescript::run(&script) {
+            Ok(_) => "{}".to_string(),
+            Err(e) => {
+                let msg = format!("spotify applescript '{verb}' failed: {e}");
+                eprintln!("[integration:spotify] {}", msg);
+                err_body(&msg)
+            }
         }
-        Err(e) => {
-            let msg = format!("playback {} spawn failed: {}", subcommand, e);
-            eprintln!("[integration:spotify] {}", msg);
-            err_body(&msg)
+    } else {
+        eprintln!("[integration:spotify] playback {}", subcommand);
+        // `output()` (not `spawn()`) so we actually wait for the result and can
+        // report failures back to Claude. The control subcommands are quick.
+        match Command::new("spotify_player")
+            .args(["playback", subcommand])
+            .output()
+        {
+            Ok(o) if o.status.success() => "{}".to_string(),
+            Ok(o) => {
+                let stderr = String::from_utf8_lossy(&o.stderr);
+                let msg = format!("playback {} failed: {}", subcommand, stderr.trim());
+                eprintln!("[integration:spotify] {}", msg);
+                err_body(&msg)
+            }
+            Err(e) => {
+                let msg = format!("playback {} spawn failed: {}", subcommand, e);
+                eprintln!("[integration:spotify] {}", msg);
+                err_body(&msg)
+            }
         }
     }
 }
