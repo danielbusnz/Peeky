@@ -15,6 +15,7 @@ async function getOrCreateStripeCustomer(env: Env, userId: string): Promise<stri
         return row.stripe_customer_id;
     }
 
+    // Stripe's API takes form-encoded bodies, not JSON.
     const res = await fetch("https://api.stripe.com/v1/customers", {
         method: "POST",
         headers: {
@@ -22,6 +23,7 @@ async function getOrCreateStripeCustomer(env: Env, userId: string): Promise<stri
             "Content-Type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
+            // Back-reference so subscription webhooks can resolve our user from the customer.
             "metadata[user_id]": userId,
         }),
     });
