@@ -20,6 +20,7 @@
 //   POST /v1/cartesia/token       mint short-lived Cartesia access token for TTS WS
 //   POST /v1/invite/verify        read-only check that an invite code is usable
 //   POST /v1/routelet/sample      store one redacted classification sample in R2
+//   POST /v1/billing/checkout     create a Stripe subscription Checkout Session
 //
 // Why mixed patterns:
 //   Anthropic is HTTP request/response with streaming SSE. We forward bytes
@@ -38,6 +39,7 @@
 import { handleGithubCallback, handleGithubSession, handleGithubStart } from "./auth/github";
 import { handleAnthropic } from "./handlers/anthropic";
 import { handleRouteletSample } from "./handlers/routelet";
+import { handleCheckout } from "./handlers/stripe";
 import { handleCartesiaToken, handleDeepgramToken } from "./handlers/tokens";
 import { cors } from "./http";
 import { handleInviteVerify } from "./tiers";
@@ -66,6 +68,9 @@ export default {
             }
             if (url.pathname === "/v1/routelet/sample") {
                 return handleRouteletSample(request, env);
+            }
+            if (url.pathname === "/v1/billing/checkout") {
+                return handleCheckout(request, env, ctx);
             }
         }
 
