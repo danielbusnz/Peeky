@@ -28,6 +28,7 @@ pub mod applescript;
 pub mod github;
 pub mod gmail;
 pub mod health;
+pub mod safari;
 pub mod spotify;
 pub mod youtube;
 
@@ -47,6 +48,9 @@ pub fn all_tools() -> Vec<serde_json::Value> {
     if github::is_available() {
         tools.extend(github::tools());
     }
+    if safari::is_available() {
+        tools.extend(safari::tools());
+    }
     tools
 }
 
@@ -64,6 +68,9 @@ pub fn dispatch(name: &str, input: &serde_json::Value) -> Option<String> {
         return Some(result);
     }
     if let Some(result) = github::dispatch(name, input) {
+        return Some(result);
+    }
+    if let Some(result) = safari::dispatch(name, input) {
         return Some(result);
     }
     None
