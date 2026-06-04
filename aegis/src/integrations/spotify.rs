@@ -12,12 +12,24 @@
 
 use std::process::Command;
 
-use super::applescript;
+use crate::integrations::applescript;
 
-/// True if the `spotify_player` binary is on PATH. We re-check on every
-/// agent-loop iteration so installing the tool mid-session works without
-/// restarting aegis.
+/// True if either backend is usable: the AppleScript app path on macOS, or the
+/// `spotify_player` CLI. Re-checked every agent-loop iteration so installing a
+/// backend mid-session works without restarting aegis.
 pub fn is_available() -> bool {
+    applescript_backend() || cli_backend()
+}
+
+/// True on macOS, where `osascript` drives the Spotify desktop app with no
+/// install. Other platforms fall back to the CLI backend.
+fn applescript_backend() -> bool {
+    cfg!(target_os = "macos")
+}
+
+/// True if the `spotify_player` CLI is on PATH. This is the search-capable
+/// backend; AppleScript cannot search the catalog.
+fn cli_backend() -> bool {
     Command::new("which")
         .arg("spotify_player")
         .stdout(std::process::Stdio::null())
@@ -30,25 +42,7 @@ pub fn is_available() -> bool {
 /// JSON tool schemas Claude sees. Each `name` must be globally unique
 /// across all integrations, so prefix with `spotify_`.
 pub fn tools() -> Vec<serde_json::Value> {
-    vec![
-        serde_json::json!({
-            "name": "spotify_play",
-            "description": "Search Spotify and play the top result. Use this for ANY \
-                'play X on Spotify' / 'play song X' intent when the user has Spotify \
-                installed. Dramatically faster than visually clicking through the \
-                Spotify UI. The query can be a song name, artist, album, or combination \
-                (e.g. 'sicko mode travis scott'). Requires Spotify Premium.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "Search query: song name, artist, album, or combination."
-                    }
-                },
-                "required": ["query"]
-            }
-        }),
+    let mut tools = vec![
         serde_json::json!({
             "name": "spotify_pause",
             "description": "Pause Spotify playback.",
@@ -69,7 +63,32 @@ pub fn tools() -> Vec<serde_json::Value> {
             "description": "Go to the previous track on Spotify.",
             "input_schema": { "type": "object", "properties": {} }
         }),
-    ]
+    ];
+
+    // Catalog search needs the CLI backend. AppleScript can only control the
+    // running app, not search it, so advertise spotify_play only where it works.
+    if cli_backend() {
+        tools.push(serde_json::json!({
+            "name": "spotify_play",
+            "description": "Search Spotify and play the top result. Use this for ANY \
+                'play X on Spotify' / 'play song X' intent when the user has Spotify \
+                installed. Dramatically faster than visually clicking through the \
+                Spotify UI. The query can be a song name, artist, album, or combination \
+                (e.g. 'sicko mode travis scott'). Requires Spotify Premium.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query: song name, artist, album, or combination."
+                    }
+                },
+                "required": ["query"]
+            }
+        }));
+    }
+
+    tools
 }
 
 pub fn dispatch(name: &str, input: &serde_json::Value) -> Option<String> {
@@ -154,16 +173,6 @@ fn play(query: &str) -> String {
     }
 }
 
-/// True when the AppleScript backend should drive Spotify: macOS, where the
-/// `osascript` runner talks to the desktop app with no install. Other platforms
-/// fall back to the `spotify_player` CLI.
-fn applescript_backend() -> bool {
-    cfg!(target_os = "macos")
-}
-
-/// Run a transport command on whichever backend is active. The two backends
-/// name verbs differently (CLI `next` vs AppleScript `next track`), so the
-/// AppleScript arm translates before building the script.
 fn control(subcommand: &str) -> String {
     if applescript_backend() {
         let verb = match subcommand {
