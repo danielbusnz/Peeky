@@ -186,10 +186,15 @@ impl SttDeepgram {
         // format declared here to match what we send. interim_results=true
         // lets us return the latest partial transcript the moment the user
         // releases, without waiting for Deepgram's final commit.
+        //
+        // keyterm boosts recognition of the product name "Peeky" (Nova-3 keyterm
+        // prompting). It mis-transcribes often as a bare proper noun (peaky,
+        // picky, peeking), which matters because the agent cue starts with it.
         let url = format!(
             "wss://api.deepgram.com/v1/listen?model=nova-3&language=en\
              &encoding=linear16&sample_rate={}&channels={}\
-             &punctuate=true&interim_results=true&smart_format=true",
+             &punctuate=true&interim_results=true&smart_format=true\
+             &keyterm=Peeky",
             sample_rate, channels
         );
 
