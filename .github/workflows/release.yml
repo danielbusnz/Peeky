@@ -243,7 +243,7 @@ jobs:
             find target/release/bundle -type f | head -50
             exit 1
           fi
-          cp "$DMG" dist/peeky-macos-aarch64.dmg
+          cp "$DMG" dist/peeky.dmg
 
       # Notarize the signed .dmg ourselves instead of letting `cargo tauri
       # build` do it inline. notarytool's default wait is unbounded, which is
@@ -259,7 +259,7 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          DMG=dist/peeky-macos-aarch64.dmg
+          DMG=dist/peeky.dmg
           # Don't let the default -e abort before we can read the status/log.
           set +e
           OUT=$(xcrun notarytool submit "$DMG" \
@@ -289,19 +289,19 @@ jobs:
       # would publish a hash that doesn't match the shipped file.
       - name: Checksum artifact
         run: |
-          (cd dist && shasum -a 256 peeky-macos-aarch64.dmg > peeky-macos-aarch64.dmg.sha256)
+          (cd dist && shasum -a 256 peeky.dmg > peeky.dmg.sha256)
 
       - name: Attest macOS artifact
         uses: actions/attest-build-provenance@v4
         with:
-          subject-path: dist/peeky-macos-aarch64.dmg
+          subject-path: dist/peeky.dmg
 
       - uses: actions/upload-artifact@v7
         with:
           name: peeky-macos
           path: |
-            dist/peeky-macos-aarch64.dmg
-            dist/peeky-macos-aarch64.dmg.sha256
+            dist/peeky.dmg
+            dist/peeky.dmg.sha256
 
   release:
     needs: [build-linux, build-windows, build-macos]
@@ -343,5 +343,5 @@ jobs:
             dist/peeky-linux-x86_64.tar.gz.sha256
             dist/peeky-windows-x86_64.zip
             dist/peeky-windows-x86_64.zip.sha256
-            dist/peeky-macos-aarch64.dmg
-            dist/peeky-macos-aarch64.dmg.sha256
+            dist/peeky.dmg
+            dist/peeky.dmg.sha256
