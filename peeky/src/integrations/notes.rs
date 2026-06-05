@@ -42,7 +42,10 @@ pub fn dispatch(name: &str, input: &serde_json::Value) -> Option<String> {
 /// JSON-encoded `{"error": "..."}` so failures reach Claude as tool_result
 /// content, matching the shape the other integrations use.
 fn err_body(msg: &str) -> String {
-    format!(r#"{{"error":{}}}"#, serde_json::Value::String(msg.to_string()))
+    format!(
+        r#"{{"error":{}}}"#,
+        serde_json::Value::String(msg.to_string())
+    )
 }
 
 /// Create a note whose body is `text`. The doubled braces are format!'s escape
