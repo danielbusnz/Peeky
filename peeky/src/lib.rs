@@ -6,6 +6,7 @@
 //! of modules instead of splicing `src/` files in via `#[path]`.
 
 pub mod actions;
+pub mod agent_cue;
 pub mod ai_cursor;
 pub mod audio;
 pub mod barge_in;
