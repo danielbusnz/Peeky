@@ -4,12 +4,12 @@
 //!
 //! Written by the console after GitHub sign-in (it also keeps the token in the
 //! OS keychain; this file is the copy the already-running agent reads) to:
-//!   Linux:   $XDG_CONFIG_HOME/aegis/session_jwt  (or ~/.config/aegis/session_jwt)
-//!   Windows: %APPDATA%\aegis\session_jwt
-//!   macOS:   ~/Library/Application Support/aegis/session_jwt
+//!   Linux:   $XDG_CONFIG_HOME/peeky/session_jwt  (or ~/.config/peeky/session_jwt)
+//!   Windows: %APPDATA%\peeky\session_jwt
+//!   macOS:   ~/Library/Application Support/peeky/session_jwt
 //!
 //! Absent or empty file means no session (trial tier). Re-read per request so a
-//! sign-in mid-session takes effect on the next turn without restarting aegis.
+//! sign-in mid-session takes effect on the next turn without restarting peeky.
 //! Signature and expiry are not checked here; the proxy is the source of truth
 //! and silently falls back to the trial tier for a bad or expired token.
 
@@ -52,7 +52,7 @@ fn load_from_path(path: &PathBuf) -> Option<String> {
 }
 
 fn session_jwt_path() -> Option<PathBuf> {
-    Some(dirs::config_dir()?.join("aegis").join("session_jwt"))
+    Some(dirs::config_dir()?.join("peeky").join("session_jwt"))
 }
 
 #[cfg(test)]
@@ -61,7 +61,7 @@ mod tests {
 
     fn tmp_path(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
-            "aegis-session-jwt-test-{}-{}.txt",
+            "peeky-session-jwt-test-{}-{}.txt",
             label,
             std::process::id()
         ))

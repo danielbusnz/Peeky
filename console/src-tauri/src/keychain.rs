@@ -6,7 +6,7 @@
 
 /// Keychain service every console secret is stored under. Each secret is a
 /// separate account within it.
-const KEYRING_SERVICE: &str = "com.aegis.settings";
+const KEYRING_SERVICE: &str = "com.peeky.settings";
 
 /// The stored value for `account`, or None if absent, blank, or unreadable.
 pub(crate) fn keychain_get(account: &str) -> Option<String> {

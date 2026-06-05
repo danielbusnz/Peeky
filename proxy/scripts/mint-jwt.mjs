@@ -1,4 +1,4 @@
-// Mint a local aegis session JWT for testing authed endpoints against
+// Mint a local peeky session JWT for testing authed endpoints against
 // `wrangler dev`. Reads JWT_SECRET from ../.dev.vars and signs an HS256 token
 // matching the format verifyJwt expects in src/auth/jwt.ts.
 //

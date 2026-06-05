@@ -20,12 +20,12 @@ fn validate_code(code: &str) -> Result<(), &'static str> {
 const VERIFY_URL: &str = "https://aegis-proxy.danielbusnz.workers.dev/v1/invite/verify";
 
 /// Returns this install's device id, creating + persisting one if absent.
-/// Mirrors aegis/src/providers/device_id.rs so the console and the agent agree
-/// on the same id at `~/.config/aegis/device_id`.
+/// Mirrors peeky/src/providers/device_id.rs so the console and the agent agree
+/// on the same id at `~/.config/peeky/device_id`.
 fn device_id() -> Result<String, String> {
     let path = dirs::config_dir()
         .ok_or("no config dir on this platform")?
-        .join("aegis")
+        .join("peeky")
         .join("device_id");
 
     if let Ok(existing) = std::fs::read_to_string(&path) {
@@ -76,8 +76,8 @@ pub async fn verify_invite_code(code: String) -> Result<(), String> {
     Err(reason)
 }
 
-/// Validate and persist an invite code to the same config dir aegis reads from
-/// at startup (see aegis/src/providers/invite_code.rs). The empty string clears
+/// Validate and persist an invite code to the same config dir peeky reads from
+/// at startup (see peeky/src/providers/invite_code.rs). The empty string clears
 /// the code.
 #[tauri::command]
 pub fn save_invite_code(code: String) -> Result<(), String> {
@@ -88,7 +88,7 @@ pub fn save_invite_code(code: String) -> Result<(), String> {
 
     let dir = dirs::config_dir()
         .ok_or("no config dir on this platform")?
-        .join("aegis");
+        .join("peeky");
     std::fs::create_dir_all(&dir).map_err(|e| format!("create_dir_all: {e}"))?;
     let path = dir.join("invite_code");
     std::fs::write(&path, trimmed).map_err(|e| format!("write: {e}"))?;
@@ -98,14 +98,14 @@ pub fn save_invite_code(code: String) -> Result<(), String> {
 /// Whether first-run onboarding has already completed (marker file present).
 pub(crate) fn is_onboarded() -> bool {
     dirs::config_dir()
-        .map(|d| d.join("aegis").join("onboarded").exists())
+        .map(|d| d.join("peeky").join("onboarded").exists())
         .unwrap_or(false)
 }
 
 /// Write the onboarded marker so the next launch skips the first-run UI.
 #[tauri::command]
 pub fn mark_onboarded() -> Result<(), String> {
-    let dir = dirs::config_dir().ok_or("no config dir")?.join("aegis");
+    let dir = dirs::config_dir().ok_or("no config dir")?.join("peeky");
     std::fs::create_dir_all(&dir).map_err(|e| format!("{e}"))?;
     std::fs::write(dir.join("onboarded"), "").map_err(|e| format!("{e}"))?;
     Ok(())

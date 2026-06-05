@@ -1,6 +1,6 @@
 # Evals
 
-LLM behavior evals for aegis. These measure routing accuracy, retrieval quality, and other model-driven decisions that aren't captured by unit tests.
+LLM behavior evals for peeky. These measure routing accuracy, retrieval quality, and other model-driven decisions that aren't captured by unit tests.
 
 ## Why this directory exists
 
@@ -29,7 +29,7 @@ cargo run --release --bin eval_tool_routing
 Pass a custom cases file:
 
 ```
-cargo run --release --bin eval_tool_routing -- aegis/evals/cases/some_other.json
+cargo run --release --bin eval_tool_routing -- peeky/evals/cases/some_other.json
 ```
 
 Each run is one Claude API call per case. Currently ~20 cases on Haiku, ~$0.02 per full run. Not free, not expensive.
@@ -46,7 +46,7 @@ More to come as the system grows (memory router store-vs-recall, integration rou
 
 1. Drop case data into `cases/<name>.json` following the same schema as `tool_routing.json`.
 2. Write the runner at `runners/<name>.rs`. Use `tool_routing.rs` as a template.
-3. Add a `[[bin]]` entry to `aegis/Cargo.toml`:
+3. Add a `[[bin]]` entry to `peeky/Cargo.toml`:
 
    ```toml
    [[bin]]
@@ -74,7 +74,7 @@ Don't let `transcript` leak the expected label. "Use the memory tool to remember
 
 ## Conventions
 
-- Runner code is Rust, same crate as aegis. No Python.
+- Runner code is Rust, same crate as peeky. No Python.
 - Cases are versioned in git. Real data, not generated.
 - Results are gitignored. If you want history, save runs externally or check in summaries only.
 - Each eval is non-deterministic. Don't chase a single failure; track pass rates over multiple runs.

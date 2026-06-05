@@ -3,7 +3,7 @@
 //! speech starts before the full audio is synthesized.
 //!
 //! Two auth modes: proxy (default, no API key on disk) and direct
-//! (`AEGIS_CARTESIA_DIRECT=1` + `CARTESIA_API_KEY`).
+//! (`PEEKY_CARTESIA_DIRECT=1` + `CARTESIA_API_KEY`).
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use futures_util::StreamExt;
@@ -16,7 +16,7 @@ use crate::tuning::PROXY_TOKEN_REFRESH_MARGIN_SECS;
 const TOKEN_TTL_FALLBACK_SECS: u64 = 60;
 
 /// Voice fallback when CARTESIA_VOICE_ID isn't set. "Barbershop Man" is
-/// a calm masculine voice that reads aegis's terse replies well.
+/// a calm masculine voice that reads peeky's terse replies well.
 const DEFAULT_VOICE_ID: &str = "a0e99841-438c-4a64-b679-ae501e7d6091";
 const MODEL_ID: &str = "sonic-2";
 const PROXY_URL: &str = "https://aegis-proxy.danielbusnz.workers.dev/v1/cartesia/token";
@@ -41,7 +41,7 @@ pub struct TtsCartesia {
 }
 
 /// Auth mode. Default routes through aegis-proxy (no Cartesia key locally).
-/// Set `AEGIS_CARTESIA_DIRECT=1` + provide `CARTESIA_API_KEY` to bypass.
+/// Set `PEEKY_CARTESIA_DIRECT=1` + provide `CARTESIA_API_KEY` to bypass.
 #[derive(Clone)]
 pub enum TtsMode {
     Direct {
@@ -55,20 +55,20 @@ pub enum TtsMode {
 
 impl TtsCartesia {
     /// Loads voice config from env and decides whether to mint tokens via
-    /// aegis-proxy (default) or use a local API key (AEGIS_CARTESIA_DIRECT=1).
+    /// aegis-proxy (default) or use a local API key (PEEKY_CARTESIA_DIRECT=1).
     /// Takes a shared `reqwest::Client` so subsequent calls reuse TLS.
     pub fn from_env(http: reqwest::Client) -> Result<Self, Box<dyn std::error::Error>> {
         dotenvy::dotenv().ok();
         let voice_id =
             std::env::var("CARTESIA_VOICE_ID").unwrap_or_else(|_| DEFAULT_VOICE_ID.to_string());
 
-        let mode = if std::env::var("AEGIS_CARTESIA_DIRECT").is_ok() {
+        let mode = if std::env::var("PEEKY_CARTESIA_DIRECT").is_ok() {
             let api_key = std::env::var("CARTESIA_API_KEY")?;
             eprintln!("[tts-cartesia] mode=Direct (using CARTESIA_API_KEY)");
             TtsMode::Direct { api_key }
         } else {
             let device_id = super::device_id::load_or_create()?;
-            eprintln!("[tts-cartesia] mode=Proxy (set AEGIS_CARTESIA_DIRECT=1 to bypass)");
+            eprintln!("[tts-cartesia] mode=Proxy (set PEEKY_CARTESIA_DIRECT=1 to bypass)");
             TtsMode::Proxy {
                 token_url: PROXY_URL.to_string(),
                 device_id,
@@ -144,7 +144,7 @@ impl TtsCartesia {
     ) -> Result<(String, u64), Box<dyn std::error::Error + Send + Sync>> {
         // Re-read the invite code and session token on every mint so an
         // onboarding change or a fresh sign-in takes effect without restarting
-        // aegis. They pick the proxy tier (code = demo, token = account).
+        // peeky. They pick the proxy tier (code = demo, token = account).
         let mut req = self
             .http
             .post(token_url)

@@ -6,7 +6,7 @@
 //   2. start stashes the state in KV (pending) and 302s to GitHub
 //   3. user approves -> GitHub hits /auth/github/callback?code=&state=
 //   4. callback exchanges the code (secret stays here), reads the identity,
-//      upserts the user in D1, mints an aegis JWT, and parks it in KV under
+//      upserts the user in D1, mints an peeky JWT, and parks it in KV under
 //      the state
 //   5. client polls /auth/github/session?state=... and collects the JWT
 //
@@ -102,7 +102,7 @@ export async function handleGithubCallback(request: Request, env: Env): Promise<
         expirationTtl: STATE_TTL_SECONDS,
     });
 
-    return closePage("Signed in to Aegis. You can close this window and return to the app.");
+    return closePage("Signed in to Peeky. You can close this window and return to the app.");
 }
 
 /**
@@ -233,7 +233,7 @@ async function upsertUser(
 /** A tiny HTML page shown in the browser tab after the redirect dance. */
 function closePage(message: string): Response {
     return new Response(
-        `<!doctype html><html><head><meta charset="utf-8"><title>Aegis</title>
+        `<!doctype html><html><head><meta charset="utf-8"><title>Peeky</title>
 <style>body{background:#1a1a1a;color:#eee;font-family:system-ui,sans-serif;display:grid;place-items:center;height:100vh;margin:0}p{font-size:1.1rem}</style>
 </head><body><p>${message}</p></body></html>`,
         { status: 200, headers: { "content-type": "text/html; charset=utf-8" } },

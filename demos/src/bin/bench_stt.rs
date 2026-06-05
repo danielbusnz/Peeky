@@ -17,12 +17,12 @@
 //!   cargo run --release --example test_stt_bench -- <wav_path> <expected_text> [iterations]
 //!
 //! Example:
-//!   cargo run --release --example test_stt_bench -- aegis/fixtures/sample.wav "hi my name is daniel" 5
+//!   cargo run --release --example test_stt_bench -- peeky/fixtures/sample.wav "hi my name is daniel" 5
 //!
 //! Recording a sample (24kHz mono, 16-bit signed little-endian):
-//!   pw-record --rate 24000 --channels 1 --format s16 aegis/fixtures/sample.wav
+//!   pw-record --rate 24000 --channels 1 --format s16 peeky/fixtures/sample.wav
 
-use aegis::providers;
+use peeky::providers;
 
 use providers::stt_deepgram::SttDeepgram;
 use std::time::{Duration, Instant};

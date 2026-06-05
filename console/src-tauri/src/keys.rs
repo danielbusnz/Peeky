@@ -1,21 +1,21 @@
 //! Bring-your-own-keys: the user's own provider API keys. Stored in the OS
-//! keychain, injected into the aegis child via the env contract its providers
+//! keychain, injected into the peeky child via the env contract its providers
 //! understand, and live-checked against each provider before they're trusted.
 
 use std::process::Command;
 
 use crate::keychain::{keychain_get, keychain_set};
 
-/// (keychain account, aegis "go direct" flag, provider key env var) per
-/// provider. The aegis runtime switches a provider to direct mode when its
+/// (keychain account, peeky "go direct" flag, provider key env var) per
+/// provider. The peeky runtime switches a provider to direct mode when its
 /// DIRECT flag is present, reading the key from the matching var.
 const BYOK_PROVIDERS: [(&str, &str, &str); 3] = [
-    ("anthropic", "AEGIS_ANTHROPIC_DIRECT", "ANTHROPIC_API_KEY"),
-    ("deepgram", "AEGIS_DEEPGRAM_DIRECT", "DEEPGRAM_API_KEY"),
-    ("cartesia", "AEGIS_CARTESIA_DIRECT", "CARTESIA_API_KEY"),
+    ("anthropic", "PEEKY_ANTHROPIC_DIRECT", "ANTHROPIC_API_KEY"),
+    ("deepgram", "PEEKY_DEEPGRAM_DIRECT", "DEEPGRAM_API_KEY"),
+    ("cartesia", "PEEKY_CARTESIA_DIRECT", "CARTESIA_API_KEY"),
 ];
 
-/// Inject any stored BYOK keys into the aegis child using the env contract its
+/// Inject any stored BYOK keys into the peeky child using the env contract its
 /// providers already understand. Providers with no stored key are left on the
 /// proxy/trial path, so direct + trial can mix per provider.
 pub(crate) fn apply_byok_env(cmd: &mut Command) {
@@ -53,7 +53,7 @@ pub fn api_keys_status() -> std::collections::HashMap<String, bool> {
 }
 
 /// Live-validate the user's own provider keys by hitting each provider's auth
-/// the same way aegis does in direct mode. Returns a per-provider map of whether
+/// the same way peeky does in direct mode. Returns a per-provider map of whether
 /// the key works. An empty key is reported `false`. Used by the onboarding gate
 /// so a typo'd key can't slip through.
 #[tauri::command]

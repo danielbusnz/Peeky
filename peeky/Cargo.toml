@@ -1,10 +1,10 @@
 [package]
-name = "aegis"
+name = "peeky"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"
-default-run = "aegis"
+default-run = "peeky"
 
 [features]
 # `hyprland` is default-on and pulls the Linux-only backend deps (GTK
@@ -94,7 +94,7 @@ bytemuck = "1"
 pollster = "0.4"
 tray-icon = "0.19"
 
-# Demo and benchmark binaries live in the sibling `aegis-demos` crate
+# Demo and benchmark binaries live in the sibling `peeky-demos` crate
 # (../demos), which depends on this library. Keeping them out of this package
-# means `cargo build`/`test -p aegis` never compiles them, so the main app
+# means `cargo build`/`test -p peeky` never compiles them, so the main app
 # builds per-OS with no feature flags.

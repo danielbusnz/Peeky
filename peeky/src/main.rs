@@ -1,9 +1,9 @@
-use aegis::{
+use peeky::{
     actions, ai_cursor, audio, hotkey, integrations, orchestrator, painter, providers, routelet,
 };
 // Only used by the macOS screen-recording permission trigger below.
 #[cfg(target_os = "macos")]
-use aegis::screenshot;
+use peeky::screenshot;
 
 fn main() {
     // Lightweight subcommand: print integration status as JSON and exit. Runs
@@ -18,17 +18,17 @@ fn main() {
     // Tee stdout/stderr to a rotating log file before anything prints, so a
     // release build launched from the .app (no terminal) stays inspectable and
     // startup panics land on disk. Best effort: a no-op if it can't set up.
-    if let Some(path) = aegis::logging::init() {
+    if let Some(path) = peeky::logging::init() {
         eprintln!("[startup] logging to {}", path.display());
     }
 
-    // Kill any aegis left over from a prior launch (e.g. a relaunch after the
+    // Kill any peeky left over from a prior launch (e.g. a relaunch after the
     // user granted Screen Recording) so only one instance ever runs.
-    aegis::single_instance::enforce();
+    peeky::single_instance::enforce();
 
-    // Consume any conversation handoff left by the Claude Code `/aegis` command
+    // Consume any conversation handoff left by the Claude Code `/peeky` command
     // so the chat path can reference what the user was working on.
-    aegis::handoff::init();
+    peeky::handoff::init();
 
     // Shared reqwest::Client. Internal Arc means clones reuse the same
     // connection pool: TLS sessions, HTTP/2 multiplexing, and no per-call
@@ -43,9 +43,9 @@ fn main() {
         providers::tts_cartesia::TtsCartesia::from_env(http).expect("missing CARTESIA_API_KEY");
     let mic = audio::Mic::init();
 
-    // Load the local ONNX classifier. Asset path: AEGIS_ROUTELET_DIR env var,
+    // Load the local ONNX classifier. Asset path: PEEKY_ROUTELET_DIR env var,
     // or the default models/routelet relative to the working directory.
-    let routelet_dir = std::env::var("AEGIS_ROUTELET_DIR")
+    let routelet_dir = std::env::var("PEEKY_ROUTELET_DIR")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| std::path::PathBuf::from("models/routelet"));
     let routelet = routelet::Routelet::load(&routelet_dir).unwrap_or_else(|e| {
@@ -64,7 +64,7 @@ fn main() {
 
     // Request macOS permissions early so the system dialogs don't interrupt a
     // voice turn. Screen Recording uses the TCC API: it prompts once and
-    // registers Aegis in the Screen Recording list. If it's not granted yet we
+    // registers Peeky in the Screen Recording list. If it's not granted yet we
     // point the user at the exact Settings pane; the grant only takes effect
     // after a relaunch, so we say so.
     #[cfg(target_os = "macos")]
@@ -73,8 +73,8 @@ fn main() {
             eprintln!("[startup] screen recording permission granted");
         } else {
             eprintln!(
-                "[startup] screen recording not granted yet. Enable Aegis under \
-                 System Settings > Privacy & Security > Screen Recording, then relaunch Aegis."
+                "[startup] screen recording not granted yet. Enable Peeky under \
+                 System Settings > Privacy & Security > Screen Recording, then relaunch Peeky."
             );
             screenshot::open_screen_recording_settings();
         }

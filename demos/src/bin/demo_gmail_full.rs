@@ -3,18 +3,18 @@
 // End-to-end exercise of every gmail integration tool.
 //
 // Sends one self-addressed test email, then runs the other six tools
-// against that single message. Cleanup is "search subject:aegis-test
+// against that single message. Cleanup is "search subject:peeky-test
 // in Gmail and delete".
 //
 // Run: cargo run --bin demo_gmail_full
 
-use aegis::integrations::gmail;
+use peeky::integrations::gmail;
 
 use serde_json::Value;
 use std::thread::sleep;
 use std::time::Duration;
 
-const SELF_ADDR: &str = "danielbusnz+aegis@gmail.com";
+const SELF_ADDR: &str = "danielbusnz+peeky@gmail.com";
 
 fn step(n: u32, label: &str) {
     println!("\n=== step {n}: {label} ===");
@@ -45,7 +45,7 @@ fn main() {
     }
 
     let tag = format!(
-        "aegis-test-{}",
+        "peeky-test-{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -64,7 +64,7 @@ fn main() {
         serde_json::json!({
             "to": SELF_ADDR,
             "subject": tag,
-            "body": format!("This is an automated end-to-end test for the aegis Gmail \
+            "body": format!("This is an automated end-to-end test for the peeky Gmail \
                             integration. Tag: {tag}. Safe to delete."),
         }),
     );

@@ -1,12 +1,12 @@
 // Smoke test for the local ONNX intent classifier (routelet).
 //
-// Run with: cargo run -p aegis-demos --bin demo_routelet
+// Run with: cargo run -p peeky-demos --bin demo_routelet
 //
 // Loads the model from models/routelet (relative to the repo root, where
 // cargo run places the working directory). Classifies five phrases, prints
 // the predicted intent, and checks it against the expected label.
 
-use aegis::routelet::Routelet;
+use peeky::routelet::Routelet;
 use std::path::Path;
 
 struct Case {

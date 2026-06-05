@@ -1,31 +1,31 @@
 [package]
-name = "aegis-demos"
+name = "peeky-demos"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
 publish = false
 
-# Out-of-tree demo and benchmark binaries. They depend on the `aegis` library
+# Out-of-tree demo and benchmark binaries. They depend on the `peeky` library
 # instead of splicing `src/` files via `#[path]`, so the main crate's build and
 # tests never compile them. Each file in src/bin/ is auto-discovered as a bin;
-# run with `cargo run -p aegis-demos --bin <name>`.
+# run with `cargo run -p peeky-demos --bin <name>`.
 #
-# `aegis` selects its backend by target OS, but the winit overlay can't be built
+# `peeky` selects its backend by target OS, but the winit overlay can't be built
 # at the same time as the Hyprland one (both export `cursor`). On Linux that
 # means the native gtk demos and the winit `demo_win` are mutually exclusive, so
 # the two features below pick a lane and gate the backend-specific demos to it:
-#   default (native):    aegis/hyprland (Hyprland on Linux); gtk/overlay demos.
-#   crossplatform:       aegis with no default features (winit path); demo_win.
+#   default (native):    peeky/hyprland (Hyprland on Linux); gtk/overlay demos.
+#   crossplatform:       peeky with no default features (winit path); demo_win.
 # Build the winit demo with: --no-default-features --features crossplatform.
 # Backend-neutral demos build under either lane.
 
 [features]
 default = ["native"]
-native = ["aegis/hyprland"]
+native = ["peeky/hyprland"]
 crossplatform = []
 
 [dependencies]
-aegis = { path = "../aegis", default-features = false }
+peeky = { path = "../peeky", default-features = false }
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros"] }
 tokio-util = { version = "0.7", default-features = false }
 reqwest = { version = "0.13.4", features = ["blocking", "json", "multipart", "stream", "query"] }

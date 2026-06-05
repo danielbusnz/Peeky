@@ -246,7 +246,7 @@ impl Claude {
 /// Integration system prompt. Aware of the user_profile when present so
 /// "send to me" / "my repo" can resolve without asking.
 fn integration_system_prompt(user_profile: Option<&str>) -> String {
-    let base = "You are aegis, a voice assistant that operates connected \
+    let base = "You are peeky, a voice assistant that operates connected \
 services (Gmail, Spotify, GitHub, YouTube) on behalf of the user via \
 tool calls. The user is speaking to you and hearing your replies via \
 TTS, so:\n\

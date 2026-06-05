@@ -25,3 +25,25 @@ pub fn run(script: &str) -> Result<String, String> {
         Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
     }
 }
+
+/// Escape a value before it goes inside an AppleScript double-quoted string.
+/// Model-provided text (a URL, a note body, a reminder name) could otherwise
+/// contain a quote or backslash that breaks the script or injects into it.
+/// Order matters: escape backslashes first, then quotes.
+pub fn escape(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn escape_handles_quotes_and_backslashes() {
+        assert_eq!(escape("plain"), "plain");
+        assert_eq!(escape(r#"a"b"#), r#"a\"b"#);
+        assert_eq!(escape(r"a\b"), r"a\\b");
+        // A backslash followed by a quote: both get escaped, backslash first.
+        assert_eq!(escape(r#"\""#), r#"\\\""#);
+    }
+}

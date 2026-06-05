@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 // Isolated test for the hotkey signal pipeline. Verifies that:
-//   1. Hyprland's keybind is sending SIGUSR1/SIGUSR2 to the running aegis pid
+//   1. Hyprland's keybind is sending SIGUSR1/SIGUSR2 to the running peeky pid
 //   2. signal_hook's listener thread is catching them
 //   3. is_recording() flips on press and off on release
 //   4. wait_for_press() unblocks within ~20ms of the press
@@ -10,7 +10,7 @@
 // Each turn prints when the press was detected and how long you held the key.
 // Ctrl+C to quit.
 
-use aegis::hotkey;
+use peeky::hotkey;
 
 use std::time::Instant;
 

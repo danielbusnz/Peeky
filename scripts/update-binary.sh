@@ -1,5 +1,5 @@
 #!/bin/bash
-# Updates the launcher's bundled aegis binary with a fresh build
+# Updates the launcher's bundled peeky binary with a fresh build
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -13,16 +13,16 @@ case "$ARCH" in
     *)             echo "Unknown arch: $ARCH"; exit 1 ;;
 esac
 
-BINARY_NAME="aegis-$TARGET"
+BINARY_NAME="peeky-$TARGET"
 
-echo "Building aegis (release) for $TARGET..."
+echo "Building peeky (release) for $TARGET..."
 cd "$REPO_ROOT"
 # On macOS the default `hyprland` feature is a Linux-only no-op, so the
 # default build takes the winit path (same as the release.yml macOS job).
-cargo build --release -p aegis --bin aegis
+cargo build --release -p peeky --bin peeky
 
 echo "Copying binary to launcher..."
-cp "$REPO_ROOT/target/release/aegis" "$BINARY_DIR/$BINARY_NAME"
+cp "$REPO_ROOT/target/release/peeky" "$BINARY_DIR/$BINARY_NAME"
 chmod +x "$BINARY_DIR/$BINARY_NAME"
 
 echo "Done! Updated: $BINARY_DIR/$BINARY_NAME"

@@ -1,11 +1,11 @@
-//! Persistent per-install UUID. Identifies this aegis install to the
+//! Persistent per-install UUID. Identifies this peeky install to the
 //! hosted proxy (aegis-proxy on Cloudflare) so it can meter per-device
 //! daily usage without a login flow.
 //!
 //! On first run, generates a v4 UUID and writes it to:
-//!   Linux:   $XDG_CONFIG_HOME/aegis/device_id  (or ~/.config/aegis/device_id)
-//!   Windows: %APPDATA%\aegis\device_id
-//!   macOS:   ~/Library/Application Support/aegis/device_id
+//!   Linux:   $XDG_CONFIG_HOME/peeky/device_id  (or ~/.config/peeky/device_id)
+//!   Windows: %APPDATA%\peeky\device_id
+//!   macOS:   ~/Library/Application Support/peeky/device_id
 //!
 //! On subsequent runs, reads the same file. The UUID is the user's "account"
 //! for all intents and purposes. Deleting the file gives them a fresh
@@ -44,5 +44,5 @@ pub fn load_or_create() -> io::Result<String> {
 fn device_id_path() -> io::Result<PathBuf> {
     let base = dirs::config_dir()
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no config dir on this platform"))?;
-    Ok(base.join("aegis").join("device_id"))
+    Ok(base.join("peeky").join("device_id"))
 }

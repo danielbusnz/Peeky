@@ -123,7 +123,7 @@ impl InputInjector for Backend {
 }
 
 /// Map a key name (Claude's wording) to a Linux input-event scancode.
-/// Covers the keys aegis-style voice commands actually emit: navigation,
+/// Covers the keys peeky-style voice commands actually emit: navigation,
 /// modifiers, letters, digits. Anything not in this table returns None
 /// and gets logged as unrecognized.
 fn key_name_to_scancode(name: &str) -> Option<u16> {

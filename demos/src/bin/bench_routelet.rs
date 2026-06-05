@@ -3,9 +3,9 @@
 // Loads the model once, warms up, then times many single-string classifies and
 // reports the distribution. Run in RELEASE for representative numbers: tract is
 // far slower unoptimized, so a debug build is not the production latency.
-//   cargo run --release -p aegis-demos --bin bench_routelet
+//   cargo run --release -p peeky-demos --bin bench_routelet
 
-use aegis::routelet::Routelet;
+use peeky::routelet::Routelet;
 use std::path::Path;
 
 fn main() {

@@ -1,13 +1,13 @@
-// Wire constants for the Aegis Cloudflare Worker proxy. The header strings
-// are the x-aegis-* literals used throughout proxy/src/index.ts;
+// Wire constants for the Peeky Cloudflare Worker proxy. The header strings
+// are the x-peeky-* literals used throughout proxy/src/index.ts;
 // code_format_valid mirrors CODE_RE in that file. Do not change these values;
 // users have codes and device IDs in flight.
 
 /// Header carrying the per-install UUID device identifier.
-pub const DEVICE_ID_HEADER: &str = "x-aegis-device-id";
+pub const DEVICE_ID_HEADER: &str = "x-peeky-device-id";
 
 /// Header carrying the invite code for demo-tier access.
-pub const INVITE_CODE_HEADER: &str = "x-aegis-invite-code";
+pub const INVITE_CODE_HEADER: &str = "x-peeky-invite-code";
 
 /// Returns true if `s` is a plausible invite code format.
 /// Mirrors the proxy's CODE_RE: /^[A-Z0-9][A-Z0-9-]{6,62}[A-Z0-9]$/

@@ -330,7 +330,7 @@ impl LiveMic {
 /// Find the input device we want to capture from.
 ///
 /// Selection order:
-///   1. `AEGIS_INPUT_DEVICE` env var: case-insensitive substring match
+///   1. `PEEKY_INPUT_DEVICE` env var: case-insensitive substring match
 ///      against device names. Manual override for edge cases (multi-DEV
 ///      cards, weird routings).
 ///   2. Auto-detect via `pactl`: query pipewire/pulse's default source,
@@ -347,7 +347,7 @@ impl LiveMic {
 fn pick_input_device() -> cpal::Device {
     let host = cpal::default_host();
 
-    if let Ok(wanted) = std::env::var("AEGIS_INPUT_DEVICE") {
+    if let Ok(wanted) = std::env::var("PEEKY_INPUT_DEVICE") {
         let needle = wanted.to_lowercase();
         let matched = host
             .input_devices()
@@ -361,11 +361,11 @@ fn pick_input_device() -> cpal::Device {
         if let Some(d) = matched {
             #[allow(deprecated)]
             let name = d.name().unwrap_or_else(|_| "<unknown>".into());
-            eprintln!("[audio] AEGIS_INPUT_DEVICE='{}' matched {}", wanted, name);
+            eprintln!("[audio] PEEKY_INPUT_DEVICE='{}' matched {}", wanted, name);
             return d;
         }
         eprintln!(
-            "[audio] AEGIS_INPUT_DEVICE='{}' matched nothing, falling back",
+            "[audio] PEEKY_INPUT_DEVICE='{}' matched nothing, falling back",
             wanted
         );
     }

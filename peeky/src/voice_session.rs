@@ -40,7 +40,7 @@ impl VoiceSession {
         let rt = tokio::runtime::Runtime::new().expect("failed to start tokio runtime");
 
         // Start the distillation sample uploader on the runtime (no-op unless
-        // AEGIS_ROUTELET_UPLOAD=1). Reuses Claude's shared HTTP client.
+        // PEEKY_ROUTELET_UPLOAD=1). Reuses Claude's shared HTTP client.
         crate::routelet::init_uploader(&rt, claude.http.clone());
 
         // Pre-open HTTPS pools to Claude, Deepgram, and Cartesia so the first
@@ -63,8 +63,8 @@ impl VoiceSession {
 
         // Load persistent memory facts (name, preferences, etc.). Empty
         // store on first launch; subsequent launches re-load from
-        // ~/.config/aegis/memory.jsonl.
-        let memory = MemoryStore::open_default().expect("could not open aegis memory store");
+        // ~/.config/peeky/memory.jsonl.
+        let memory = MemoryStore::open_default().expect("could not open peeky memory store");
 
         // Fresh live conversation context each launch; the durable record
         // lives in the Tier 2 history log, not here.

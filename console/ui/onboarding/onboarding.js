@@ -1,6 +1,6 @@
 // Onboarding screen. A blank invite code starts the free trial tier; an
 // entered code or the user's own provider keys are verified before they take
-// effect. Shows the push-to-talk hotkey, then spawns the aegis agent and closes.
+// effect. Shows the push-to-talk hotkey, then spawns the peeky agent and closes.
 
 // TODO: Pop sound disabled - not working on macOS (see GitHub issue)
 // const popSound = new Audio("pop.mp3");
@@ -116,10 +116,10 @@ function showHowTo() {
 
 // macOS only: prompt for the agent's mic + accessibility permissions while the
 // launcher is in the foreground. Screen Recording is deliberately NOT requested
-// here: we spawn the agent (aegis) detached and exit, so aegis is its own TCC
+// here: we spawn the agent (peeky) detached and exit, so peeky is its own TCC
 // responsible process and a launcher-side grant would land on the wrong identity
-// (com.aegis.settings) and add a second, useless "Aegis" entry to the Screen
-// Recording list. aegis requests Screen Recording itself on first run. Mic is
+// (com.peeky.settings) and add a second, useless "Peeky" entry to the Screen
+// Recording list. peeky requests Screen Recording itself on first run. Mic is
 // API-grantable; accessibility can't be auto-granted, so we open its pane and
 // continue (the hotkey starts working once the user toggles it). Commands come
 // from tauri-plugin-macos-permissions.
@@ -258,7 +258,7 @@ document.getElementById("cursor-button").addEventListener("click", async () => {
         }
     }
 
-    // Show the hotkey card. Onboarding is finalized + aegis spawned only when
+    // Show the hotkey card. Onboarding is finalized + peeky spawned only when
     // the user acknowledges it, so they always see how to talk before it starts.
     showHowTo();
 });
@@ -276,7 +276,7 @@ document.getElementById("howto-done").addEventListener("click", async () => {
         if (needsRelaunch) {
             // Relaunch the app so permissions take effect. On relaunch,
             // the onboarded file exists so the launcher skips the UI and
-            // spawns aegis directly with the new permissions.
+            // spawns peeky directly with the new permissions.
             window.__TAURI__.process.relaunch();
             return;
         }
@@ -284,8 +284,8 @@ document.getElementById("howto-done").addEventListener("click", async () => {
 
     // Fire-and-forget: the agent runs as its own process, so don't block the
     // window close on it booting.
-    invoke("spawn_aegis").catch((err) =>
-        console.error("[welcome] spawn aegis failed:", err),
+    invoke("spawn_peeky").catch((err) =>
+        console.error("[welcome] spawn peeky failed:", err),
     );
 
     window.__TAURI__.window.getCurrentWindow().close();

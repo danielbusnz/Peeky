@@ -25,73 +25,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
-name = "aegis"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "bytemuck",
- "cpal",
- "dirs 5.0.1",
- "dotenvy",
- "fast_image_resize",
- "futures-util",
- "global-hotkey",
- "google-gmail1",
- "gtk4",
- "gtk4-layer-shell",
- "hound",
- "hyper-rustls",
- "hyper-util",
- "hyprland",
- "image",
- "libc",
- "mouse_position",
- "objc2 0.6.4",
- "objc2-core-foundation",
- "objc2-core-graphics",
- "open",
- "pollster",
- "raw-window-handle",
- "regex",
- "reqwest",
- "rodio",
- "rusqlite",
- "rustls",
- "serde_json",
- "signal-hook",
- "softbuffer",
- "tiny-skia",
- "tokenizers",
- "tokio",
- "tokio-tungstenite",
- "tokio-util",
- "tract-onnx",
- "tray-icon 0.19.3",
- "url",
- "uuid",
- "wgpu",
- "winit",
- "xcap",
- "yup-oauth2",
-]
-
-[[package]]
-name = "aegis-demos"
-version = "0.1.0"
-dependencies = [
- "aegis",
- "base64 0.22.1",
- "gtk4",
- "hound",
- "mouse_position",
- "reqwest",
- "serde_json",
- "tokio",
- "tokio-util",
- "xcap",
-]
-
-[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5368,6 +5301,73 @@ name = "pathdiff"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df94ce210e5bc13cb6651479fa48d14f601d9858cfe0467f43ae157023b938d3"
+
+[[package]]
+name = "peeky"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "bytemuck",
+ "cpal",
+ "dirs 5.0.1",
+ "dotenvy",
+ "fast_image_resize",
+ "futures-util",
+ "global-hotkey",
+ "google-gmail1",
+ "gtk4",
+ "gtk4-layer-shell",
+ "hound",
+ "hyper-rustls",
+ "hyper-util",
+ "hyprland",
+ "image",
+ "libc",
+ "mouse_position",
+ "objc2 0.6.4",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
+ "open",
+ "pollster",
+ "raw-window-handle",
+ "regex",
+ "reqwest",
+ "rodio",
+ "rusqlite",
+ "rustls",
+ "serde_json",
+ "signal-hook",
+ "softbuffer",
+ "tiny-skia",
+ "tokenizers",
+ "tokio",
+ "tokio-tungstenite",
+ "tokio-util",
+ "tract-onnx",
+ "tray-icon 0.19.3",
+ "url",
+ "uuid",
+ "wgpu",
+ "winit",
+ "xcap",
+ "yup-oauth2",
+]
+
+[[package]]
+name = "peeky-demos"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "gtk4",
+ "hound",
+ "mouse_position",
+ "peeky",
+ "reqwest",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "xcap",
+]
 
 [[package]]
 name = "percent-encoding"

@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use aegis::{ai_cursor, hotkey, providers, screenshot};
+use peeky::{ai_cursor, hotkey, providers, screenshot};
 
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;

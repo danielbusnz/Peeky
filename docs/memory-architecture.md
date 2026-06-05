@@ -17,10 +17,10 @@ Long-term memory design. Tier 1 ships today; tiers 2 and 3 are designed, not bui
 
 ## Tier 1: core facts (shipped)
 
-`aegis/src/providers/claude/memory.rs`.
+`peeky/src/providers/claude/memory.rs`.
 
 - `MemoryStore` = `Arc<Mutex<Vec<(String, String)>>>` plus a `PathBuf`.
-- Append-only JSONL at `~/.config/aegis/memory.jsonl`. Latest-wins per key on load.
+- Append-only JSONL at `~/.config/peeky/memory.jsonl`. Latest-wins per key on load.
 - Two ops: `store_fact(key, value)` and in-memory lookup at recall.
 - Routed via Haiku 4.5 forced tool call.
 - Injected into other paths via `as_prompt_block()`.
@@ -47,7 +47,7 @@ CREATE VIRTUAL TABLE turns_fts USING fts5(
 );
 ```
 
-- Path: `~/.config/aegis/history.db`.
+- Path: `~/.config/peeky/history.db`.
 - `rusqlite` with the `bundled` feature.
 - Writes async off the hot path.
 - Indexed search: `<10ms` on 1M rows.

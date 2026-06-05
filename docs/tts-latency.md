@@ -9,7 +9,7 @@ client buffering.
 
 1. **Mint auth token** (`bearer_token`). Proxy mode (default): a full HTTPS
    round-trip to the Cloudflare Worker, **once per synthesis call**. Direct mode
-   (`AEGIS_CARTESIA_DIRECT`): free.
+   (`PEEKY_CARTESIA_DIRECT`): free.
 2. **POST** the text to `api.cartesia.ai/tts/sse`. Connection is pre-warmed at
    session start (`warm()`), so mostly upload + server queue.
 3. **`sonic-2` synthesizes** and streams the first PCM chunk (~150-300ms typical,

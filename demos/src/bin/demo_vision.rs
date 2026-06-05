@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use aegis::{providers, screenshot};
+use peeky::{providers, screenshot};
 
 use tokio_util::sync::CancellationToken;
 

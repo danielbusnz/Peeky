@@ -5,11 +5,11 @@
 //!
 //! Setup the user does once:
 //! ```text
-//! AEGIS_GMAIL_CLIENT_ID=...
-//! AEGIS_GMAIL_CLIENT_SECRET=...
+//! PEEKY_GMAIL_CLIENT_ID=...
+//! PEEKY_GMAIL_CLIENT_SECRET=...
 //! ```
 //! placed in `.env`. First `cargo run` opens a browser and writes the
-//! refresh token to `~/.config/aegis/gmail_token.json` (mode 0600 on Unix).
+//! refresh token to `~/.config/peeky/gmail_token.json` (mode 0600 on Unix).
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 #[cfg(unix)]
@@ -33,8 +33,8 @@ const SCOPES: &[&str] = &[
 /// fail at runtime.
 pub fn is_available() -> bool {
     dotenvy::dotenv().ok();
-    let id = std::env::var("AEGIS_GMAIL_CLIENT_ID").unwrap_or_default();
-    let secret = std::env::var("AEGIS_GMAIL_CLIENT_SECRET").unwrap_or_default();
+    let id = std::env::var("PEEKY_GMAIL_CLIENT_ID").unwrap_or_default();
+    let secret = std::env::var("PEEKY_GMAIL_CLIENT_SECRET").unwrap_or_default();
     !id.is_empty() && !secret.is_empty()
 }
 
@@ -264,17 +264,17 @@ async fn init_auth() -> Result<&'static GmailAuth, String> {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
     dotenvy::dotenv().ok();
-    let client_id = std::env::var("AEGIS_GMAIL_CLIENT_ID")
-        .map_err(|_| "[integration:gmail] AEGIS_GMAIL_CLIENT_ID not set".to_string())?;
-    let client_secret = std::env::var("AEGIS_GMAIL_CLIENT_SECRET")
-        .map_err(|_| "[integration:gmail] AEGIS_GMAIL_CLIENT_SECRET not set".to_string())?;
+    let client_id = std::env::var("PEEKY_GMAIL_CLIENT_ID")
+        .map_err(|_| "[integration:gmail] PEEKY_GMAIL_CLIENT_ID not set".to_string())?;
+    let client_secret = std::env::var("PEEKY_GMAIL_CLIENT_SECRET")
+        .map_err(|_| "[integration:gmail] PEEKY_GMAIL_CLIENT_SECRET not set".to_string())?;
 
     let config_dir = dirs::config_dir()
         .ok_or_else(|| "[integration:gmail] dirs::config_dir() returned None".to_string())?;
-    let aegis_dir = config_dir.join("aegis");
-    std::fs::create_dir_all(&aegis_dir)
+    let peeky_dir = config_dir.join("peeky");
+    std::fs::create_dir_all(&peeky_dir)
         .map_err(|e| format!("[integration:gmail] could not create config dir: {e}"))?;
-    let token_path = aegis_dir.join("gmail_token.json");
+    let token_path = peeky_dir.join("gmail_token.json");
 
     let secret = yup_oauth2::ApplicationSecret {
         client_id,
@@ -507,7 +507,7 @@ async fn cmd_read(input: &serde_json::Value) -> String {
     );
 
     let headers = parse_headers(&msg);
-    if std::env::var("AEGIS_GMAIL_DEBUG").is_ok() {
+    if std::env::var("PEEKY_GMAIL_DEBUG").is_ok() {
         eprintln!(
             "[gmail debug] payload.mimeType={:?} payload.body.size={:?} parts.len={:?}",
             msg["payload"]["mimeType"].as_str(),

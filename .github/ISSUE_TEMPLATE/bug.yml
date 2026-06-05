@@ -25,7 +25,7 @@ body:
       label: How to reproduce
       description: Exact steps. Include the transcript or command you ran.
       placeholder: |
-        1. cargo run --release --bin aegis
+        1. cargo run --release --bin peeky
         2. hold INSERT, say "remember when we talked about dune", release
         3. classifier routes to Memory instead of Chat
     validations:
@@ -43,11 +43,11 @@ body:
     id: env
     attributes:
       label: Environment
-      description: OS, window manager, aegis commit hash or version
+      description: OS, window manager, peeky commit hash or version
       placeholder: |
         OS: Arch Linux 6.18
         WM: Hyprland
-        aegis: c02bbf7
+        peeky: c02bbf7
     validations:
       required: true
 

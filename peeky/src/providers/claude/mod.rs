@@ -13,10 +13,10 @@ mod parsing;
 mod prompt;
 mod working_context;
 
-// Re-exports for the aegis binary's use. Examples that pull in providers/
+// Re-exports for the peeky binary's use. Examples that pull in providers/
 // via #[path] but don't touch Intent or MemoryStore see these as unused;
 // the allow silences that false-positive warning without affecting the
-// real aegis binary, which uses both.
+// real peeky binary, which uses both.
 #[allow(unused_imports)]
 pub use classifier::Intent;
 #[allow(unused_imports)]
@@ -72,7 +72,7 @@ pub struct Claude {
     /// Full URL to POST messages requests to. Either the hosted proxy or
     /// api.anthropic.com depending on which mode we're in.
     pub endpoint: String,
-    /// (header_name, header_value) for auth. Either ("x-aegis-device-id", uuid)
+    /// (header_name, header_value) for auth. Either ("x-peeky-device-id", uuid)
     /// when routed through the proxy, or ("x-api-key", anthropic_key) in
     /// direct mode.
     pub auth: (String, String),
@@ -84,7 +84,7 @@ pub struct Claude {
 }
 
 /// Default endpoint for the hosted proxy. Override at compile time by setting
-/// `AEGIS_PROXY_URL` to a different worker URL if you deploy your own.
+/// `PEEKY_PROXY_URL` to a different worker URL if you deploy your own.
 const PROXY_URL: &str = "https://aegis-proxy.danielbusnz.workers.dev/v1/anthropic/messages";
 const DIRECT_URL: &str = "https://api.anthropic.com/v1/messages";
 
@@ -92,7 +92,7 @@ impl Claude {
     /// Adds the auth header (always), plus the invite code and session-token
     /// headers when set and in proxy mode. Both are re-read from disk on every
     /// call so an onboarding code change or a fresh sign-in takes effect on the
-    /// very next request without restarting aegis. The proxy resolves the tier
+    /// very next request without restarting peeky. The proxy resolves the tier
     /// from these: an invite code wins (demo), else a valid token (account),
     /// else trial. File reads are ~100us cold and free hot; cheap given it's
     /// hit a handful of times per voice turn.
@@ -130,7 +130,7 @@ impl Claude {
     ///
     /// To bypass the proxy and talk to Anthropic directly (useful for local
     /// dev, debugging, or burning your own credit), set
-    /// `AEGIS_ANTHROPIC_DIRECT=1` in the environment AND provide
+    /// `PEEKY_ANTHROPIC_DIRECT=1` in the environment AND provide
     /// `ANTHROPIC_API_KEY`.
     ///
     /// `http` is the shared `reqwest::Client` so connection pools (TCP/TLS)
@@ -139,7 +139,7 @@ impl Claude {
     pub fn from_env(http: reqwest::Client) -> Result<Self, Box<dyn std::error::Error>> {
         dotenvy::dotenv().ok();
 
-        if std::env::var("AEGIS_ANTHROPIC_DIRECT").is_ok() {
+        if std::env::var("PEEKY_ANTHROPIC_DIRECT").is_ok() {
             let api_key = std::env::var("ANTHROPIC_API_KEY")?;
             return Ok(Claude {
                 http,

@@ -2,7 +2,7 @@
   "name": "aegis-proxy",
   "version": "0.1.0",
   "private": true,
-  "description": "Cloudflare Worker fronting Anthropic for the aegis desktop client.",
+  "description": "Cloudflare Worker fronting Anthropic for the peeky desktop client.",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",

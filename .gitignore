@@ -12,5 +12,5 @@
 console/src-tauri/gen/
 .cargo/
 *.wav
-aegis/evals/results/
+peeky/evals/results/
 node_modules/

@@ -1,6 +1,6 @@
 //! Tee process stdout and stderr to a log file while keeping terminal output.
 //!
-//! aegis emits every diagnostic with plain `println!`/`eprintln!`. Launched
+//! peeky emits every diagnostic with plain `println!`/`eprintln!`. Launched
 //! from the macOS .app bundle (or any GUI launcher) the process has no
 //! controlling terminal, so that output is discarded and a release build gives
 //! no way to see what it is doing. [`init`] splices a pipe under fds 1 and 2
@@ -11,16 +11,16 @@
 
 use std::path::PathBuf;
 
-/// Current log location: `<config_dir>/aegis/logs/aegis.log`
-/// (`~/Library/Application Support/aegis/logs/aegis.log` on macOS,
-/// `~/.config/aegis/logs/aegis.log` on Linux). None if the config dir can't
+/// Current log location: `<config_dir>/peeky/logs/peeky.log`
+/// (`~/Library/Application Support/peeky/logs/peeky.log` on macOS,
+/// `~/.config/peeky/logs/peeky.log` on Linux). None if the config dir can't
 /// be resolved.
 fn log_path() -> Option<PathBuf> {
     Some(
         dirs::config_dir()?
-            .join("aegis")
+            .join("peeky")
             .join("logs")
-            .join("aegis.log"),
+            .join("peeky.log"),
     )
 }
 

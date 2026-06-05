@@ -7,7 +7,7 @@ mod output;
 
 // Examples (test_stt, test_stt_bench) include this module via #[path]
 // but only use the input side, so the output re-export looks unused
-// from their compile units. The aegis binary uses both.
+// from their compile units. The peeky binary uses both.
 #[allow(unused_imports)]
 pub use input::*;
 #[allow(unused_imports)]

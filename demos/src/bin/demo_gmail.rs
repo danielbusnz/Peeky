@@ -5,16 +5,16 @@
 // Run: cargo run --bin demo_gmail
 //
 // First invocation opens the system browser to Google's consent page,
-// captures the loopback redirect, and writes ~/.config/aegis/gmail_token.json.
+// captures the loopback redirect, and writes ~/.config/peeky/gmail_token.json.
 // Subsequent invocations reuse the cached refresh token.
 
-use aegis::integrations::gmail;
+use peeky::integrations::gmail;
 
 fn main() {
     if !gmail::is_available() {
         eprintln!(
-            "gmail::is_available() == false. Did you export AEGIS_GMAIL_CLIENT_ID and \
-             AEGIS_GMAIL_CLIENT_SECRET (or put them in .env)?"
+            "gmail::is_available() == false. Did you export PEEKY_GMAIL_CLIENT_ID and \
+             PEEKY_GMAIL_CLIENT_SECRET (or put them in .env)?"
         );
         std::process::exit(1);
     }

@@ -5,7 +5,7 @@
 //! prompt, so it doesn't need to cover their cases.
 
 pub(super) fn system_prompt_for_actions() -> &'static str {
-    "You are aegis's multi-step task executor. The user gave a voice \
+    "You are peeky's multi-step task executor. The user gave a voice \
      request that needs two or more chained actions, e.g. \"open YouTube, \
      search for X, play the top result\" or \"check my email then read \
      the latest one to me.\" Simpler single-step requests get routed \

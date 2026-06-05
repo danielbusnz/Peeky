@@ -5,12 +5,12 @@
 // where the latency budget goes.
 //
 // Usage:
-//   cargo run --release --example test_find_action_bench -- aegis/fixtures/find_action_sample.wav 5
+//   cargo run --release --example test_find_action_bench -- peeky/fixtures/find_action_sample.wav 5
 //
 // Record a sample if you don't have one yet (24kHz mono PCM 16-bit):
-//   pw-record --rate 24000 --channels 1 --format s16 aegis/fixtures/find_action_sample.wav
+//   pw-record --rate 24000 --channels 1 --format s16 peeky/fixtures/find_action_sample.wav
 //   # or with alsa:
-//   arecord -f S16_LE -c 1 -r 24000 -d 4 aegis/fixtures/find_action_sample.wav
+//   arecord -f S16_LE -c 1 -r 24000 -d 4 peeky/fixtures/find_action_sample.wav
 //
 // Reported stages per iteration:
 //   stt:         release → final transcript (Deepgram tail)
@@ -23,7 +23,7 @@
 
 #![allow(dead_code)]
 
-use aegis::{intent, providers, screenshot};
+use peeky::{intent, providers, screenshot};
 
 use providers::claude::{Claude, Intent};
 use providers::stt_deepgram::SttDeepgram;

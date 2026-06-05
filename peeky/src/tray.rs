@@ -1,5 +1,5 @@
-//! macOS menu bar icon. Shows the Aegis icon in the top-right menu bar
-//! with a "Quit Aegis" option. Native NSStatusBar integration via tray-icon.
+//! macOS menu bar icon. Shows the Peeky icon in the top-right menu bar
+//! with a "Quit Peeky" option. Native NSStatusBar integration via tray-icon.
 
 #[cfg(target_os = "macos")]
 use tray_icon::{
@@ -16,7 +16,7 @@ const ICON_PNG: &[u8] = include_bytes!("../assets/icon-menubar.png");
 /// Initialize the menu bar icon. Call once from main thread before event loop.
 #[cfg(target_os = "macos")]
 pub fn init() -> TrayIcon {
-    let quit_item = MenuItem::new("Quit Aegis", true, None);
+    let quit_item = MenuItem::new("Quit Peeky", true, None);
     let _ = QUIT_ID.set(quit_item.id().clone());
 
     let menu = Menu::new();
@@ -28,7 +28,7 @@ pub fn init() -> TrayIcon {
     TrayIconBuilder::new()
         .with_menu(Box::new(menu))
         .with_icon(icon)
-        .with_tooltip("Aegis")
+        .with_tooltip("Peeky")
         .build()
         .expect("tray icon build")
 }

@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-aegis is pre-1.0 and under active development. Only the `main` branch
+peeky is pre-1.0 and under active development. Only the `main` branch
 receives fixes. There are no LTS or backported releases.
 
 ## Reporting a Vulnerability
@@ -33,13 +33,13 @@ The following are not treated as vulnerabilities:
 
 ## Hardening Notes
 
-aegis ships with an opinionated default configuration:
+peeky ships with an opinionated default configuration:
 
 - API calls route through a hosted Cloudflare Worker so no provider keys
   live on the client unless the user opts in via `.env`.
-- The local memory store lives at `~/.config/aegis/memory.jsonl` and is
+- The local memory store lives at `~/.config/peeky/memory.jsonl` and is
   never transmitted off-device.
-- The agent loop has a hard step cap configured in `aegis/src/tuning.rs`
+- The agent loop has a hard step cap configured in `peeky/src/tuning.rs`
   to prevent runaway tool calls.
 
 If you find a configuration in the repo that contradicts the above,

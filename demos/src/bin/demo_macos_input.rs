@@ -6,7 +6,7 @@
 //! compiles cleanly with `--all-targets`.
 
 #[cfg(target_os = "macos")]
-use aegis::actions;
+use peeky::actions;
 
 #[cfg(not(target_os = "macos"))]
 fn main() {
@@ -42,7 +42,7 @@ fn main() {
 
     // Test 2: Type some text
     println!("2. Testing type_text...");
-    actions::type_text("Hello from Aegis! ");
+    actions::type_text("Hello from Peeky! ");
     thread::sleep(Duration::from_millis(500));
 
     // Test 3: Press key combo (Cmd+A to select all)

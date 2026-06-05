@@ -43,8 +43,8 @@ fn append_record(path: &Path, line: &str, max_lines: usize) -> std::io::Result<(
 /// Claude fallback fired this turn, Claude's label as the free teacher signal.
 ///
 /// Two independent opt-ins, both off by default:
-///   * `AEGIS_ROUTELET_LOG=1` appends the sample to the on-device JSONL log.
-///   * `AEGIS_ROUTELET_UPLOAD=1` enqueues it for the background proxy uploader
+///   * `PEEKY_ROUTELET_LOG=1` appends the sample to the on-device JSONL log.
+///   * `PEEKY_ROUTELET_UPLOAD=1` enqueues it for the background proxy uploader
 ///     (only effective once `init_uploader` has run).
 ///
 /// Does nothing unless at least one is set. On any error, emits a warning to
@@ -109,11 +109,11 @@ fn write_local(sample: &serde_json::Value) {
     }
 }
 
-/// Resolve `~/.config/aegis/routelet_log.jsonl`, creating the directory if
+/// Resolve `~/.config/peeky/routelet_log.jsonl`, creating the directory if
 /// needed. Mirrors the resolution used by `MemoryStore::open_default`.
 fn build_log_path() -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
     let mut path = dirs::config_dir().ok_or("could not locate config dir")?;
-    path.push("aegis");
+    path.push("peeky");
     std::fs::create_dir_all(&path)?;
     path.push("routelet_log.jsonl");
     Ok(path)
@@ -122,7 +122,7 @@ fn build_log_path() -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
 // ────── distillation sample uploader ──────
 
 /// Proxy endpoint that stores one redacted sample per POST. Override with
-/// `AEGIS_ROUTELET_SAMPLE_URL` to point at a local `wrangler dev` instance.
+/// `PEEKY_ROUTELET_SAMPLE_URL` to point at a local `wrangler dev` instance.
 const SAMPLE_URL: &str = "https://aegis-proxy.danielbusnz.workers.dev/v1/routelet/sample";
 
 /// Set once by `init_uploader` when uploading is enabled. `log_classification`
@@ -130,22 +130,22 @@ const SAMPLE_URL: &str = "https://aegis-proxy.danielbusnz.workers.dev/v1/routele
 static UPLOAD_TX: OnceLock<UnboundedSender<serde_json::Value>> = OnceLock::new();
 
 fn logging_enabled() -> bool {
-    std::env::var("AEGIS_ROUTELET_LOG").as_deref() == Ok("1")
+    std::env::var("PEEKY_ROUTELET_LOG").as_deref() == Ok("1")
 }
 
 fn upload_enabled() -> bool {
-    std::env::var("AEGIS_ROUTELET_UPLOAD").as_deref() == Ok("1")
+    std::env::var("PEEKY_ROUTELET_UPLOAD").as_deref() == Ok("1")
 }
 
 fn sample_url() -> String {
-    std::env::var("AEGIS_ROUTELET_SAMPLE_URL").unwrap_or_else(|_| SAMPLE_URL.to_string())
+    std::env::var("PEEKY_ROUTELET_SAMPLE_URL").unwrap_or_else(|_| SAMPLE_URL.to_string())
 }
 
 /// Spawn the background sample uploader on the session runtime. Samples that
 /// `log_classification` enqueues are drained in batches and POSTed to the proxy
 /// off the hot turn path, so the voice loop never blocks on the network.
 ///
-/// No-op unless `AEGIS_ROUTELET_UPLOAD=1`. Idempotent: a second call is ignored.
+/// No-op unless `PEEKY_ROUTELET_UPLOAD=1`. Idempotent: a second call is ignored.
 /// Reuses the shared `reqwest::Client` so uploads ride the warm connection pool.
 pub fn init_uploader(rt: &tokio::runtime::Runtime, http: reqwest::Client) {
     if !upload_enabled() {
@@ -205,7 +205,7 @@ mod tests {
     fn append_record_creates_and_appends() {
         // Use a unique name in tmp so parallel test runs don't collide.
         let path = std::env::temp_dir().join(format!(
-            "aegis_routelet_test_{}.jsonl",
+            "peeky_routelet_test_{}.jsonl",
             std::time::SystemTime::now()
                 .duration_since(std::time::SystemTime::UNIX_EPOCH)
                 .map(|d| d.subsec_nanos())
@@ -242,7 +242,7 @@ mod tests {
     #[test]
     fn append_record_caps_to_max_lines() {
         let path = std::env::temp_dir().join(format!(
-            "aegis_routelet_cap_{}.jsonl",
+            "peeky_routelet_cap_{}.jsonl",
             std::time::SystemTime::now()
                 .duration_since(std::time::SystemTime::UNIX_EPOCH)
                 .map(|d| d.subsec_nanos())

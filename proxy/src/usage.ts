@@ -70,7 +70,7 @@ export function cartesiaExhausted(usage: DailyUsage, budget: DailyBudget): boole
 
 /**
  * The 429 JSON body for a tier that has spent its daily budget. The `error`
- * code is what the client switches on (e.g. aegis pops the sign-in window on
+ * code is what the client switches on (e.g. peeky pops the sign-in window on
  * `trial_exhausted`); the message is human-facing fallback copy.
  */
 export function exhaustionBody(tier: Tier, provider: string): Record<string, unknown> {

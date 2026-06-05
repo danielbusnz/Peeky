@@ -17,7 +17,7 @@ const HTML_BODY = `
     <div id="outer-halo">
       <div id="breathing-button"></div>
     </div>
-    <button id="cursor-button" aria-label="Start Aegis">
+    <button id="cursor-button" aria-label="Start Peeky">
       <img src="cursor.svg" alt="" />
     </button>
     <div id="enroll">
@@ -673,12 +673,12 @@ describe("gate: BYOK flow", () => {
 // ============================================================
 
 describe("#howto-done: finalize onboarding", () => {
-  test("calls mark_onboarded, then spawn_aegis, then closes the window", async () => {
+  test("calls mark_onboarded, then spawn_peeky, then closes the window", async () => {
     const { invokeFn, tauri, howtoDone } = await setup({
       verify_invite_code: null,
       save_invite_code: null,
       mark_onboarded: null,
-      spawn_aegis: null,
+      spawn_peeky: null,
     });
 
     click(howtoDone());
@@ -686,7 +686,7 @@ describe("#howto-done: finalize onboarding", () => {
 
     const calls = invokeFn.mock.calls.map(([cmd]) => cmd);
     expect(calls).toContain("mark_onboarded");
-    expect(calls).toContain("spawn_aegis");
+    expect(calls).toContain("spawn_peeky");
     expect(tauri._closeMock).toHaveBeenCalledOnce();
   });
 
@@ -715,7 +715,7 @@ describe("#howto-done: finalize onboarding", () => {
     expect(closeIdx).toBeGreaterThan(markIdx);
   });
 
-  test("spawn_aegis is called before close", async () => {
+  test("spawn_peeky is called before close", async () => {
     const order = [];
     const invokeFn = vi.fn(async (cmd) => {
       order.push(cmd);
@@ -734,7 +734,7 @@ describe("#howto-done: finalize onboarding", () => {
     click(document.getElementById("howto-done"));
     await new Promise((r) => setTimeout(r, 10));
 
-    const spawnIdx = order.indexOf("spawn_aegis");
+    const spawnIdx = order.indexOf("spawn_peeky");
     const closeIdx = order.indexOf("close");
     expect(spawnIdx).toBeGreaterThanOrEqual(0);
     expect(closeIdx).toBeGreaterThan(spawnIdx);
@@ -743,7 +743,7 @@ describe("#howto-done: finalize onboarding", () => {
   test("mark_onboarded failure does not prevent close", async () => {
     const { tauri, howtoDone } = await setup({
       mark_onboarded: new Error("db locked"),
-      spawn_aegis: null,
+      spawn_peeky: null,
     });
 
     click(howtoDone());

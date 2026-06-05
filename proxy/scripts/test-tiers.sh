@@ -53,17 +53,17 @@ hit() {
     local device="$1" code="${2:-}"
     if [[ -n "$code" ]]; then
         curl -s -o /dev/null -w "%{http_code}" -X POST "$ENDPOINT" \
-            -H "x-aegis-device-id: ${device}" -H "x-aegis-invite-code: ${code}"
+            -H "x-peeky-device-id: ${device}" -H "x-peeky-invite-code: ${code}"
     else
         curl -s -o /dev/null -w "%{http_code}" -X POST "$ENDPOINT" \
-            -H "x-aegis-device-id: ${device}"
+            -H "x-peeky-device-id: ${device}"
     fi
 }
 
 # POST one metered call as a signed-in account. $1 = device id, $2 = bearer JWT.
 hit_jwt() {
     curl -s -o /dev/null -w "%{http_code}" -X POST "$ENDPOINT" \
-        -H "x-aegis-device-id: ${1}" -H "authorization: Bearer ${2}"
+        -H "x-peeky-device-id: ${1}" -H "authorization: Bearer ${2}"
 }
 
 check() {
@@ -101,11 +101,11 @@ assert_cap() {
     local body="" capped=0
     for ((i = 1; i <= slack; i++)); do
         if [[ -n "$bearer" ]]; then
-            body="$(curl -s -X POST "$ENDPOINT" -H "x-aegis-device-id: ${device}" -H "authorization: Bearer ${bearer}")"
+            body="$(curl -s -X POST "$ENDPOINT" -H "x-peeky-device-id: ${device}" -H "authorization: Bearer ${bearer}")"
         elif [[ -n "$code" ]]; then
-            body="$(curl -s -X POST "$ENDPOINT" -H "x-aegis-device-id: ${device}" -H "x-aegis-invite-code: ${code}")"
+            body="$(curl -s -X POST "$ENDPOINT" -H "x-peeky-device-id: ${device}" -H "x-peeky-invite-code: ${code}")"
         else
-            body="$(curl -s -X POST "$ENDPOINT" -H "x-aegis-device-id: ${device}")"
+            body="$(curl -s -X POST "$ENDPOINT" -H "x-peeky-device-id: ${device}")"
         fi
         grep -q "\"${want_err}\"" <<<"$body" && { capped=1; break; }
     done

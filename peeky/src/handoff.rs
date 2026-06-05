@@ -1,8 +1,8 @@
 //! One-shot conversation handoff from Claude Code.
 //!
-//! When Aegis is spawned via the Claude Code `/aegis` command, that command
+//! When Peeky is spawned via the Claude Code `/peeky` command, that command
 //! writes a short summary of what the user was working on to
-//! `<config>/aegis/handoff.md`. We read it once at startup and delete it, so
+//! `<config>/peeky/handoff.md`. We read it once at startup and delete it, so
 //! the context is tied to that one spawn and never goes stale on later
 //! launches. The chat path injects it as a cached system block so a voice turn
 //! like "what were we just doing?" has the context.
@@ -28,7 +28,7 @@ pub fn get() -> Option<&'static str> {
 }
 
 fn read_and_delete() -> Option<String> {
-    let path = dirs::config_dir()?.join("aegis").join("handoff.md");
+    let path = dirs::config_dir()?.join("peeky").join("handoff.md");
     let content = std::fs::read_to_string(&path).ok()?;
     // Consume it: this context belongs to the spawn that wrote it.
     let _ = std::fs::remove_file(&path);

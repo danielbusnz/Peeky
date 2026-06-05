@@ -1,4 +1,4 @@
-# Build and test aegis on macOS. The winit-window + crossplatform
+# Build and test peeky on macOS. The winit-window + crossplatform
 # feature combo is the only set supported on Mac; hyprland is Linux only.
 #
 # First pass: we want to know whether this compiles at all. The codebase
@@ -24,16 +24,16 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Type-check aegis (default = winit on macOS)
-        run: cargo check -p aegis --all-targets
+      - name: Type-check peeky (default = winit on macOS)
+        run: cargo check -p peeky --all-targets
 
-      - name: Test aegis
-        run: cargo test -p aegis
+      - name: Test peeky
+        run: cargo test -p peeky
 
-      - name: Build aegis bin
-        run: cargo build -p aegis --bin aegis
+      - name: Build peeky bin
+        run: cargo build -p peeky --bin peeky
 
       - uses: actions/upload-artifact@v7
         with:
-          name: aegis-macos
-          path: target/debug/aegis
+          name: peeky-macos
+          path: target/debug/peeky

@@ -13,7 +13,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-const APP_ID: &str = "com.aegis.test-loading";
+const APP_ID: &str = "com.peeky.test-loading";
 const WIN_W: i32 = 240;
 const WIN_H: i32 = 240;
 

@@ -51,7 +51,7 @@ export async function lookupInvite(
 }
 
 /**
- * Inspects the request for `x-aegis-invite-code`. If absent, returns the trial
+ * Inspects the request for `x-peeky-invite-code`. If absent, returns the trial
  * tier with the configured cap. If present, validates the code, binds the
  * device, and returns the demo tier with the code's call cap. Returns an error
  * Response on any validation failure so callers can early-return.
@@ -61,7 +61,7 @@ export async function resolveTier(
     env: Env,
     deviceId: string,
 ): Promise<Tier | Response> {
-    const code = request.headers.get("x-aegis-invite-code");
+    const code = request.headers.get("x-peeky-invite-code");
     if (!code) {
         // No invite code: a valid session JWT upgrades to the account tier;
         // anyone else gets the anonymous trial. An invalid or expired token
@@ -120,7 +120,7 @@ export async function handleInviteVerify(request: Request, env: Env): Promise<Re
     const deviceId = requireDeviceId(request);
     if (deviceId instanceof Response) return deviceId;
 
-    const code = request.headers.get("x-aegis-invite-code");
+    const code = request.headers.get("x-peeky-invite-code");
     if (!code) {
         return cors(jsonResponse(400, { error: "missing invite code" }));
     }

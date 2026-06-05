@@ -1,7 +1,7 @@
 //! YouTube integration via the `yt-dlp` CLI.
 //!
 //! The flow: yt-dlp resolves a search query to the first matching video ID
-//! server-side (no browser needed), then aegis opens
+//! server-side (no browser needed), then peeky opens
 //! `https://www.youtube.com/watch?v=<id>` in the user's browser, which
 //! YouTube auto-plays. One tool call vs. 4-6 steps of visual automation.
 //!
@@ -9,7 +9,7 @@
 //! ```text
 //! sudo pacman -S yt-dlp        # arch
 //! sudo apt install yt-dlp      # debian/ubuntu
-//! brew install yt-dlp          # macos (if you ever port aegis there)
+//! brew install yt-dlp          # macos (if you ever port peeky there)
 //! ```
 
 use std::process::Command;
@@ -71,8 +71,8 @@ pub fn dispatch(name: &str, input: &serde_json::Value) -> Option<String> {
 }
 
 /// Resolve a search query to the top video ID via yt-dlp's `ytsearch1:`
-/// pseudo-URL, then hand the watch URL to aegis's existing open_url
-/// routing (which respects AEGIS_BROWSER + focused-window detection).
+/// pseudo-URL, then hand the watch URL to peeky's existing open_url
+/// routing (which respects PEEKY_BROWSER + focused-window detection).
 /// yt-dlp blocks ~1-3s; acceptable for one-shot voice intent.
 fn play(query: &str) {
     eprintln!(

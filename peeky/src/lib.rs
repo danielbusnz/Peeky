@@ -1,4 +1,4 @@
-//! Aegis: a voice-controlled AI cursor.
+//! Peeky: a voice-controlled AI cursor.
 //!
 //! The crate is split into a library (this file) and a thin binary
 //! (`main.rs`). The library exposes every subsystem as a public module so

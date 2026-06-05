@@ -1,39 +1,39 @@
-# Aegis Agent Guide
+# Peeky Agent Guide
 
 Orientation and rules for humans and agents working in this repo. The first half maps the codebase (what it is, how a voice turn flows, where things live). The second half is the working rules. If you use an agent, run it from the repo root so it picks this file up automatically.
 
 ## Overview
 
-Aegis is a voice-controlled AI cursor for Linux, written in Rust. Hold a push-to-talk hotkey, say something, release. The transcript is classified into one of five intents, the matching path runs, and the reply streams back as speech (and, when relevant, the cursor moves or a real click/type fires).
+Peeky is a voice-controlled AI cursor for Linux, written in Rust. Hold a push-to-talk hotkey, say something, release. The transcript is classified into one of five intents, the matching path runs, and the reply streams back as speech (and, when relevant, the cursor moves or a real click/type fires).
 
 A single voice turn flows like this:
 
-1. **Hotkey** (`aegis/src/hotkey/`) flips a global `RECORDING` atomic. On Hyprland, `bind`/`bindr` send `SIGUSR1` (press) / `SIGUSR2` (release) to the process; a signal-hook listener thread flips the flag. Other platforms use the `global-hotkey` crate polled from the winit loop.
-2. **Audio capture** (`aegis/src/audio/input.rs`) holds a persistent `cpal` mic stream and forwards PCM to the STT channel while the key is held, with a pre-roll ring and a post-release grace window.
-3. **STT** (`aegis/src/providers/stt_deepgram.rs`) streams PCM over a Deepgram websocket and returns the final transcript on release, after a short quiescence wait for multi-segment utterances.
-4. **Classify** (hybrid cascade). An exact-match keyword allowlist (`aegis/src/intent.rs`) catches bare transport commands ("play", "skip") sub-millisecond. Otherwise the on-device routelet classifier (`aegis/src/routelet/`) runs (~5-30ms) and returns an intent with a confidence; a confident, non-`none` result is used directly. Only a low-confidence or `none` (reject) result falls through to the LLM classifier (`aegis/src/providers/claude/classifier.rs`), a forced-tool Claude call spawned in parallel with the screenshot capture so its latency is mostly hidden.
-5. **Dispatch** (`aegis/src/orchestrator.rs`) routes to one of five paths, all under `aegis/src/providers/claude/`: `find_action`, `integration`, `chat`, `memory`, `agent`.
-6. **TTS** (`aegis/src/providers/tts_cartesia.rs`). Claude deltas are split into sentences and streamed to Cartesia, which synthesizes PCM into the `rodio` sink. The first flush is permissive (fast first audio); later flushes are strict (natural prosody).
-7. **Barge-in** (`aegis/src/barge_in.rs`). A watchdog polls the hotkey; a re-press mid-turn cancels the in-flight Claude and Cartesia streams so the next turn starts clean.
+1. **Hotkey** (`peeky/src/hotkey/`) flips a global `RECORDING` atomic. On Hyprland, `bind`/`bindr` send `SIGUSR1` (press) / `SIGUSR2` (release) to the process; a signal-hook listener thread flips the flag. Other platforms use the `global-hotkey` crate polled from the winit loop.
+2. **Audio capture** (`peeky/src/audio/input.rs`) holds a persistent `cpal` mic stream and forwards PCM to the STT channel while the key is held, with a pre-roll ring and a post-release grace window.
+3. **STT** (`peeky/src/providers/stt_deepgram.rs`) streams PCM over a Deepgram websocket and returns the final transcript on release, after a short quiescence wait for multi-segment utterances.
+4. **Classify** (hybrid cascade). An exact-match keyword allowlist (`peeky/src/intent.rs`) catches bare transport commands ("play", "skip") sub-millisecond. Otherwise the on-device routelet classifier (`peeky/src/routelet/`) runs (~5-30ms) and returns an intent with a confidence; a confident, non-`none` result is used directly. Only a low-confidence or `none` (reject) result falls through to the LLM classifier (`peeky/src/providers/claude/classifier.rs`), a forced-tool Claude call spawned in parallel with the screenshot capture so its latency is mostly hidden.
+5. **Dispatch** (`peeky/src/orchestrator.rs`) routes to one of five paths, all under `peeky/src/providers/claude/`: `find_action`, `integration`, `chat`, `memory`, `agent`.
+6. **TTS** (`peeky/src/providers/tts_cartesia.rs`). Claude deltas are split into sentences and streamed to Cartesia, which synthesizes PCM into the `rodio` sink. The first flush is permissive (fast first audio); later flushes are strict (natural prosody).
+7. **Barge-in** (`peeky/src/barge_in.rs`). A watchdog polls the hotkey; a re-press mid-turn cancels the in-flight Claude and Cartesia streams so the next turn starts clean.
 
-`aegis/src/orchestrator.rs` is the core loop: one voice turn per iteration. Start there.
+`peeky/src/orchestrator.rs` is the core loop: one voice turn per iteration. Start there.
 
 ## Architecture
 
-**Workspace** (`Cargo.toml`). Three Rust members: `aegis` (the agent binary plus its library), `demos` (hand-run dev tools and benchmarks), and `console/src-tauri` (the Tauri desktop GUI: onboarding, sign-in, settings). The `proxy/` directory is **not** a workspace member: it is a TypeScript Cloudflare Worker.
+**Workspace** (`Cargo.toml`). Three Rust members: `peeky` (the agent binary plus its library), `demos` (hand-run dev tools and benchmarks), and `console/src-tauri` (the Tauri desktop GUI: onboarding, sign-in, settings). The `proxy/` directory is **not** a workspace member: it is a TypeScript Cloudflare Worker.
 
-**The `aegis` crate** splits into `lib.rs` (every subsystem exposed as a public module) and a thin `main.rs`, so the out-of-tree `demos` crate builds against the same modules. Default feature is `hyprland`; the winit/X11 path builds with `--no-default-features`.
+**The `peeky` crate** splits into `lib.rs` (every subsystem exposed as a public module) and a thin `main.rs`, so the out-of-tree `demos` crate builds against the same modules. Default feature is `hyprland`; the winit/X11 path builds with `--no-default-features`.
 
 **Platform-backend pattern.** Several subsystems (`hotkey/`, `input/`, `desktop/`, `screenshot/`, `mouse_position/`, `ai_cursor/`) share one shape: a `mod.rs` facade, a `backend.rs` trait, and per-OS implementations (`hyprland.rs`, `macos.rs`, `windows.rs`, `crossplatform.rs`/`winit.rs`) selected by feature flags. When adding a platform capability, add it to the trait and implement it in every backend.
 
 **Sibling crates and services:**
 
-- **console** (`console/src-tauri/`): Tauri 2 desktop GUI. Frontend pages under `console/ui/` (`onboarding/` one-time setup, `settings/` the signed-in surface, `shared/`, `icons/`). First-run onboarding collects an invite code or the user's own API keys (stored in the OS keychain), requests macOS TCC permissions, then spawns the `aegis` binary as a child with the right env. If `~/.config/aegis/onboarded` exists, it spawns silently and exits. Also hosts GitHub sign-in and (soon) the settings/integrations surface.
+- **console** (`console/src-tauri/`): Tauri 2 desktop GUI. Frontend pages under `console/ui/` (`onboarding/` one-time setup, `settings/` the signed-in surface, `shared/`, `icons/`). First-run onboarding collects an invite code or the user's own API keys (stored in the OS keychain), requests macOS TCC permissions, then spawns the `peeky` binary as a child with the right env. If `~/.config/peeky/onboarded` exists, it spawns silently and exits. Also hosts GitHub sign-in and (soon) the settings/integrations surface.
 - **proxy** (`proxy/src/index.ts`): the Cloudflare Worker that holds the real API keys and enforces per-tier usage caps. Deployed with Wrangler. See routes below.
 
 ## API Proxy
 
-The app ships without API keys. By default every provider call routes through the Worker, which holds the secrets and meters usage against a per-UTC-day budget. The tier is resolved per request: an invite code (`x-aegis-invite-code`) is the demo tier, else a valid session token (`Authorization: Bearer`) is the account tier for signed-in users, else the anonymous trial tier. When the trial budget is spent the agent speaks an upgrade prompt and opens GitHub sign-in in the browser (`aegis/src/upgrade.rs`); a successful login writes the session token the agent reads on its next turn, no restart. Each provider can be pointed straight at its upstream with an `AEGIS_*_DIRECT=1` env var plus the matching key (see "Use your own API keys" in the README).
+The app ships without API keys. By default every provider call routes through the Worker, which holds the secrets and meters usage against a per-UTC-day budget. The tier is resolved per request: an invite code (`x-peeky-invite-code`) is the demo tier, else a valid session token (`Authorization: Bearer`) is the account tier for signed-in users, else the anonymous trial tier. When the trial budget is spent the agent speaks an upgrade prompt and opens GitHub sign-in in the browser (`peeky/src/upgrade.rs`); a successful login writes the session token the agent reads on its next turn, no restart. Each provider can be pointed straight at its upstream with an `PEEKY_*_DIRECT=1` env var plus the matching key (see "Use your own API keys" in the README).
 
 | Route | Method | Upstream | Purpose |
 | --- | --- | --- | --- |
@@ -43,7 +43,7 @@ The app ships without API keys. By default every provider call routes through th
 | `/v1/invite/verify` | POST | KV | Validates an invite code (exists, not expired, device slot free) |
 | `/v1/routelet/sample` | POST | R2 | Stores one redacted distillation sample (opt-in telemetry, no metering) |
 | `/auth/github/start` | GET | none | Stashes `state` in KV, 302s to GitHub OAuth |
-| `/auth/github/callback` | GET | GitHub | Exchanges the code, upserts the user in D1, parks an aegis JWT under `state` |
+| `/auth/github/callback` | GET | GitHub | Exchanges the code, upserts the user in D1, parks an peeky JWT under `state` |
 | `/auth/github/session` | GET | KV | Poll target: returns `pending`, or the JWT once the callback lands (single-use) |
 | `OPTIONS *` | OPTIONS | none | CORS preflight |
 
@@ -57,23 +57,23 @@ Pipeline and entry points:
 
 | File | ~Lines | Purpose |
 | --- | --- | --- |
-| `aegis/src/main.rs` | 48 | Thin binary. Builds the session and runs the turn loop. |
-| `aegis/src/lib.rs` | - | Library root. Exposes every subsystem as a public module. |
-| `aegis/src/orchestrator.rs` | 800 | Core loop. One turn: record → classify → dispatch → stream TTS → barge-in. |
-| `aegis/src/voice_session.rs` | 64 | Session holder (tokio runtime, mic, audio sink, provider clients, memory), built once at startup. |
-| `aegis/src/intent.rs` | 60 | Exact-match transport-command allowlist (drift guard) and tests. |
-| `aegis/src/tuning.rs` | 52 | Every behavior dial in one place, each with an `↑`/`↓` tradeoff comment. |
+| `peeky/src/main.rs` | 48 | Thin binary. Builds the session and runs the turn loop. |
+| `peeky/src/lib.rs` | - | Library root. Exposes every subsystem as a public module. |
+| `peeky/src/orchestrator.rs` | 800 | Core loop. One turn: record → classify → dispatch → stream TTS → barge-in. |
+| `peeky/src/voice_session.rs` | 64 | Session holder (tokio runtime, mic, audio sink, provider clients, memory), built once at startup. |
+| `peeky/src/intent.rs` | 60 | Exact-match transport-command allowlist (drift guard) and tests. |
+| `peeky/src/tuning.rs` | 52 | Every behavior dial in one place, each with an `↑`/`↓` tradeoff comment. |
 
-Claude paths (`aegis/src/providers/claude/`):
+Claude paths (`peeky/src/providers/claude/`):
 
 | File | ~Lines | Purpose |
 | --- | --- | --- |
-| `mod.rs` | 152 | Claude client. Auth (proxy vs `AEGIS_ANTHROPIC_DIRECT`), request builder, connection warming. |
+| `mod.rs` | 152 | Claude client. Auth (proxy vs `PEEKY_ANTHROPIC_DIRECT`), request builder, connection warming. |
 | `classifier.rs` | 246 | LLM fallback classifier. Forced tool call returns the intent enum. |
 | `find_action.rs` | 280 | Point/click/type/scroll from a single screenshot query; action fires mid-stream. |
 | `integration.rs` | 266 | Service calls. Two-step: pick tool (forced), dispatch, then summarize. |
 | `chat.rs` | 138 | Pure Q&A. No screen, no tools. Injects the user profile from memory. |
-| `memory.rs` | 549 | Store/recall facts in `~/.config/aegis/memory.jsonl`. |
+| `memory.rs` | 549 | Store/recall facts in `~/.config/peeky/memory.jsonl`. |
 | `agent_loop.rs` | 526 | Multi-step loop with iterative screenshots (cap `AGENT_MAX_STEPS`). |
 | `parsing.rs` | 815 | Tool schemas, SSE parsing, old-screenshot trimming, `cache_control` markers. |
 
@@ -81,30 +81,30 @@ Providers and I/O:
 
 | File | Purpose |
 | --- | --- |
-| `aegis/src/providers/stt_deepgram.rs` | Deepgram websocket STT (proxy token or direct key). |
-| `aegis/src/providers/tts_cartesia.rs` | Cartesia streaming TTS (proxy token or direct key). |
-| `aegis/src/providers/device_id.rs`, `invite_code.rs`, `session_jwt.rs` | Persisted identifiers for proxy auth (device id, invite code, signed-in session token), re-read per request. |
-| `aegis/src/audio/input.rs`, `output.rs` | `cpal` mic capture and `rodio` playback. |
-| `aegis/src/actions.rs` | Serialized executor draining Claude's input actions to the platform input backend. |
-| `aegis/src/input/`, `desktop/`, `screenshot/`, `mouse_position/` | Platform backends: input injection, window/app management, capture, cursor position. |
-| `aegis/src/ai_cursor/`, `painter.rs` | The blue cursor overlay and its renderer (GTK/cairo on Hyprland). |
-| `aegis/src/barge_in.rs` | Re-press watchdog that fires the cancellation token. |
-| `aegis/src/tray.rs` | macOS menu bar icon. |
+| `peeky/src/providers/stt_deepgram.rs` | Deepgram websocket STT (proxy token or direct key). |
+| `peeky/src/providers/tts_cartesia.rs` | Cartesia streaming TTS (proxy token or direct key). |
+| `peeky/src/providers/device_id.rs`, `invite_code.rs`, `session_jwt.rs` | Persisted identifiers for proxy auth (device id, invite code, signed-in session token), re-read per request. |
+| `peeky/src/audio/input.rs`, `output.rs` | `cpal` mic capture and `rodio` playback. |
+| `peeky/src/actions.rs` | Serialized executor draining Claude's input actions to the platform input backend. |
+| `peeky/src/input/`, `desktop/`, `screenshot/`, `mouse_position/` | Platform backends: input injection, window/app management, capture, cursor position. |
+| `peeky/src/ai_cursor/`, `painter.rs` | The blue cursor overlay and its renderer (GTK/cairo on Hyprland). |
+| `peeky/src/barge_in.rs` | Re-press watchdog that fires the cancellation token. |
+| `peeky/src/tray.rs` | macOS menu bar icon. |
 
-Integrations (`aegis/src/integrations/`): `mod.rs` is the registry (`all_tools()` + `dispatch()`); `gmail.rs`, `spotify.rs`, `github.rs`, `youtube.rs`, `health.rs` are the service handlers, each gated on its own credentials.
+Integrations (`peeky/src/integrations/`): `mod.rs` is the registry (`all_tools()` + `dispatch()`); `gmail.rs`, `spotify.rs`, `github.rs`, `youtube.rs`, `health.rs` are the service handlers, each gated on its own credentials.
 
 ## Architecture Decisions
 
 The non-obvious "why"s. Check these before changing the related behavior.
 
 - **Push-to-talk over Unix signals (Hyprland).** Hyprland's `bind`/`bindr` can signal a process matched by regex, so press/release map to `SIGUSR1`/`SIGUSR2` and a signal-hook thread flips a global atomic (no polling). The README's `pkill -SIGUSR1/-SIGUSR2` hotkey config depends on this exact mechanism.
-- **Proxy by default, per-provider direct opt-out.** Zero keys needed to run. `AEGIS_ANTHROPIC_DIRECT` / `AEGIS_DEEPGRAM_DIRECT` / `AEGIS_CARTESIA_DIRECT` (each with its matching key) bypass the Worker. Mix and match.
+- **Proxy by default, per-provider direct opt-out.** Zero keys needed to run. `PEEKY_ANTHROPIC_DIRECT` / `PEEKY_DEEPGRAM_DIRECT` / `PEEKY_CARTESIA_DIRECT` (each with its matching key) bypass the Worker. Mix and match.
 - **Hybrid classify, LLM overlapped with the screenshot.** The keyword allowlist and on-device routelet resolve most turns with no cloud round-trip. When routelet defers (low confidence or the `none` reject class), the LLM classifier call runs in parallel with the screenshot capture/resize so its latency is largely hidden. Voice turns are latency-bound; do not add synchronous work before TTS without checking the budget in `tuning.rs`.
 - **Keyword layer is an exact-match allowlist, not a classifier.** It short-circuits only bare transport commands ("play", "skip", "next track") said as the entire utterance. Everything else, including locator verbs and service names, falls through to routelet, which generalizes across phrasings. A transport word inside a sentence ("play sicko mode") deliberately does not match, so it reaches routelet. The old prefix/substring classifier was removed because it masked routelet and its substring rules misfired on routelet's territory.
 - **TTS first flush permissive, later flushes strict.** The first sentence flushes on a clause break (comma/semicolon/colon) once past `TTS_FIRST_FLUSH_MIN_CHARS`, to start audio fast. Once speech is rolling, only `.!?` flush, for natural prosody.
 - **Don't early-cancel on integration actions.** Visual actions (point/click/type) get on-screen feedback, so the Claude stream exits early to cut chatter. Integration actions are silent API calls whose results must flow back for Claude to speak a summary, so they are not cancelled.
 - **Agent loop bounds requests.** `AGENT_KEEP_RECENT_SCREENSHOTS` strips image bytes from older tool results to keep request bodies small; `AGENT_SETTLE_MS` waits for the UI to repaint before the next screenshot so the model doesn't act on a pre-animation frame.
-- **Invite code and device id are re-read per request.** So the onboarding window can change them without restarting aegis.
+- **Invite code and device id are re-read per request.** So the onboarding window can change them without restarting peeky.
 
 ## Conversational Style
 
@@ -127,13 +127,13 @@ The non-obvious "why"s. Check these before changing the related behavior.
 - Match the existing comment style. Comments describe what code can't say (Ousterhout discipline). Don't restate what's obvious from the symbol names.
 - Always ask before removing functionality or code that appears intentional.
 - Do not preserve backward compatibility unless the user asks for it.
-- Never hardcode tuning constants in the middle of logic. Put them in `aegis/src/tuning.rs` with an `↑` / `↓` tradeoff comment.
+- Never hardcode tuning constants in the middle of logic. Put them in `peeky/src/tuning.rs` with an `↑` / `↓` tradeoff comment.
 - When touching `providers/claude/*`, remember the hot path is voice-latency-bound. Don't add work that runs synchronously before TTS without checking the budget in `tuning.rs`.
 
 ## Commands
 
 - After code changes (not docs): `cargo check` (full output, no tail). Fix all errors and warnings before committing.
-- After touching anything in `src/`, run `cargo test --bin aegis` and confirm all unit tests pass.
+- After touching anything in `src/`, run `cargo test --bin peeky` and confirm all unit tests pass.
 - Don't run `cargo build --release` unless asked. It's slow and unnecessary for verification.
 - Don't run evals (`cargo run --bin eval_*`) unless asked. They cost real API credits.
 - Don't run demos (`cargo run --bin demo_*` / `bench_*`) unless asked. Many require hardware (mic, screen, hotkey daemon) or live API access.
@@ -145,13 +145,13 @@ The non-obvious "why"s. Check these before changing the related behavior.
 ## Where Things Go
 
 - **Unit tests**: inline in source files via `#[cfg(test)] mod tests`. Run with `cargo test`. Must be deterministic and free.
-- **Integration tests**: `aegis/tests/`. Run with `cargo test`. None exist yet but the directory is reserved.
-- **Demos**: `aegis/demos/demo_*.rs`. Hand-run dev tools. Each is a `[[bin]]` entry in `Cargo.toml`.
-- **Benchmarks**: `aegis/demos/bench_*.rs`. Same shape as demos but report latency stats over N iterations.
-- **Evals**: `aegis/evals/runners/*.rs` (runner code) + `aegis/evals/cases/*.json` (case data) + `aegis/evals/results/` (gitignored output). Run with `cargo run --bin eval_<name>`. LLM behavior tests. Stochastic, paid, not part of CI.
-- **Providers**: `aegis/src/providers/`. Each external service (Claude, Deepgram, Cartesia, integrations) is its own module.
-- **Tuning constants**: `aegis/src/tuning.rs`. Every behavior dial in one place.
-- **Memory architecture**: `aegis/docs/memory-architecture.md`. Three-tier design (facts JSONL, history SQLite+FTS5, future embeddings).
+- **Integration tests**: `peeky/tests/`. Run with `cargo test`. None exist yet but the directory is reserved.
+- **Demos**: `peeky/demos/demo_*.rs`. Hand-run dev tools. Each is a `[[bin]]` entry in `Cargo.toml`.
+- **Benchmarks**: `peeky/demos/bench_*.rs`. Same shape as demos but report latency stats over N iterations.
+- **Evals**: `peeky/evals/runners/*.rs` (runner code) + `peeky/evals/cases/*.json` (case data) + `peeky/evals/results/` (gitignored output). Run with `cargo run --bin eval_<name>`. LLM behavior tests. Stochastic, paid, not part of CI.
+- **Providers**: `peeky/src/providers/`. Each external service (Claude, Deepgram, Cartesia, integrations) is its own module.
+- **Tuning constants**: `peeky/src/tuning.rs`. Every behavior dial in one place.
+- **Memory architecture**: `peeky/docs/memory-architecture.md`. Three-tier design (facts JSONL, history SQLite+FTS5, future embeddings).
 
 ## Dependencies
 
@@ -214,11 +214,11 @@ When closing issues via commit:
 
 ## Releases
 
-aegis is a binary crate, not a published library. Releases are:
+peeky is a binary crate, not a published library. Releases are:
 
-1. Update `aegis/CHANGELOG.md` under the `## [Unreleased]` section (create if missing).
-2. Bump `version` in `aegis/Cargo.toml`.
-3. Build a release binary: `cargo build --release --bin aegis`.
+1. Update `peeky/CHANGELOG.md` under the `## [Unreleased]` section (create if missing).
+2. Bump `version` in `peeky/Cargo.toml`.
+3. Build a release binary: `cargo build --release --bin peeky`.
 4. Smoke test the binary on the target platform.
 5. Tag the commit (`git tag v0.X.Y`) and push the tag.
 6. (Optional) Create a GitHub release with the binary attached.

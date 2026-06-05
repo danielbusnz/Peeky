@@ -1,5 +1,5 @@
 // aegis-proxy: Cloudflare Worker that fronts Anthropic, Deepgram, and Cartesia
-// for the aegis desktop client.
+// for the peeky desktop client.
 //
 // Why it exists:
 //   The desktop app ships without API keys so non-technical users can install
@@ -10,7 +10,7 @@
 // (Anthropic tokens, Deepgram/Cartesia mint counts) that reset at midnight UTC.
 //   trial: no invite code. Uses TRIAL_DAILY_BUDGET from constants.ts. Per
 //          device, keyed by UTC day.
-//   demo:  request carries `x-aegis-invite-code`. The code's KV payload sets
+//   demo:  request carries `x-peeky-invite-code`. The code's KV payload sets
 //          the daily budgets, an expiry, and a max-devices binding. Used for
 //          recruiter demos and anyone we hand-grant extended access.
 //

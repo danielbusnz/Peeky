@@ -13,12 +13,12 @@ pub struct Backend;
 impl DesktopControl for Backend {
     /// Open a URL in the user's currently-focused browser when possible,
     /// falling back to xdg-open. Priority:
-    ///   1. `AEGIS_BROWSER` env var: force a specific binary.
+    ///   1. `PEEKY_BROWSER` env var: force a specific binary.
     ///   2. Hyprland's currently-focused window, if it's a Chromium-family
     ///      browser (Chrome, Brave, Chromium, Edge, Vivaldi). Chromium-family
     ///      can be invoked directly without D-Bus session issues.
     ///   3. xdg-open: uses the system default browser. Necessary for Firefox
-    ///      since direct `firefox <url>` calls hang on D-Bus when aegis isn't
+    ///      since direct `firefox <url>` calls hang on D-Bus when peeky isn't
     ///      in the user session.
     fn open_url(raw: &str) {
         let parsed = match url::Url::parse(raw) {
@@ -38,10 +38,10 @@ impl DesktopControl for Backend {
 
         eprintln!("[action:open_url] opening {}", raw);
 
-        if let Ok(forced) = std::env::var("AEGIS_BROWSER") {
-            eprintln!("[action:open_url] AEGIS_BROWSER override → {}", forced);
+        if let Ok(forced) = std::env::var("PEEKY_BROWSER") {
+            eprintln!("[action:open_url] PEEKY_BROWSER override → {}", forced);
             if let Err(e) = Command::new(&forced).arg(raw).spawn() {
-                eprintln!("[action:open_url] AEGIS_BROWSER spawn failed: {}", e);
+                eprintln!("[action:open_url] PEEKY_BROWSER spawn failed: {}", e);
             }
             raise_likely_browser();
             return;
@@ -74,7 +74,7 @@ impl DesktopControl for Backend {
 
     /// Tries gtk-launch first (handles .desktop entries like "spotify" →
     /// spotify.desktop), falls back to spawning the binary directly via shell
-    /// `||`. setsid -f fully detaches so the app survives if aegis exits.
+    /// `||`. setsid -f fully detaches so the app survives if peeky exits.
     fn launch_app(app: &str) {
         eprintln!("[action:launch_app] launching '{}'", app);
         let escaped = shell_single_quote(app);

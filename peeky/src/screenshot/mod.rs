@@ -74,11 +74,11 @@ pub fn capture_for_claude(
 ///
 /// Uses the TCC API (macOS 11+): `CGPreflightScreenCaptureAccess` checks
 /// without a prompt, and `CGRequestScreenCaptureAccess` shows the system
-/// prompt once per launch and registers Aegis in the Screen Recording list so
+/// prompt once per launch and registers Peeky in the Screen Recording list so
 /// the user only has to flip the toggle. This replaces the old
 /// dummy-screenshot trigger, which was non-deterministic on modern macOS.
 ///
-/// Note: a freshly granted permission only takes effect after Aegis relaunches.
+/// Note: a freshly granted permission only takes effect after Peeky relaunches.
 #[cfg(target_os = "macos")]
 pub fn ensure_screen_recording_access() -> bool {
     // Declared directly rather than via objc2-core-graphics so we don't depend

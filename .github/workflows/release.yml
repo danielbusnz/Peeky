@@ -69,39 +69,39 @@ jobs:
 
       - name: Build (release, winit / portable path)
         run: |
-          cargo build --release -p aegis \
+          cargo build --release -p peeky \
             --no-default-features \
-            --bin aegis
+            --bin peeky
 
       - name: Package artifact
         run: |
-          mkdir -p dist/aegis-linux-x86_64
-          cp target/release/aegis dist/aegis-linux-x86_64/aegis
+          mkdir -p dist/peeky-linux-x86_64
+          cp target/release/peeky dist/peeky-linux-x86_64/peeky
           # The classifier loads from ./models/routelet relative to the
           # binary's cwd, so ship the three files alongside the executable.
           # Users untar and run from the extracted dir.
-          mkdir -p dist/aegis-linux-x86_64/models/routelet
+          mkdir -p dist/peeky-linux-x86_64/models/routelet
           cp models/routelet/embedder.onnx \
              models/routelet/head.json \
              models/routelet/tokenizer.json \
-             dist/aegis-linux-x86_64/models/routelet/
-          (cd dist && tar -czf aegis-linux-x86_64.tar.gz aegis-linux-x86_64)
-          (cd dist && sha256sum aegis-linux-x86_64.tar.gz > aegis-linux-x86_64.tar.gz.sha256)
+             dist/peeky-linux-x86_64/models/routelet/
+          (cd dist && tar -czf peeky-linux-x86_64.tar.gz peeky-linux-x86_64)
+          (cd dist && sha256sum peeky-linux-x86_64.tar.gz > peeky-linux-x86_64.tar.gz.sha256)
 
       # SLSA build provenance: signed attestation linking the artifact to
       # this exact workflow run and commit. Verifiable with
-      # `gh attestation verify aegis-linux-x86_64.tar.gz --repo danielbusnz-lgtm/Aegis`.
+      # `gh attestation verify peeky-linux-x86_64.tar.gz --repo danielbusnz-lgtm/Peeky`.
       - name: Attest Linux artifact
         uses: actions/attest-build-provenance@v4
         with:
-          subject-path: dist/aegis-linux-x86_64.tar.gz
+          subject-path: dist/peeky-linux-x86_64.tar.gz
 
       - uses: actions/upload-artifact@v7
         with:
-          name: aegis-linux
+          name: peeky-linux
           path: |
-            dist/aegis-linux-x86_64.tar.gz
-            dist/aegis-linux-x86_64.tar.gz.sha256
+            dist/peeky-linux-x86_64.tar.gz
+            dist/peeky-linux-x86_64.tar.gz.sha256
 
   build-windows:
     runs-on: windows-latest
@@ -113,32 +113,32 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Build (release, default = winit on Windows)
-        run: cargo build --release -p aegis --bin aegis
+        run: cargo build --release -p peeky --bin peeky
 
       - name: Package artifact
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force dist/aegis-windows-x86_64 | Out-Null
-          Copy-Item target/release/aegis.exe dist/aegis-windows-x86_64/aegis.exe
-          # Ship the classifier next to the binary so AEGIS_ROUTELET_DIR's
+          New-Item -ItemType Directory -Force dist/peeky-windows-x86_64 | Out-Null
+          Copy-Item target/release/peeky.exe dist/peeky-windows-x86_64/peeky.exe
+          # Ship the classifier next to the binary so PEEKY_ROUTELET_DIR's
           # default (./models/routelet) resolves on first run.
-          New-Item -ItemType Directory -Force dist/aegis-windows-x86_64/models/routelet | Out-Null
-          Copy-Item models/routelet/embedder.onnx,models/routelet/head.json,models/routelet/tokenizer.json dist/aegis-windows-x86_64/models/routelet/
-          Compress-Archive -Path dist/aegis-windows-x86_64/* -DestinationPath dist/aegis-windows-x86_64.zip
-          $hash = (Get-FileHash dist/aegis-windows-x86_64.zip -Algorithm SHA256).Hash.ToLower()
-          "$hash  aegis-windows-x86_64.zip" | Out-File -Encoding ascii dist/aegis-windows-x86_64.zip.sha256
+          New-Item -ItemType Directory -Force dist/peeky-windows-x86_64/models/routelet | Out-Null
+          Copy-Item models/routelet/embedder.onnx,models/routelet/head.json,models/routelet/tokenizer.json dist/peeky-windows-x86_64/models/routelet/
+          Compress-Archive -Path dist/peeky-windows-x86_64/* -DestinationPath dist/peeky-windows-x86_64.zip
+          $hash = (Get-FileHash dist/peeky-windows-x86_64.zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  peeky-windows-x86_64.zip" | Out-File -Encoding ascii dist/peeky-windows-x86_64.zip.sha256
 
       - name: Attest Windows artifact
         uses: actions/attest-build-provenance@v4
         with:
-          subject-path: dist/aegis-windows-x86_64.zip
+          subject-path: dist/peeky-windows-x86_64.zip
 
       - uses: actions/upload-artifact@v7
         with:
-          name: aegis-windows
+          name: peeky-windows
           path: |
-            dist/aegis-windows-x86_64.zip
-            dist/aegis-windows-x86_64.zip.sha256
+            dist/peeky-windows-x86_64.zip
+            dist/peeky-windows-x86_64.zip.sha256
 
   build-macos:
     # macos-latest is Apple Silicon (arm64). Intel Macs would need a
@@ -158,10 +158,10 @@ jobs:
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "^2.0.0" --locked
 
-      - name: Build aegis (release, default = winit on macOS)
+      - name: Build peeky (release, default = winit on macOS)
         run: |
-          cargo build --release -p aegis \
-            --bin aegis
+          cargo build --release -p peeky \
+            --bin peeky
 
       # Code signing is fully optional: with no APPLE_CERTIFICATE secret the
       # next steps are skipped and the .dmg builds unsigned, same as before.
@@ -221,9 +221,9 @@ jobs:
           echo "APPLE_SIGNING_IDENTITY=$CERT_ID" >> "$GITHUB_ENV"
           echo "Signing identity: $CERT_ID"
 
-      # Tauri's build.rs in console/src-tauri copies the aegis binary with the
+      # Tauri's build.rs in console/src-tauri copies the peeky binary with the
       # right target-triple suffix, then `cargo tauri build` bundles it as a
-      # sidecar inside Aegis.app and produces a .dmg. With a real Developer ID
+      # sidecar inside Peeky.app and produces a .dmg. With a real Developer ID
       # identity Tauri signs (hardened runtime); with APPLE_SIGNING_IDENTITY="-"
       # from the detect step it ad-hoc signs. Notarization is intentionally a
       # separate step below, not done here.
@@ -243,7 +243,7 @@ jobs:
             find target/release/bundle -type f | head -50
             exit 1
           fi
-          cp "$DMG" dist/aegis-macos-aarch64.dmg
+          cp "$DMG" dist/peeky-macos-aarch64.dmg
 
       # Notarize the signed .dmg ourselves instead of letting `cargo tauri
       # build` do it inline. notarytool's default wait is unbounded, which is
@@ -259,7 +259,7 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          DMG=dist/aegis-macos-aarch64.dmg
+          DMG=dist/peeky-macos-aarch64.dmg
           # Don't let the default -e abort before we can read the status/log.
           set +e
           OUT=$(xcrun notarytool submit "$DMG" \
@@ -289,19 +289,19 @@ jobs:
       # would publish a hash that doesn't match the shipped file.
       - name: Checksum artifact
         run: |
-          (cd dist && shasum -a 256 aegis-macos-aarch64.dmg > aegis-macos-aarch64.dmg.sha256)
+          (cd dist && shasum -a 256 peeky-macos-aarch64.dmg > peeky-macos-aarch64.dmg.sha256)
 
       - name: Attest macOS artifact
         uses: actions/attest-build-provenance@v4
         with:
-          subject-path: dist/aegis-macos-aarch64.dmg
+          subject-path: dist/peeky-macos-aarch64.dmg
 
       - uses: actions/upload-artifact@v7
         with:
-          name: aegis-macos
+          name: peeky-macos
           path: |
-            dist/aegis-macos-aarch64.dmg
-            dist/aegis-macos-aarch64.dmg.sha256
+            dist/peeky-macos-aarch64.dmg
+            dist/peeky-macos-aarch64.dmg.sha256
 
   release:
     needs: [build-linux, build-windows, build-macos]
@@ -311,17 +311,17 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
-          name: aegis-linux
+          name: peeky-linux
           path: dist/
 
       - uses: actions/download-artifact@v8
         with:
-          name: aegis-windows
+          name: peeky-windows
           path: dist/
 
       - uses: actions/download-artifact@v8
         with:
-          name: aegis-macos
+          name: peeky-macos
           path: dist/
 
       - name: Resolve tag
@@ -339,9 +339,9 @@ jobs:
           draft: true
           generate_release_notes: true
           files: |
-            dist/aegis-linux-x86_64.tar.gz
-            dist/aegis-linux-x86_64.tar.gz.sha256
-            dist/aegis-windows-x86_64.zip
-            dist/aegis-windows-x86_64.zip.sha256
-            dist/aegis-macos-aarch64.dmg
-            dist/aegis-macos-aarch64.dmg.sha256
+            dist/peeky-linux-x86_64.tar.gz
+            dist/peeky-linux-x86_64.tar.gz.sha256
+            dist/peeky-windows-x86_64.zip
+            dist/peeky-windows-x86_64.zip.sha256
+            dist/peeky-macos-aarch64.dmg
+            dist/peeky-macos-aarch64.dmg.sha256

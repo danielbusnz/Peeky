@@ -38,7 +38,7 @@ pub fn run_loop(
 ) {
     let session = VoiceSession::start(mic, stt, claude, cartesia, routelet);
 
-    println!("aegis ready. hold Ctrl+Space to talk");
+    println!("peeky ready. hold Ctrl+Space to talk");
     loop {
         hotkey::wait_for_press();
         let press_t = std::time::Instant::now();
@@ -898,7 +898,7 @@ fn speak_error(
     message: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("[orchestrator] speaking error: {message}");
-    println!("aegis: {message}");
+    println!("peeky: {message}");
     let player = audio_out.new_player();
     let chan_nz = audio_out.channels;
     let sr_nz = audio_out.sample_rate;

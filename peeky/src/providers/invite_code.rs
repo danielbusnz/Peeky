@@ -1,11 +1,11 @@
 //! Optional per-install invite code. When present, the client adds it to
-//! proxy requests as `x-aegis-invite-code`, promoting them from the trial
+//! proxy requests as `x-peeky-invite-code`, promoting them from the trial
 //! tier to the demo tier (see proxy/README.md).
 //!
 //! Written by the console's onboarding flow to:
-//!   Linux:   $XDG_CONFIG_HOME/aegis/invite_code  (or ~/.config/aegis/invite_code)
-//!   Windows: %APPDATA%\aegis\invite_code
-//!   macOS:   ~/Library/Application Support/aegis/invite_code
+//!   Linux:   $XDG_CONFIG_HOME/peeky/invite_code  (or ~/.config/peeky/invite_code)
+//!   Windows: %APPDATA%\peeky\invite_code
+//!   macOS:   ~/Library/Application Support/peeky/invite_code
 //!
 //! Absent or empty file means trial tier. Format is not validated here;
 //! the proxy is the source of truth and returns 400/403 for bad codes.
@@ -33,7 +33,7 @@ fn load_from_path(path: &PathBuf) -> Option<String> {
 }
 
 fn invite_code_path() -> Option<PathBuf> {
-    Some(dirs::config_dir()?.join("aegis").join("invite_code"))
+    Some(dirs::config_dir()?.join("peeky").join("invite_code"))
 }
 
 #[cfg(test)]
@@ -43,7 +43,7 @@ mod tests {
 
     fn tmp_path(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
-            "aegis-invite-test-{}-{}.txt",
+            "peeky-invite-test-{}-{}.txt",
             label,
             std::process::id()
         ))

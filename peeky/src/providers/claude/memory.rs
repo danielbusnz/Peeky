@@ -2,7 +2,7 @@
 //! user wants to store a fact about themselves like "remember my X is Y",
 //! or recall one they told us before like "what did I tell you about Z").
 //!
-//! Storage: append-only JSONL at `~/.config/aegis/memory.jsonl`. Each
+//! Storage: append-only JSONL at `~/.config/peeky/memory.jsonl`. Each
 //! line is `{ "key": "...", "value": "...", "ts": "..." }`. The whole
 //! file gets loaded into RAM at session start and refreshed whenever a
 //! write happens. Effectively flat key-value with overwrite-on-rewrite
@@ -45,7 +45,7 @@ impl MemoryStore {
     /// filesystem issues. Missing file is treated as empty store.
     pub fn open_default() -> Result<Self, Box<dyn std::error::Error>> {
         let mut path = dirs::config_dir().ok_or("could not locate config dir")?;
-        path.push("aegis");
+        path.push("peeky");
         std::fs::create_dir_all(&path)?;
         path.push("memory.jsonl");
         Self::open(path)
@@ -387,7 +387,7 @@ impl Claude {
             "system": [{
                 "type": "text",
                 "text": format!(
-                    "You are aegis, a voice assistant. The user is asking about the conversation \
+                    "You are peeky, a voice assistant. The user is asking about the conversation \
                      you have been having with them. Answer from the transcript below in one or two \
                      short spoken sentences, plain prose, no markdown. If the answer is not in it, \
                      say so briefly.\n\nConversation so far:\n{}",
@@ -443,7 +443,7 @@ impl Claude {
 
 /// Router prompt for the memory path. Stable, cached.
 fn memory_router_prompt() -> &'static str {
-    "You are the memory router for aegis, a desktop voice assistant. The \
+    "You are the memory router for peeky, a desktop voice assistant. The \
 user is either asking to remember a fact about themselves or asking to \
 recall one they previously stored.\n\
 \n\
@@ -477,7 +477,7 @@ mod tests {
 
     fn tmp_path(label: &str) -> PathBuf {
         let p =
-            std::env::temp_dir().join(format!("aegis-mem-{}-{}.jsonl", label, std::process::id()));
+            std::env::temp_dir().join(format!("peeky-mem-{}-{}.jsonl", label, std::process::id()));
         let _ = std::fs::remove_file(&p);
         p
     }

@@ -6,7 +6,7 @@
 //! gh auth login               # browser OAuth, stores token in ~/.config/gh
 //! ```
 //!
-//! Aegis does not store GitHub credentials. `gh` handles auth, refresh, and
+//! Peeky does not store GitHub credentials. `gh` handles auth, refresh, and
 //! token storage. We just shell out.
 
 use std::process::{Command, Stdio};

@@ -36,10 +36,10 @@ pub struct SttDeepgram {
     token_cache: TokenCache,
 }
 
-/// Auth mode. In proxy mode aegis fetches a short-lived JWT from aegis-proxy
+/// Auth mode. In proxy mode peeky fetches a short-lived JWT from aegis-proxy
 /// before opening Deepgram's WebSocket. In direct mode the local API key is
 /// used as a `Token`-prefixed credential. Only enable with
-/// `AEGIS_DEEPGRAM_DIRECT=1` (useful for dev / burning your own quota).
+/// `PEEKY_DEEPGRAM_DIRECT=1` (useful for dev / burning your own quota).
 #[derive(Clone)]
 pub enum SttMode {
     Direct {
@@ -54,11 +54,11 @@ pub enum SttMode {
 impl SttDeepgram {
     /// Initialize from `.env`/environment. Default behavior is to route auth
     /// through aegis-proxy (no Deepgram key needed locally). Set
-    /// `AEGIS_DEEPGRAM_DIRECT=1` + provide `DEEPGRAM_API_KEY` to bypass.
+    /// `PEEKY_DEEPGRAM_DIRECT=1` + provide `DEEPGRAM_API_KEY` to bypass.
     pub fn from_env(http: reqwest::Client) -> Result<Self, Box<dyn std::error::Error>> {
         dotenvy::dotenv().ok();
 
-        if std::env::var("AEGIS_DEEPGRAM_DIRECT").is_ok() {
+        if std::env::var("PEEKY_DEEPGRAM_DIRECT").is_ok() {
             let api_key = std::env::var("DEEPGRAM_API_KEY")?;
             return Ok(Self {
                 http,
@@ -142,7 +142,7 @@ impl SttDeepgram {
     ) -> Result<(String, u64), Box<dyn std::error::Error + Send + Sync>> {
         // Re-read the invite code and session token on every mint so an
         // onboarding change or a fresh sign-in takes effect without restarting
-        // aegis. They pick the proxy tier (code = demo, token = account).
+        // peeky. They pick the proxy tier (code = demo, token = account).
         let mut req = self
             .http
             .post(token_url)

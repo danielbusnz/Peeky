@@ -1,5 +1,5 @@
 {
-  "_note": "Canonical preprocess() conformance vectors. A byte-identical copy lives in the other repo (routelet at tests/, aegis at aegis/tests/); keep the two in sync. preprocess is the intent-independent input normalization the model sees at BOTH training and inference: (1) lowercase; (2) strip trailing whitespace and terminal .!? runs; (3) after a secret keyword, mask the remainder; (4) emails -> <EMAIL>; (5) runs of 4+ digits -> <NUM>. It must NOT depend on intent (inference does not know the intent yet). The Rust and Python implementations must reproduce every `out` exactly.",
+  "_note": "Canonical preprocess() conformance vectors. A byte-identical copy lives in the other repo (routelet at tests/, peeky at peeky/tests/); keep the two in sync. preprocess is the intent-independent input normalization the model sees at BOTH training and inference: (1) lowercase; (2) strip trailing whitespace and terminal .!? runs; (3) after a secret keyword, mask the remainder; (4) emails -> <EMAIL>; (5) runs of 4+ digits -> <NUM>. It must NOT depend on intent (inference does not know the intent yet). The Rust and Python implementations must reproduce every `out` exactly.",
   "vectors": [
     { "in": "play despacito on spotify", "out": "play despacito on spotify" },
     { "in": "what's the capital of france", "out": "what's the capital of france" },

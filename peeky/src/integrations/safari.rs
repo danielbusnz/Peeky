@@ -70,18 +70,11 @@ fn err_body(msg: &str) -> String {
     )
 }
 
-/// Escape a value before it goes inside an AppleScript double-quoted string.
-/// The `url` is model-provided, so a stray quote or backslash would otherwise
-/// break the script (or inject into it).
-fn escaped(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"")
-}
-
 /// Fire-and-forget: open the URL in Safari. Returns `{}` on success.
 fn open_url(url: &str) -> String {
     let script = format!(
         "tell application \"Safari\" to open location \"{}\"",
-        escaped(url)
+        applescript::escape(url)
     );
     match applescript::run(&script) {
         Ok(_) => "{}".to_string(),
@@ -120,11 +113,16 @@ fn list_tabs() -> String {
     return out
 end tell"#;
 
-    let raw = match applescript::run(script) {
-        Ok(r) => r,
-        Err(e) => return err_body(&format!("safari list_tabs failed: {e}")),
-    };
+    match applescript::run(script) {
+        Ok(raw) => parse_tab_lines(&raw),
+        Err(e) => err_body(&format!("safari list_tabs failed: {e}")),
+    }
+}
 
+/// Parse the `url<tab>title` lines `list_tabs` produces into
+/// `{"tabs":[{"url","title"}]}`. Split out from `list_tabs` so it can be
+/// unit-tested without running osascript.
+fn parse_tab_lines(raw: &str) -> String {
     let tabs: Vec<serde_json::Value> = raw
         .lines()
         .filter(|line| !line.is_empty())
@@ -144,5 +142,74 @@ fn close_tab() -> String {
     match applescript::run("tell application \"Safari\" to close current tab of front window") {
         Ok(_) => "{}".to_string(),
         Err(e) => err_body(&format!("safari close_tab failed: {e}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The osascript-backed functions (open_url, current_tab, close_tab, the run
+    // half of list_tabs) need macOS and a running Safari, so they are verified by
+    // hand, not here. These cover the pure logic that runs on any platform.
+
+    #[test]
+    fn tools_exposes_the_four_expected_names() {
+        let schemas = tools();
+        let names: Vec<&str> = schemas.iter().filter_map(|t| t["name"].as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "safari_open_url",
+                "safari_current_tab",
+                "safari_list_tabs",
+                "safari_close_tab"
+            ]
+        );
+    }
+
+    #[test]
+    fn open_url_requires_a_url_argument() {
+        let open = tools()
+            .into_iter()
+            .find(|t| t["name"] == "safari_open_url")
+            .expect("safari_open_url tool present");
+        assert_eq!(open["input_schema"]["required"][0], "url");
+    }
+
+    #[test]
+    fn dispatch_missing_url_returns_error_not_panic() {
+        let out = dispatch("safari_open_url", &serde_json::json!({}))
+            .expect("dispatch owns safari_open_url");
+        assert!(out.contains("error"), "expected an error body, got {out}");
+        assert!(out.contains("missing"));
+    }
+
+    #[test]
+    fn dispatch_unknown_tool_returns_none() {
+        assert!(dispatch("not_a_safari_tool", &serde_json::json!({})).is_none());
+    }
+
+    #[test]
+    fn parse_tab_lines_builds_one_entry_per_line() {
+        let raw = "https://a.com\tSite A\nhttps://b.com\tSite B\n";
+        let parsed: serde_json::Value = serde_json::from_str(&parse_tab_lines(raw)).unwrap();
+        let tabs = parsed["tabs"].as_array().unwrap();
+        assert_eq!(tabs.len(), 2);
+        assert_eq!(tabs[0]["url"], "https://a.com");
+        assert_eq!(tabs[0]["title"], "Site A");
+        assert_eq!(tabs[1]["title"], "Site B");
+    }
+
+    #[test]
+    fn parse_tab_lines_handles_empty_and_titleless() {
+        let empty: serde_json::Value = serde_json::from_str(&parse_tab_lines("")).unwrap();
+        assert_eq!(empty["tabs"].as_array().unwrap().len(), 0);
+
+        // A line with a URL but no tab/title still parses, title is empty.
+        let no_title: serde_json::Value =
+            serde_json::from_str(&parse_tab_lines("https://a.com\n")).unwrap();
+        assert_eq!(no_title["tabs"][0]["url"], "https://a.com");
+        assert_eq!(no_title["tabs"][0]["title"], "");
     }
 }

@@ -28,8 +28,11 @@ pub mod applescript;
 pub mod github;
 pub mod gmail;
 pub mod health;
+pub mod notes;
+pub mod reminders;
 pub mod safari;
 pub mod spotify;
+pub mod system;
 pub mod youtube;
 
 /// Tool schemas to inject into Claude's tools array. Only tools from
@@ -51,6 +54,15 @@ pub fn all_tools() -> Vec<serde_json::Value> {
     if safari::is_available() {
         tools.extend(safari::tools());
     }
+    if system::is_available() {
+        tools.extend(system::tools());
+    }
+    if reminders::is_available() {
+        tools.extend(reminders::tools());
+    }
+    if notes::is_available() {
+        tools.extend(notes::tools());
+    }
     tools
 }
 
@@ -71,6 +83,15 @@ pub fn dispatch(name: &str, input: &serde_json::Value) -> Option<String> {
         return Some(result);
     }
     if let Some(result) = safari::dispatch(name, input) {
+        return Some(result);
+    }
+    if let Some(result) = system::dispatch(name, input) {
+        return Some(result);
+    }
+    if let Some(result) = reminders::dispatch(name, input) {
+        return Some(result);
+    }
+    if let Some(result) = notes::dispatch(name, input) {
         return Some(result);
     }
     None

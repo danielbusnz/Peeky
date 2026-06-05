@@ -1,6 +1,6 @@
 //! Tier 0: the live working context for the current session. A bounded buffer
 //! of the most recent voice turns plus a running summary of older ones,
-//! injected into chat/agent requests so Aegis remembers the current
+//! injected into chat/agent requests so Peeky remembers the current
 //! conversation, not just stored facts.
 //!
 //! Not the source of truth: every turn is also written to the durable Tier 2
@@ -16,7 +16,7 @@ use std::sync::{Arc, Mutex};
 use super::Claude;
 use crate::tuning::{WORKING_CONTEXT_COMPACT_AT, WORKING_CONTEXT_RECENT_TURNS};
 
-/// One finished voice turn: what the user said and what Aegis spoke back.
+/// One finished voice turn: what the user said and what Peeky spoke back.
 #[derive(Clone)]
 struct Turn {
     user: String,
@@ -100,7 +100,7 @@ impl WorkingContext {
         if !inner.recent.is_empty() {
             s.push_str("Recent turns:\n");
             for t in &inner.recent {
-                s.push_str(&format!("User: {}\nAegis: {}\n", t.user, t.reply));
+                s.push_str(&format!("User: {}\nPeeky: {}\n", t.user, t.reply));
             }
         }
         Some(s)
@@ -135,7 +135,7 @@ impl WorkingContext {
         let drained = inner.recent.len() - WORKING_CONTEXT_RECENT_TURNS;
         let mut s = String::new();
         for t in inner.recent.iter().take(drained) {
-            s.push_str(&format!("User: {}\nAegis: {}\n", t.user, t.reply));
+            s.push_str(&format!("User: {}\nPeeky: {}\n", t.user, t.reply));
         }
         Some((s, drained))
     }
@@ -241,7 +241,7 @@ mod tests {
         let block = wc.as_prompt_block().expect("non-empty");
         assert!(block.contains("Recent turns:"));
         assert!(block.contains("User: what's the weather"));
-        assert!(block.contains("Aegis: I can't check that yet"));
+        assert!(block.contains("Peeky: I can't check that yet"));
     }
 
     #[test]

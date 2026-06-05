@@ -1,4 +1,4 @@
-# Dependabot configuration for aegis.
+# Dependabot configuration for peeky.
 #
 # Three ecosystems live in this repo:
 #   - cargo: the Rust workspace at the repo root.

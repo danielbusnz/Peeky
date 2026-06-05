@@ -67,7 +67,7 @@ jobs:
       # --no-default-features drops the `hyprland` feature, so this builds the
       # winit + portable-crate path (no GTK4/layer-shell C libs needed in CI).
       - name: Clippy (winit / portable path)
-        run: cargo clippy -p aegis --no-default-features --all-targets -- -D warnings
+        run: cargo clippy -p peeky --no-default-features --all-targets -- -D warnings
 
   build:
     name: build + test (${{ matrix.rust }})
@@ -113,10 +113,10 @@ jobs:
           key: build-${{ matrix.rust }}
 
       - name: Check
-        run: cargo check -p aegis --no-default-features
+        run: cargo check -p peeky --no-default-features
 
       - name: Test
-        run: cargo test -p aegis --no-default-features
+        run: cargo test -p peeky --no-default-features
 
   console-js:
     name: console js tests

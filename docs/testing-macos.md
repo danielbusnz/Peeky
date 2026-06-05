@@ -1,4 +1,4 @@
-# Testing Aegis on macOS
+# Testing Peeky on macOS
 
 First-run guide for grabbing the latest CI artifact and verifying it on a Mac.
 
@@ -19,18 +19,18 @@ First-run guide for grabbing the latest CI artifact and verifying it on a Mac.
 ## 1. Download
 
 ```bash
-mkdir -p ~/aegis-test && cd ~/aegis-test
+mkdir -p ~/peeky-test && cd ~/peeky-test
 LATEST=$(gh run list --workflow=macos.yml --limit 1 \
-  --repo danielbusnz-lgtm/Aegis \
+  --repo danielbusnz-lgtm/Peeky \
   --json databaseId --jq '.[0].databaseId')
-gh run download "$LATEST" --repo danielbusnz-lgtm/Aegis --name aegis-macos
-chmod +x aegis
+gh run download "$LATEST" --repo danielbusnz-lgtm/Peeky --name peeky-macos
+chmod +x peeky
 ```
 
 ## 2. Strip Gatekeeper quarantine
 
 ```bash
-xattr -d com.apple.quarantine ./aegis
+xattr -d com.apple.quarantine ./peeky
 ```
 
 Without this, macOS shows "could not be verified" and refuses to run.
@@ -38,7 +38,7 @@ Without this, macOS shows "could not be verified" and refuses to run.
 ## 3. Run from terminal
 
 ```bash
-./aegis
+./peeky
 ```
 
 Run from terminal, not Finder. We need stderr.
@@ -65,7 +65,7 @@ No prompts at all = binary failing silently before reaching those code paths.
 Expect:
 ```
 [hotkey] registered (global)
-aegis ready. hold Ctrl+Space to talk
+peeky ready. hold Ctrl+Space to talk
 ```
 
 `register: ...` followed by an error usually means Accessibility was denied or Ctrl+Space is taken.
@@ -115,10 +115,10 @@ Pure-logic paths (classifier, memory, parsing) all pass tests. I/O paths (mic, s
 
 ```bash
 LATEST=$(gh run list --workflow=macos.yml --limit 1 \
-  --repo danielbusnz-lgtm/Aegis \
+  --repo danielbusnz-lgtm/Peeky \
   --json databaseId --jq '.[0].databaseId')
-gh run download "$LATEST" --repo danielbusnz-lgtm/Aegis --name aegis-macos
-chmod +x aegis
-xattr -d com.apple.quarantine ./aegis 2>/dev/null || true
-./aegis
+gh run download "$LATEST" --repo danielbusnz-lgtm/Peeky --name peeky-macos
+chmod +x peeky
+xattr -d com.apple.quarantine ./peeky 2>/dev/null || true
+./peeky
 ```

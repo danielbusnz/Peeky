@@ -286,7 +286,7 @@ mod tests {
 
     fn load_test_routelet() -> Option<Routelet> {
         // Models live at models/routelet relative to the repo root; cargo test
-        // runs with cwd = the crate root (aegis/), so step up one level.
+        // runs with cwd = the crate root (peeky/), so step up one level.
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()?
             .join("models/routelet");

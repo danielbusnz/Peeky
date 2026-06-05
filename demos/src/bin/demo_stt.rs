@@ -17,7 +17,7 @@
 //   * Slow startup (first chunk delay should be ~0ms with pre-roll)
 //   * Deepgram lag (first interim should arrive 100-300ms after first chunk)
 
-use aegis::{audio, hotkey, providers};
+use peeky::{audio, hotkey, providers};
 
 use providers::stt_deepgram::SttDeepgram;
 use std::sync::Arc;

@@ -98,4 +98,4 @@ echo "Max devices:  ${MAX_DEVICES}"
 echo "Daily budget: ${DAILY_INPUT_TOKENS} in / ${DAILY_OUTPUT_TOKENS} out tokens, ${DAILY_DEEPGRAM} STT / ${DAILY_CARTESIA} TTS mints"
 echo
 echo "Send the recipient:"
-echo "  Paste this code into Aegis settings: ${CODE}"
+echo "  Paste this code into Peeky settings: ${CODE}"

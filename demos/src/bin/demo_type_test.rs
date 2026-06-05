@@ -1,8 +1,8 @@
 //! Self-verifying test that macOS text injection actually enters text.
 //!
-//! Opens a fresh TextEdit document, types a known string via the aegis input
+//! Opens a fresh TextEdit document, types a known string via the peeky input
 //! backend, reads the document back, and reports PASS/FAIL. Run with:
-//!   cargo run -p aegis-demos --bin demo_type_test
+//!   cargo run -p peeky-demos --bin demo_type_test
 //!
 //! macOS only; the running terminal needs Accessibility permission.
 
@@ -13,7 +13,7 @@ fn main() {
 
 #[cfg(target_os = "macos")]
 fn main() {
-    use aegis::actions;
+    use peeky::actions;
     use std::process::Command;
     use std::thread;
     use std::time::Duration;
@@ -30,7 +30,7 @@ fn main() {
         String::from_utf8_lossy(&out.stdout).trim().to_string()
     }
 
-    println!("=== aegis text-entry test ===");
+    println!("=== peeky text-entry test ===");
     actions::init_input_executor();
     actions::check_input_injection_available();
 

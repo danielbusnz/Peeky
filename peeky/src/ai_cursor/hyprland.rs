@@ -1,4 +1,4 @@
-//! Hyprland cursor overlay. A GTK4 layer-shell window draws aegis's
+//! Hyprland cursor overlay. A GTK4 layer-shell window draws peeky's
 //! sprite on top of every other window, click-through so the user's
 //! input still reaches the app underneath. The window covers the whole
 //! monitor; the sprite gets drawn at sub-pixel coords inside.

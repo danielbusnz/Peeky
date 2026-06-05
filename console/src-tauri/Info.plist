@@ -5,8 +5,8 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Aegis needs microphone access for voice commands</string>
+	<string>Peeky needs microphone access for voice commands</string>
 	<key>NSScreenCaptureUsageDescription</key>
-	<string>Aegis needs screen recording to see what you are working on</string>
+	<string>Peeky needs screen recording to see what you are working on</string>
 </dict>
 </plist>

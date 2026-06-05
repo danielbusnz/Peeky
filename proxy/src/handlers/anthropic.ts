@@ -52,7 +52,7 @@ export async function handleAnthropic(request: Request, env: Env, ctx: Execution
     if (beta) upstreamHeaders["anthropic-beta"] = beta;
 
     // Stream the request body straight through instead of buffering it. The
-    // aegis client always sends stream:true, so we skip parsing the body just
+    // peeky client always sends stream:true, so we skip parsing the body just
     // to check that. For screenshot turns this overlaps the client->edge and
     // edge->Anthropic uploads instead of doing them back to back. `duplex` is
     // required when the body is a stream and isn't in the DOM RequestInit type.

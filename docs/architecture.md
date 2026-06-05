@@ -12,7 +12,7 @@ flowchart LR
 
     STT --> CLS{Intent classifier<br/>keyword then Claude}
 
-    CLS -->|memory| MEM[Local JSONL<br/>~/.config/aegis/memory.jsonl]
+    CLS -->|memory| MEM[Local JSONL<br/>~/.config/peeky/memory.jsonl]
     CLS -->|find_action| FA[Claude + screenshot<br/>one shot]
     CLS -->|integration| INT[Service APIs<br/>Spotify Gmail GitHub YouTube]
     CLS -->|chat| CHAT[Claude chat<br/>no tools]
@@ -73,7 +73,7 @@ Keyword classifier (`intent.rs`) handles ~80% of turns in <1ms. Ambiguous turns 
 
 ## Memory layer
 
-JSONL key/value at `~/.config/aegis/memory.jsonl`. Three-tier design (FTS5 log, embeddings, sleep-time consolidation) in [memory-architecture.md](./memory-architecture.md).
+JSONL key/value at `~/.config/peeky/memory.jsonl`. Three-tier design (FTS5 log, embeddings, sleep-time consolidation) in [memory-architecture.md](./memory-architecture.md).
 
 ## Next: lasso to ask
 

@@ -4,12 +4,12 @@
 <dict>
 	<!--
 	  Developer ID distribution, hardened runtime (Tauri enables it by
-	  default and notarization requires it). NOT sandboxed: Aegis posts
+	  default and notarization requires it). NOT sandboxed: Peeky posts
 	  synthetic CGEvents and reads the screen to drive the cursor, which
 	  the App Sandbox forbids.
 
 	  tauri-bundler applies this single file to every signed binary in the
-	  bundle, including the `aegis` sidecar in Contents/MacOS. The sidecar
+	  bundle, including the `peeky` sidecar in Contents/MacOS. The sidecar
 	  is what opens the microphone via cpal, so the audio-input entitlement
 	  has to be here for voice capture to work under the hardened runtime.
 

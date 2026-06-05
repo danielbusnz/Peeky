@@ -16,7 +16,7 @@ use crate::integrations::applescript;
 
 /// True if either backend is usable: the AppleScript app path on macOS, or the
 /// `spotify_player` CLI. Re-checked every agent-loop iteration so installing a
-/// backend mid-session works without restarting aegis.
+/// backend mid-session works without restarting peeky.
 pub fn is_available() -> bool {
     applescript_backend() || cli_backend()
 }
@@ -51,7 +51,7 @@ pub fn tools() -> Vec<serde_json::Value> {
         serde_json::json!({
             "name": "spotify_resume",
             "description": "Resume Spotify playback after a pause.",
-            "input_schema": { "type": "object", "properties": {} }
+                "input_schema": { "type": "object", "properties": {} }
         }),
         serde_json::json!({
             "name": "spotify_next",

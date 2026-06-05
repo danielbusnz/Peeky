@@ -1,7 +1,7 @@
 //! Conversation history store. Persists every voice turn (user transcript
 //! + Claude reply) so we can search past conversations later.
 //!
-//! Storage: SQLite database at `~/.config/aegis/history.db`. One row per
+//! Storage: SQLite database at `~/.config/peeky/history.db`. One row per
 //! turn. Future tiers will add an `embedding` BLOB column and an FTS5
 //! virtual table for hybrid semantic + keyword search.
 //!
@@ -50,13 +50,13 @@ pub struct HistoryStore {
 
 #[allow(dead_code)]
 impl HistoryStore {
-    /// Open the store at the default location (`~/.config/aegis/history.db`
+    /// Open the store at the default location (`~/.config/peeky/history.db`
     /// on Linux, the OS equivalent elsewhere). Creates the parent
     /// directory if missing. Missing db file is fine; we create the
     /// schema on first open.
     pub fn open_default() -> Result<Self, Box<dyn std::error::Error>> {
         let mut path = dirs::config_dir().ok_or("could not locate config dir")?;
-        path.push("aegis");
+        path.push("peeky");
         std::fs::create_dir_all(&path)?;
         path.push("history.db");
         Self::open(path)
@@ -233,7 +233,7 @@ mod tests {
     fn tmp_db_path(label: &str) -> PathBuf {
         let mut p = std::env::temp_dir();
         p.push(format!(
-            "aegis-history-test-{}-{}-{:?}.db",
+            "peeky-history-test-{}-{}-{:?}.db",
             label,
             std::process::id(),
             std::thread::current().id()

@@ -21,14 +21,14 @@
 // Visual check on Windows: while holding Insert, the cursor sprite should
 // be visible AND clicks should pass through to the app underneath.
 
-use aegis::{ai_cursor, hotkey, mouse_position, screenshot};
+use peeky::{ai_cursor, hotkey, mouse_position, screenshot};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use std::time::Instant;
 
 fn main() {
     println!("=================================");
-    println!("aegis end-to-end test");
+    println!("peeky end-to-end test");
     println!("=================================");
     println!();
 
@@ -74,7 +74,7 @@ fn main() {
                             );
                             let bytes = BASE64.decode(b64.as_bytes()).expect("base64 decode");
                             let path =
-                                std::env::temp_dir().join(format!("aegis_test_turn{}.jpg", turn));
+                                std::env::temp_dir().join(format!("peeky_test_turn{}.jpg", turn));
                             std::fs::write(&path, &bytes).expect("write screenshot");
                             eprintln!("[t={:>8.1?}] saved: {}", t.elapsed(), path.display());
                         }

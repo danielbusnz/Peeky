@@ -1,4 +1,4 @@
--- Accounts for aegis. A user is one identity from a social provider (github,
+-- Accounts for peeky. A user is one identity from a social provider (github,
 -- google). Integration tokens are NOT stored here: they stay on the device.
 -- This table backs login, and later the subscription tier the proxy meters
 -- against and a synced settings blob.

@@ -1,5 +1,5 @@
 // Minimal HS256 JWT, hand-rolled on Web Crypto so the Worker stays
-// dependency-free. Used to mint the aegis session token the desktop client
+// dependency-free. Used to mint the peeky session token the desktop client
 // stores after sign-in and replays on metered requests. Stateless: the proxy
 // verifies the signature and expiry, no session table.
 

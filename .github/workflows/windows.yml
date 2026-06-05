@@ -16,22 +16,22 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      # Scope to the aegis crate. The console (Tauri) needs an icon.ico
+      # Scope to the peeky crate. The console (Tauri) needs an icon.ico
       # we don't have committed yet; until it does, including it here
       # breaks the windows build.
-      - name: Type-check aegis (default = winit on Windows)
-        run: cargo check -p aegis --all-targets
+      - name: Type-check peeky (default = winit on Windows)
+        run: cargo check -p peeky --all-targets
 
-      - name: Build aegis (main bin)
-        run: cargo build -p aegis --bin aegis
+      - name: Build peeky (main bin)
+        run: cargo build -p peeky --bin peeky
 
       - name: Build cross-platform demo_win
-        run: cargo build -p aegis-demos --no-default-features --features crossplatform --bin demo_win
+        run: cargo build -p peeky-demos --no-default-features --features crossplatform --bin demo_win
 
       - name: Upload binaries
         uses: actions/upload-artifact@v7
         with:
-          name: aegis-windows
+          name: peeky-windows
           path: |
-            target/debug/aegis.exe
+            target/debug/peeky.exe
             target/debug/demo_win.exe

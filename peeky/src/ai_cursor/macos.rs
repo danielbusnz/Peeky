@@ -206,7 +206,7 @@ impl WgpuRenderer {
         let adapter_limits = adapter.limits();
         let (device, queue) = pollster::block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {
-                label: Some("aegis cursor device"),
+                label: Some("peeky cursor device"),
                 required_features: wgpu::Features::empty(),
                 required_limits: adapter_limits,
                 memory_hints: wgpu::MemoryHints::Performance,

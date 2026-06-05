@@ -1,6 +1,6 @@
 //! Trial-wall upgrade prompt. When a proxy call comes back trial-exhausted, we
 //! nudge the user to sign in: speak one line and open the console's sign-in
-//! window (`AEGIS_SHOW_SIGNIN=1`), the same branded card the user can reach from
+//! window (`PEEKY_SHOW_SIGNIN=1`), the same branded card the user can reach from
 //! settings. That window runs the GitHub OAuth dance and writes the session
 //! token to the file the agent reads per request (see
 //! [`crate::providers::session_jwt`]), so the next voice turn is already on the
@@ -36,7 +36,7 @@ static PROMPTED: AtomicBool = AtomicBool::new(false);
 static ANNOUNCEMENT_PENDING: AtomicBool = AtomicBool::new(false);
 
 fn proxy_base() -> String {
-    std::env::var("AEGIS_PROXY_BASE")
+    std::env::var("PEEKY_PROXY_BASE")
         .unwrap_or_else(|_| "https://aegis-proxy.danielbusnz.workers.dev".to_string())
 }
 
@@ -67,7 +67,7 @@ async fn launch_signin() {
     run_oauth_flow().await;
 }
 
-/// Spawn the console's sign-in window via `AEGIS_SHOW_SIGNIN=1`. The console
+/// Spawn the console's sign-in window via `PEEKY_SHOW_SIGNIN=1`. The console
 /// runs the OAuth dance and writes the session token file we read. Returns true
 /// once a console binary is found and spawned.
 fn open_console_signin() -> bool {
@@ -76,7 +76,7 @@ fn open_console_signin() -> bool {
             continue;
         }
         let mut cmd = std::process::Command::new(&path);
-        cmd.env("AEGIS_SHOW_SIGNIN", "1");
+        cmd.env("PEEKY_SHOW_SIGNIN", "1");
         #[cfg(unix)]
         std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
         match cmd.spawn() {
@@ -98,18 +98,18 @@ fn open_console_signin() -> bool {
 /// bundles (sibling of the agent exe) and the dev workspace layout.
 fn console_candidates() -> Vec<PathBuf> {
     let mut candidates = Vec::new();
-    if let Ok(p) = std::env::var("AEGIS_CONSOLE_BIN") {
+    if let Ok(p) = std::env::var("PEEKY_CONSOLE_BIN") {
         candidates.push(PathBuf::from(p));
     }
     if let Ok(exe) = std::env::current_exe()
         && let Some(dir) = exe.parent()
     {
         candidates.push(dir.join("console"));
-        candidates.push(dir.join("Aegis"));
+        candidates.push(dir.join("Peeky"));
         #[cfg(windows)]
         {
             candidates.push(dir.join("console.exe"));
-            candidates.push(dir.join("Aegis.exe"));
+            candidates.push(dir.join("Peeky.exe"));
         }
     }
     for p in [

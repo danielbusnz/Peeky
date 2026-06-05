@@ -17,7 +17,7 @@ $top
 ${o}│${r}  ${b}DANIEL BROOKS${r}
 ${o}│${r}  ${d}builder · self-taught · ships in Rust, TypeScript & Python${r}
 $mid
-   ${o}◆${r} ${b}Aegis${r} — AI cursor that runs your computer for you
+   ${o}◆${r} ${b}Peeky${r} — AI cursor that runs your computer for you
    ${o}◆${r} ${b}Routelet${r} — on-device ML classifier, routes intents in ms
    ${o}◆${r} ${b}HiveNet${r} — full-stack social network with a real-time feed
 $mid

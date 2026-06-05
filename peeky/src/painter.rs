@@ -42,7 +42,7 @@ const HARMONICS: [(f64, f64, f64); 3] = [(1.5, 0.0, 0.55), (3.1, 1.0, 0.30), (5.
 /// bars the same height (no curve). 0.4 ≈ tidy half-circle pyramid.
 const SHAPE_FLOOR: f64 = 0.4;
 
-/// Animated soundwave shown while Aegis is in the listening state.
+/// Animated soundwave shown while Peeky is in the listening state.
 pub struct Soundwave {
     start: Instant,
 }
@@ -104,7 +104,7 @@ const SPINNER_ALPHA_FLOOR: f64 = 0.12;
 const SPINNER_CORNER_RADIUS: f64 = 1.25;
 const SPINNER_COLOR: (f64, f64, f64) = (1.00, 0.55, 0.00);
 
-/// iOS-style radial spinner shown while Aegis is processing (Loading state).
+/// iOS-style radial spinner shown while Peeky is processing (Loading state).
 pub struct LoadingSpinner {
     start: Instant,
 }

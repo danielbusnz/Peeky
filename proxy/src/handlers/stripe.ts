@@ -76,8 +76,8 @@ export async function handleCheckout(request: Request, env: Env, ctx: ExecutionC
                 customer: customerId,
                 "line_items[0][price]": env.STRIPE_PRICE_ID,
                 "line_items[0][quantity]": "1",
-                success_url: "https://aegis.dev/upgrade/success",
-                cancel_url: "https://aegis.dev/upgrade/cancel",
+                success_url: "https://peeky.dev/upgrade/success",
+                cancel_url: "https://peeky.dev/upgrade/cancel",
             }),
         });
         if (!res.ok) {

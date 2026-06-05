@@ -41,16 +41,16 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      # Limit to the aegis package; the console pulls webkit2gtk and isn't
+      # Limit to the peeky package; the console pulls webkit2gtk and isn't
       # worth testing here. The memex tool is also out of scope.
-      - name: Type-check aegis (winit / portable path)
-        run: cargo check -p aegis --no-default-features
+      - name: Type-check peeky (winit / portable path)
+        run: cargo check -p peeky --no-default-features
 
-      - name: Build aegis bin (winit / portable path)
-        run: cargo build -p aegis --no-default-features --bin aegis
+      - name: Build peeky bin (winit / portable path)
+        run: cargo build -p peeky --no-default-features --bin peeky
 
       - name: Upload binaries
         uses: actions/upload-artifact@v7
         with:
-          name: aegis-linux
-          path: target/debug/aegis
+          name: peeky-linux
+          path: target/debug/peeky

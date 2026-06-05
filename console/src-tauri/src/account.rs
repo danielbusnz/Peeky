@@ -5,10 +5,10 @@
 
 use crate::keychain::{keychain_delete, keychain_get, keychain_set};
 
-/// Base URL of the aegis proxy Worker. Override with AEGIS_PROXY_BASE (e.g.
+/// Base URL of the peeky proxy Worker. Override with PEEKY_PROXY_BASE (e.g.
 /// http://localhost:8787) to point at a local `wrangler dev` while testing.
 fn proxy_base() -> String {
-    std::env::var("AEGIS_PROXY_BASE")
+    std::env::var("PEEKY_PROXY_BASE")
         .unwrap_or_else(|_| "https://aegis-proxy.danielbusnz.workers.dev".to_string())
 }
 
@@ -20,10 +20,10 @@ const SESSION_EMAIL_ACCOUNT: &str = "session_email";
 
 /// The agent-readable session JWT file. This is the source of truth for "signed
 /// in": the running agent reads it per request (see
-/// aegis/src/providers/session_jwt.rs), and it works on Linux setups with no
+/// peeky/src/providers/session_jwt.rs), and it works on Linux setups with no
 /// Secret Service, unlike the keychain.
 fn session_jwt_path() -> Option<std::path::PathBuf> {
-    Some(dirs::config_dir()?.join("aegis").join("session_jwt"))
+    Some(dirs::config_dir()?.join("peeky").join("session_jwt"))
 }
 
 /// Write the session JWT to the 0600 file the agent reads, so signing in

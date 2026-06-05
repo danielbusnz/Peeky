@@ -1,11 +1,11 @@
 // Settings page, shown once the user is signed in. Account section reads the
 // keychain session (account_status / sign_out). Integration status comes from
-// the aegis `integrations-status` subcommand, surfaced via the
+// the peeky `integrations-status` subcommand, surfaced via the
 // integrations_status Tauri command. Connect flows are still to come.
 
 const { invoke } = window.__TAURI__.core;
 
-// The integrations Aegis supports. `connect` describes how a user authenticates
+// The integrations Peeky supports. `connect` describes how a user authenticates
 // it today (all local). Wired to real connect flows later.
 const INTEGRATIONS = [
     { key: "github", name: "GitHub", connect: "gh auth login" },

@@ -122,7 +122,7 @@ fn probe_github() -> Status {
 // ── gmail ─────────────────────────────────────────────────────────────────
 fn probe_gmail() -> Status {
     if !gmail::is_available() {
-        return Status::Skip("AEGIS_GMAIL_CLIENT_ID/SECRET not set".to_string());
+        return Status::Skip("PEEKY_GMAIL_CLIENT_ID/SECRET not set".to_string());
     }
     // user_email() hits /profile, which exercises OAuth refresh, the token
     // cache file, and an HTTP round trip. Success means "auth works AND we

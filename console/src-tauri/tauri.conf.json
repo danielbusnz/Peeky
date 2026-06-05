@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Aegis",
+  "productName": "Peeky",
   "version": "0.1.10",
-  "identifier": "com.aegis.settings",
+  "identifier": "com.peeky.settings",
   "build": {
     "frontendDist": "../ui"
   },
@@ -13,7 +13,7 @@
       {
         "label": "onboarding",
         "url": "onboarding/index.html",
-        "title": "Aegis",
+        "title": "Peeky",
         "width": 600,
         "height": 620,
         "resizable": false,
@@ -27,7 +27,7 @@
       {
         "label": "settings",
         "url": "settings-ui/signin.html",
-        "title": "Aegis",
+        "title": "Peeky",
         "width": 500,
         "height": 540,
         "resizable": false,
@@ -55,7 +55,7 @@
       "icons/icon.ico"
     ],
     "externalBin": [
-      "binaries/aegis"
+      "binaries/peeky"
     ],
     "resources": {
       "../../models/routelet/embedder.onnx": "models/routelet/embedder.onnx",

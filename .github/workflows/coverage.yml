@@ -1,4 +1,4 @@
-# Code coverage for the aegis crate using cargo-llvm-cov.
+# Code coverage for the peeky crate using cargo-llvm-cov.
 #
 # Mirrors the feature set and system deps from ci.yml's test job so the
 # coverage numbers match what CI actually tests. LCOV is uploaded to
@@ -53,7 +53,7 @@ jobs:
 
       - name: Generate LCOV coverage
         run: |
-          cargo llvm-cov -p aegis \
+          cargo llvm-cov -p peeky \
             --no-default-features \
             --lcov --output-path lcov.info
 

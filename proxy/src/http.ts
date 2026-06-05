@@ -16,7 +16,7 @@ export function cors(res: Response): Response {
     headers.set("access-control-allow-methods", "POST, OPTIONS");
     headers.set(
         "access-control-allow-headers",
-        "content-type, authorization, anthropic-version, anthropic-beta, x-aegis-device-id, x-aegis-invite-code",
+        "content-type, authorization, anthropic-version, anthropic-beta, x-peeky-device-id, x-peeky-invite-code",
     );
     return new Response(res.body, { status: res.status, headers });
 }
@@ -39,9 +39,9 @@ export function passthroughHeaders(upstream: Headers): Headers {
  *   // ...use deviceId as a string
  */
 export function requireDeviceId(request: Request): string | Response {
-    const deviceId = request.headers.get("x-aegis-device-id");
+    const deviceId = request.headers.get("x-peeky-device-id");
     if (!deviceId || !UUID_RE.test(deviceId)) {
-        return cors(jsonResponse(401, { error: "missing or invalid X-Aegis-Device-Id" }));
+        return cors(jsonResponse(401, { error: "missing or invalid X-Peeky-Device-Id" }));
     }
     return deviceId;
 }

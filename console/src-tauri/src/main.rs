@@ -11,14 +11,14 @@ mod proxy_contract;
 use tauri::Manager;
 
 fn main() {
-    // Dev escape hatch: AEGIS_SHOW_SIGNIN=1 forces the sign-in window so the
+    // Dev escape hatch: PEEKY_SHOW_SIGNIN=1 forces the sign-in window so the
     // login flow can be exercised without going through (or resetting)
     // onboarding. Skips the onboarded-spawn shortcut below.
-    let show_signin = std::env::var_os("AEGIS_SHOW_SIGNIN").is_some();
+    let show_signin = std::env::var_os("PEEKY_SHOW_SIGNIN").is_some();
 
-    // If already onboarded, spawn aegis directly and exit (no UI).
+    // If already onboarded, spawn peeky directly and exit (no UI).
     if !show_signin && invite::is_onboarded() {
-        if let Err(e) = agent::spawn_aegis() {
+        if let Err(e) = agent::spawn_peeky() {
             eprintln!("[console] {e}");
         }
         return;
@@ -35,7 +35,7 @@ fn main() {
 
     let builder = tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
-            agent::spawn_aegis,
+            agent::spawn_peeky,
             invite::save_invite_code,
             invite::mark_onboarded,
             invite::verify_invite_code,

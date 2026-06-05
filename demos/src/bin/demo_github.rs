@@ -3,7 +3,7 @@
 // Smoke test for the github integration tools.
 // Run: cargo run --bin demo_github
 
-use aegis::integrations::github;
+use peeky::integrations::github;
 
 use serde_json::Value;
 

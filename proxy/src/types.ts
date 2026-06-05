@@ -1,4 +1,4 @@
-// Shared types for the aegis proxy Worker. The runtime bindings (Env) and the
+// Shared types for the peeky proxy Worker. The runtime bindings (Env) and the
 // shapes persisted to KV and R2 live here so handlers and the metering layer
 // agree on one definition.
 
@@ -12,7 +12,7 @@ export interface Env {
     /** Stripe secret key (sk_...). Set via `wrangler secret put STRIPE_SECRET_KEY`. */
     STRIPE_SECRET_KEY: string;
     /**
-     * Recurring Price id (price_...) for the aegis subscription. Not a secret, a
+     * Recurring Price id (price_...) for the peeky subscription. Not a secret, a
      * plain var so test and live can differ. Set in wrangler.toml [vars] (or
      * .dev.vars for local dev).
      */
@@ -42,7 +42,7 @@ export interface Env {
     GITHUB_CLIENT_ID: string;
     /** GitHub OAuth app client secret. `wrangler secret put GITHUB_CLIENT_SECRET`. */
     GITHUB_CLIENT_SECRET: string;
-    /** HS256 signing secret for aegis session JWTs. `wrangler secret put JWT_SECRET`. */
+    /** HS256 signing secret for peeky session JWTs. `wrangler secret put JWT_SECRET`. */
     JWT_SECRET: string;
 }
 
@@ -111,7 +111,7 @@ export type RouteletSample = {
      * the fallback path feeds this endpoint; null until then.
      */
     claude_label: string | null;
-    /** The `x-aegis-device-id` that produced the sample. */
+    /** The `x-peeky-device-id` that produced the sample. */
     device: string;
     /** Unix seconds, server clock (not the client's). */
     ts: number;

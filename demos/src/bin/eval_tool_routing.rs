@@ -1,29 +1,29 @@
 // Eval harness for top-level intent classification.
 //
-// Feeds each transcript from `aegis/evals/cases/tool_routing.json` through
+// Feeds each transcript from `peeky/evals/cases/tool_routing.json` through
 // the live Claude classifier (`claude.classify_intent`) and compares the
 // picked Intent to the case's `expected_intent`. The model never sees
 // `expected_intent`; we only use it to score the result.
 //
 // Usage:
 //   cargo run --release --bin eval_tool_routing
-//   cargo run --release --bin eval_tool_routing -- aegis/evals/cases/tool_routing.json
+//   cargo run --release --bin eval_tool_routing -- peeky/evals/cases/tool_routing.json
 //
 // Requires the same .env setup as the main binary (proxy device id or
-// AEGIS_ANTHROPIC_DIRECT=1 + ANTHROPIC_API_KEY).
+// PEEKY_ANTHROPIC_DIRECT=1 + ANTHROPIC_API_KEY).
 //
 // Prints a per-case pass/fail line, a per-category summary, and a
 // confusion matrix. Each case is one Claude call, billed normally.
 
 #![allow(dead_code)]
 
-use aegis::providers;
+use peeky::providers;
 
 use providers::claude::{Claude, Intent};
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
-const DEFAULT_CASES_PATH: &str = "aegis/evals/cases/tool_routing.json";
+const DEFAULT_CASES_PATH: &str = "peeky/evals/cases/tool_routing.json";
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();

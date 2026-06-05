@@ -31,7 +31,7 @@ type Active = crossplatform::Backend;
 /// # Example
 ///
 /// ```no_run
-/// let (x, y) = aegis::mouse_position::mouse_movement().unwrap();
+/// let (x, y) = peeky::mouse_position::mouse_movement().unwrap();
 /// println!("cursor at ({x}, {y})");
 /// ```
 pub fn mouse_movement() -> Result<(i64, i64), Box<dyn std::error::Error + Send + Sync>> {

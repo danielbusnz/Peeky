@@ -55,9 +55,9 @@ impl InputInjector for Backend {
         };
 
         // Confirm the action reached OS-level execution (not just the queue in
-        // actions.rs). The literal text is only logged under AEGIS_INPUT_DEBUG,
+        // actions.rs). The literal text is only logged under PEEKY_INPUT_DEBUG,
         // since it can contain anything the user types, passwords included.
-        if std::env::var("AEGIS_INPUT_DEBUG").is_ok() {
+        if std::env::var("PEEKY_INPUT_DEBUG").is_ok() {
             eprintln!(
                 "[input:type] injecting {} char(s): {:?} (enter={})",
                 text_to_type.chars().count(),

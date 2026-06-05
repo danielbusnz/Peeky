@@ -49,7 +49,7 @@ impl Claude {
                 "cache_control": { "type": "ephemeral" }
             }));
         }
-        // Conversation handoff from the Claude Code session that launched Aegis
+        // Conversation handoff from the Claude Code session that launched Peeky
         // (what the user was working on), if any. Cached so it's cheap per turn.
         if let Some(handoff) = crate::handoff::get() {
             system_blocks.push(serde_json::json!({
@@ -160,7 +160,7 @@ impl Claude {
 /// it caches well. Keep short. Every token here is sent on every chat
 /// turn.
 fn chat_system_prompt() -> &'static str {
-    "You are aegis, a voice assistant running on the user's desktop. A \
+    "You are peeky, a voice assistant running on the user's desktop. A \
 screenshot of the user's current screen is attached. The user is \
 speaking to you and hearing your replies via TTS, so:\n\
 - Be concise. Aim for 1-3 sentences unless the user asks for detail.\n\
