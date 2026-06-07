@@ -92,7 +92,7 @@ impl Routelet {
         let head: serde_json::Value = serde_json::from_slice(&head_bytes)
             .map_err(|e| format!("failed to parse {}: {e}", head_path.display()))?;
 
-        let coef = head["coef"]
+        let mut coef = head["coef"]
             .as_array()
             .ok_or("head.json: 'coef' is not an array")?
             .iter()
@@ -111,7 +111,7 @@ impl Routelet {
             })
             .collect::<Result<Vec<Vec<f32>>, String>>()?;
 
-        let intercept = head["intercept"]
+        let mut intercept = head["intercept"]
             .as_array()
             .ok_or("head.json: 'intercept' is not an array")?
             .iter()
@@ -123,7 +123,7 @@ impl Routelet {
             })
             .collect::<Result<Vec<f32>, String>>()?;
 
-        let labels = head["labels"]
+        let mut labels = head["labels"]
             .as_array()
             .ok_or("head.json: 'labels' is not an array")?
             .iter()
@@ -149,6 +149,19 @@ impl Routelet {
                 labels.len()
             )
             .into());
+        }
+
+        // Drop the `agent` class if the head still ships it. Agent is an explicit
+        // voice-cue mode now, not something routelet guesses, so routelet must not
+        // emit Intent::Agent; a would-be-agent turn falls to the next-best class or
+        // to `none` (Claude fallback, which still routes agent). Removing the column
+        // from all three keeps coef/intercept/labels aligned, and the softmax in
+        // head_predict_with_confidence renormalizes over what remains. No-op once a
+        // retrained head ships without the class.
+        if let Some(agent_idx) = labels.iter().position(|l| l == "agent") {
+            labels.remove(agent_idx);
+            coef.remove(agent_idx);
+            intercept.remove(agent_idx);
         }
 
         Ok(Routelet {
@@ -333,6 +346,22 @@ mod tests {
             conf > 0.5,
             "expected confidence > 0.5 for clear phrase, got {conf}"
         );
+    }
+
+    // The agent class is stripped at load: routelet must never emit Intent::Agent,
+    // and the three head vectors stay aligned after the drop.
+    #[test]
+    fn agent_class_dropped_at_load() {
+        let Some(routelet) = load_test_routelet() else {
+            eprintln!("[test] skipping: model not found");
+            return;
+        };
+        assert!(
+            !routelet.labels.iter().any(|l| l == "agent"),
+            "routelet head must not retain the agent label after load"
+        );
+        assert_eq!(routelet.labels.len(), routelet.coef.len());
+        assert_eq!(routelet.labels.len(), routelet.intercept.len());
     }
 
     // ── hermetic head-math tests (no model, no file I/O, no network) ──
