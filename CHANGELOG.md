@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). peeky f
 
 ## [Unreleased]
 
+## [0.1.20] - 2026-06-10
+
+### Changed
+
+- Retrain the on-device intent router for the v0.1.19 macOS integrations: "turn off wifi", "next slide", "facetime mom" now route on-device instead of falling through to the wrong path.
+- Drop the `agent` class from the router. Agent turns route through the Claude classifier fallback until the spoken cue ships.
+- Keep terminal question marks through transcript preprocessing, so capability questions ("can you see my screen?") route to chat instead of firing an action.
+
 ## [0.1.19] - 2026-06-10
 
 ### Added
