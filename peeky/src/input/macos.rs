@@ -48,10 +48,9 @@ impl InputInjector for Backend {
         thread::sleep(Duration::from_millis(80));
 
         // Check if text ends with newline (submit)
-        let (text_to_type, needs_enter) = if text.ends_with('\n') {
-            (&text[..text.len() - 1], true)
-        } else {
-            (text, false)
+        let (text_to_type, needs_enter) = match text.strip_suffix('\n') {
+            Some(stripped) => (stripped, true),
+            None => (text, false),
         };
 
         // Confirm the action reached OS-level execution (not just the queue in

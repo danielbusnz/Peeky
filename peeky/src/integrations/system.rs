@@ -339,10 +339,8 @@ fn wifi_device(ports: &str) -> Option<&str> {
         let line = line.trim();
         if let Some(port) = line.strip_prefix("Hardware Port:") {
             in_wifi_block = port.trim() == "Wi-Fi";
-        } else if in_wifi_block {
-            if let Some(device) = line.strip_prefix("Device:") {
-                return Some(device.trim());
-            }
+        } else if in_wifi_block && let Some(device) = line.strip_prefix("Device:") {
+            return Some(device.trim());
         }
     }
     None
