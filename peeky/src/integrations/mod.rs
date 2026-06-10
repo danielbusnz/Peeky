@@ -25,13 +25,27 @@
 //! runtime" surprises.
 
 pub mod applescript;
+pub mod apps;
+pub mod calendar;
+pub mod clipboard;
+pub mod contacts;
+pub mod facetime;
+pub mod finder;
 pub mod github;
 pub mod gmail;
 pub mod health;
+pub mod keynote;
+pub mod mail;
+pub mod maps;
+pub mod messages;
+pub mod music;
 pub mod notes;
+pub mod photos;
 pub mod reminders;
 pub mod safari;
+pub mod shortcuts;
 pub mod spotify;
+pub mod spotlight;
 pub mod system;
 pub mod youtube;
 
@@ -63,6 +77,48 @@ pub fn all_tools() -> Vec<serde_json::Value> {
     if notes::is_available() {
         tools.extend(notes::tools());
     }
+    if finder::is_available() {
+        tools.extend(finder::tools());
+    }
+    if calendar::is_available() {
+        tools.extend(calendar::tools());
+    }
+    if apps::is_available() {
+        tools.extend(apps::tools());
+    }
+    if shortcuts::is_available() {
+        tools.extend(shortcuts::tools());
+    }
+    if messages::is_available() {
+        tools.extend(messages::tools());
+    }
+    if contacts::is_available() {
+        tools.extend(contacts::tools());
+    }
+    if music::is_available() {
+        tools.extend(music::tools());
+    }
+    if mail::is_available() {
+        tools.extend(mail::tools());
+    }
+    if photos::is_available() {
+        tools.extend(photos::tools());
+    }
+    if keynote::is_available() {
+        tools.extend(keynote::tools());
+    }
+    if clipboard::is_available() {
+        tools.extend(clipboard::tools());
+    }
+    if spotlight::is_available() {
+        tools.extend(spotlight::tools());
+    }
+    if facetime::is_available() {
+        tools.extend(facetime::tools());
+    }
+    if maps::is_available() {
+        tools.extend(maps::tools());
+    }
     tools
 }
 
@@ -92,6 +148,48 @@ pub fn dispatch(name: &str, input: &serde_json::Value) -> Option<String> {
         return Some(result);
     }
     if let Some(result) = notes::dispatch(name, input) {
+        return Some(result);
+    }
+    if let Some(result) = finder::dispatch(name, input) {
+        return Some(result);
+    }
+    if let Some(result) = calendar::dispatch(name, input) {
+        return Some(result);
+    }
+    if let Some(result) = apps::dispatch(name, input) {
+        return Some(result);
+    }
+    if let Some(result) = shortcuts::dispatch(name, input) {
+        return Some(result);
+    }
+    if let Some(result) = messages::dispatch(name, input) {
+        return Some(result);
+    }
+    if let Some(result) = contacts::dispatch(name, input) {
+        return Some(result);
+    }
+    if let Some(result) = music::dispatch(name, input) {
+        return Some(result);
+    }
+    if let Some(result) = mail::dispatch(name, input) {
+        return Some(result);
+    }
+    if let Some(result) = photos::dispatch(name, input) {
+        return Some(result);
+    }
+    if let Some(result) = keynote::dispatch(name, input) {
+        return Some(result);
+    }
+    if let Some(result) = clipboard::dispatch(name, input) {
+        return Some(result);
+    }
+    if let Some(result) = spotlight::dispatch(name, input) {
+        return Some(result);
+    }
+    if let Some(result) = facetime::dispatch(name, input) {
+        return Some(result);
+    }
+    if let Some(result) = maps::dispatch(name, input) {
         return Some(result);
     }
     None
