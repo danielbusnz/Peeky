@@ -6,6 +6,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). peeky f
 
 ## [Unreleased]
 
+## [0.1.19] - 2026-06-10
+
+### Added
+
+- Finder integration: open, reveal, and trash files and folders by voice (`finder_open`, `finder_reveal`, `finder_trash`).
+- Calendar integration: add events at relative times and list today's agenda.
+- App control: open, quit, and list running macOS apps by name.
+- Shortcuts integration: run any user Shortcut by name in the background, list shortcuts.
+- Messages integration: send iMessages, with contact names resolved through the new Contacts lookup.
+- Apple Music integration: transport control, current track, and library track search.
+- Mail integration: send email and read the inbox unread count.
+- Photos integration: show an album by name.
+- Keynote integration: start, advance, and stop a presentation by voice.
+- System controls: dark mode, sleep, screen saver (screen lock), wallpaper, notification banners, keep-awake via `caffeinate`, and Wi-Fi power.
+- Clipboard read and write tools.
+- Spotlight file search via `mdfind`, pairs with Finder reveal for "find that pdf".
+- FaceTime calls and Apple Maps directions/search via Apple URL schemes.
+
 ## [0.1.8] - 2026-05-28
 
 ### Added
