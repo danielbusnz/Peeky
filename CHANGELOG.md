@@ -6,6 +6,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). peeky f
 
 ## [Unreleased]
 
+## [0.1.21] - 2026-06-11
+
+### Changed
+
+- Redesign onboarding as a borderless card window: breathing-rings welcome screen, then a one-click "Get started" step with the invite code and API key fields tucked behind an accordion link.
+- New app icon: white pixel cursor on an orange tile.
+
+### Added
+
+- Escape steps back through onboarding and closes the window from the welcome screen.
+
 ## [0.1.20] - 2026-06-10
 
 ### Changed
