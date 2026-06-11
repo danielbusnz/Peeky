@@ -14,30 +14,42 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const HTML_BODY = `
   <div class="window" data-tauri-drag-region>
-    <div id="outer-halo">
-      <div id="breathing-button"></div>
+    <div class="card" data-tauri-drag-region>
+    <div class="sheen" aria-hidden="true"></div>
+    <span class="wordmark"><img src="cursor.svg" alt="" />Peeky</span>
+    <div class="stage" data-tauri-drag-region>
+      <div class="ripple r1" aria-hidden="true"></div>
+      <div class="ripple r2" aria-hidden="true"></div>
+      <button id="cursor-button" aria-label="Start Peeky">
+        <img src="cursor.svg" alt="" />
+      </button>
     </div>
-    <button id="cursor-button" aria-label="Start Peeky">
-      <img src="cursor.svg" alt="" />
-    </button>
+    <p class="hint">Click to begin</p>
     <div id="enroll">
-      <div id="invite">
-        <input type="text" id="invite-code" placeholder="Invite code (optional)" autocomplete="off" autocapitalize="characters" spellcheck="false" />
-        <span id="invite-status" aria-hidden="true"></span>
+      <p id="enroll-title">You're in</p>
+      <p id="enroll-sub">Peeky is free while in beta. Hold <span id="enroll-hotkey">Ctrl+Space</span> anywhere to start.</p>
+      <button type="button" id="enroll-continue">Get started</button>
+      <button type="button" id="access-toggle" class="link-btn">Have an invite code or API keys?</button>
+      <div id="access-options">
+        <div id="invite">
+          <input type="text" id="invite-code" placeholder="Invite code" autocomplete="off" autocapitalize="characters" spellcheck="false" />
+          <span id="invite-status" aria-hidden="true"></span>
+        </div>
+        <div id="byok">
+          <input type="password" id="key-anthropic" placeholder="Anthropic API key" autocomplete="off" spellcheck="false" />
+          <input type="password" id="key-deepgram" placeholder="Deepgram API key" autocomplete="off" spellcheck="false" />
+          <input type="password" id="key-cartesia" placeholder="Cartesia API key" autocomplete="off" spellcheck="false" />
+        </div>
+        <button type="button" id="byok-toggle" class="link-btn">Bring your own API keys</button>
+        <button type="button" id="byok-back" class="link-btn">Use an invite code instead</button>
       </div>
-      <div id="byok">
-        <input type="password" id="key-anthropic" placeholder="Anthropic API key" autocomplete="off" spellcheck="false" />
-        <input type="password" id="key-deepgram" placeholder="Deepgram API key" autocomplete="off" spellcheck="false" />
-        <input type="password" id="key-cartesia" placeholder="Cartesia API key" autocomplete="off" spellcheck="false" />
-      </div>
-      <button type="button" id="byok-toggle" class="link-btn">Use your own API keys</button>
-      <button type="button" id="byok-back" class="link-btn">Use an invite code instead</button>
       <p id="gate-hint" role="status" aria-live="polite"></p>
     </div>
     <div id="howto">
       <p class="howto-title">You're all set</p>
       <p class="howto-sub">Hold <kbd id="hotkey-combo">Ctrl + Space</kbd> and speak</p>
       <button id="howto-done" type="button">Got it</button>
+    </div>
     </div>
   </div>
 `;
@@ -113,6 +125,7 @@ async function setup(invokeOverrides = {}, { noTauri = false } = {}) {
     codeStatus: () => document.getElementById("invite-status"),
     gateHint: () => document.getElementById("gate-hint"),
     cursorBtn: () => document.getElementById("cursor-button"),
+    enrollContinue: () => document.getElementById("enroll-continue"),
     byokToggle: () => document.getElementById("byok-toggle"),
     byokBack: () => document.getElementById("byok-back"),
     anthropicField: () => document.getElementById("key-anthropic"),
@@ -389,10 +402,10 @@ describe("api_keys_status prefill on load", () => {
 
 describe("gate: invite flow", () => {
   test("empty invite code → starts trial, advances to howto, no shake, no save", async () => {
-    const { invokeFn, codeInput, cursorBtn, win } = await setup();
+    const { invokeFn, codeInput, enrollContinue, win } = await setup();
 
     codeInput().value = "";
-    click(cursorBtn());
+    click(enrollContinue());
     await new Promise((r) => setTimeout(r, 0));
 
     // Blank code is the free trial: advance to the hotkey card, no error shake.
@@ -404,12 +417,12 @@ describe("gate: invite flow", () => {
   });
 
   test("invite code rejected → blocked, #invite-code gets .invalid + .shake, hint set", async () => {
-    const { invokeFn, codeInput, gateHint, cursorBtn, win } = await setup({
+    const { invokeFn, codeInput, gateHint, enrollContinue, win } = await setup({
       verify_invite_code: new Error("rejected"),
     });
 
     codeInput().value = "BADCODE";
-    click(cursorBtn());
+    click(enrollContinue());
     await new Promise((r) => setTimeout(r, 0));
 
     expect(win().classList.contains("show-howto")).toBe(false);
@@ -422,13 +435,13 @@ describe("gate: invite flow", () => {
   });
 
   test("good invite code → .show-howto added, save_invite_code called with normalized code", async () => {
-    const { invokeFn, codeInput, cursorBtn, win } = await setup({
+    const { invokeFn, codeInput, enrollContinue, win } = await setup({
       verify_invite_code: null,
       save_invite_code: null,
     });
 
     codeInput().value = "  good-code  ";
-    click(cursorBtn());
+    click(enrollContinue());
     await new Promise((r) => setTimeout(r, 0));
 
     expect(win().classList.contains("show-howto")).toBe(true);
@@ -439,13 +452,13 @@ describe("gate: invite flow", () => {
   });
 
   test("good invite code → normalized code passed to verify", async () => {
-    const { invokeFn, codeInput, cursorBtn } = await setup({
+    const { invokeFn, codeInput, enrollContinue } = await setup({
       verify_invite_code: null,
       save_invite_code: null,
     });
 
     codeInput().value = "  lowercase  ";
-    click(cursorBtn());
+    click(enrollContinue());
     await new Promise((r) => setTimeout(r, 0));
 
     const verifyCalls = invokeFn.mock.calls.filter(([cmd]) => cmd === "verify_invite_code");
@@ -460,7 +473,7 @@ describe("gate: invite flow", () => {
 
 describe("gate: BYOK flow", () => {
   test("all keys valid → .show-howto added, save_api_keys called with trimmed values", async () => {
-    const { invokeFn, anthropicField, deepgramField, cartesiaField, byokToggle, cursorBtn, win } =
+    const { invokeFn, anthropicField, deepgramField, cartesiaField, byokToggle, enrollContinue, win } =
       await setup({
         verify_api_keys: { anthropic: true, deepgram: true, cartesia: true },
         save_api_keys: null,
@@ -471,7 +484,7 @@ describe("gate: BYOK flow", () => {
     deepgramField().value = "dg-key";
     cartesiaField().value = "  cart-key  ";
 
-    click(cursorBtn());
+    click(enrollContinue());
     await new Promise((r) => setTimeout(r, 0));
 
     expect(win().classList.contains("show-howto")).toBe(true);
@@ -486,7 +499,7 @@ describe("gate: BYOK flow", () => {
   });
 
   test("one key invalid → blocked, invalid field gets .invalid + .shake, valid fields get .valid, hint set", async () => {
-    const { anthropicField, deepgramField, cartesiaField, byokToggle, cursorBtn, win, gateHint } =
+    const { anthropicField, deepgramField, cartesiaField, byokToggle, enrollContinue, win, gateHint } =
       await setup({
         verify_api_keys: { anthropic: true, deepgram: false, cartesia: true },
         save_api_keys: null,
@@ -497,7 +510,7 @@ describe("gate: BYOK flow", () => {
     deepgramField().value = "bad-key";
     cartesiaField().value = "cart-key";
 
-    click(cursorBtn());
+    click(enrollContinue());
     await new Promise((r) => setTimeout(r, 0));
 
     expect(win().classList.contains("show-howto")).toBe(false);
@@ -509,7 +522,7 @@ describe("gate: BYOK flow", () => {
   });
 
   test("blank field without .saved → blocked BEFORE verify_api_keys, blank field shakes", async () => {
-    const { invokeFn, anthropicField, deepgramField, cartesiaField, byokToggle, cursorBtn, win } =
+    const { invokeFn, anthropicField, deepgramField, cartesiaField, byokToggle, enrollContinue, win } =
       await setup({
         verify_api_keys: { anthropic: true, deepgram: true, cartesia: true },
       });
@@ -519,7 +532,7 @@ describe("gate: BYOK flow", () => {
     deepgramField().value = ""; // blank, not saved
     cartesiaField().value = "cart-key";
 
-    click(cursorBtn());
+    click(enrollContinue());
     await new Promise((r) => setTimeout(r, 0));
 
     expect(win().classList.contains("show-howto")).toBe(false);
@@ -532,7 +545,7 @@ describe("gate: BYOK flow", () => {
   });
 
   test("blank field that IS .saved → allowed through to verify_api_keys", async () => {
-    const { invokeFn, anthropicField, deepgramField, cartesiaField, byokToggle, cursorBtn } =
+    const { invokeFn, anthropicField, deepgramField, cartesiaField, byokToggle, enrollContinue } =
       await setup({
         api_keys_status: { anthropic: false, deepgram: true, cartesia: false },
         verify_api_keys: { anthropic: true, deepgram: true, cartesia: true },
@@ -546,7 +559,7 @@ describe("gate: BYOK flow", () => {
     deepgramField().value = ""; // blank but .saved
     cartesiaField().value = "cart-key";
 
-    click(cursorBtn());
+    click(enrollContinue());
     await new Promise((r) => setTimeout(r, 0));
 
     const verifyCalls = invokeFn.mock.calls.filter(([cmd]) => cmd === "verify_api_keys");
@@ -554,7 +567,7 @@ describe("gate: BYOK flow", () => {
   });
 
   test("blank .saved field → blank string passed to verify_api_keys", async () => {
-    const { invokeFn, anthropicField, deepgramField, cartesiaField, byokToggle, cursorBtn } =
+    const { invokeFn, anthropicField, deepgramField, cartesiaField, byokToggle, enrollContinue } =
       await setup({
         api_keys_status: { anthropic: false, deepgram: true, cartesia: false },
         verify_api_keys: { anthropic: true, deepgram: true, cartesia: true },
@@ -566,7 +579,7 @@ describe("gate: BYOK flow", () => {
     deepgramField().value = "";
     cartesiaField().value = "cart-key";
 
-    click(cursorBtn());
+    click(enrollContinue());
     await new Promise((r) => setTimeout(r, 0));
 
     const verifyCalls = invokeFn.mock.calls.filter(([cmd]) => cmd === "verify_api_keys");
@@ -578,7 +591,7 @@ describe("gate: BYOK flow", () => {
   });
 
   test("multiple blank unsaved fields → all shake", async () => {
-    const { deepgramField, cartesiaField, byokToggle, cursorBtn, anthropicField } = await setup({
+    const { deepgramField, cartesiaField, byokToggle, enrollContinue, anthropicField } = await setup({
       verify_api_keys: { anthropic: true, deepgram: true, cartesia: true },
     });
 
@@ -587,7 +600,7 @@ describe("gate: BYOK flow", () => {
     deepgramField().value = "";
     cartesiaField().value = "";
 
-    click(cursorBtn());
+    click(enrollContinue());
     await new Promise((r) => setTimeout(r, 0));
 
     expect(deepgramField().classList.contains("shake")).toBe(true);
@@ -595,7 +608,7 @@ describe("gate: BYOK flow", () => {
   });
 
   test("hint text set when blank unsaved fields present", async () => {
-    const { deepgramField, byokToggle, cursorBtn, gateHint, anthropicField, cartesiaField } =
+    const { deepgramField, byokToggle, enrollContinue, gateHint, anthropicField, cartesiaField } =
       await setup();
 
     click(byokToggle());
@@ -603,14 +616,14 @@ describe("gate: BYOK flow", () => {
     deepgramField().value = "";
     cartesiaField().value = "cart-key";
 
-    click(cursorBtn());
+    click(enrollContinue());
     await new Promise((r) => setTimeout(r, 0));
 
     expect(gateHint().textContent).toBe("Enter all three API keys, or use an invite code.");
   });
 
   test("verify_api_keys called with correct keys object", async () => {
-    const { invokeFn, anthropicField, deepgramField, cartesiaField, byokToggle, cursorBtn } =
+    const { invokeFn, anthropicField, deepgramField, cartesiaField, byokToggle, enrollContinue } =
       await setup({
         verify_api_keys: { anthropic: true, deepgram: true, cartesia: true },
         save_api_keys: null,
@@ -621,7 +634,7 @@ describe("gate: BYOK flow", () => {
     deepgramField().value = "dg";
     cartesiaField().value = "cart";
 
-    click(cursorBtn());
+    click(enrollContinue());
     await new Promise((r) => setTimeout(r, 0));
 
     const verifyCalls = invokeFn.mock.calls.filter(([cmd]) => cmd === "verify_api_keys");
@@ -629,7 +642,7 @@ describe("gate: BYOK flow", () => {
   });
 
   test("all invalid keys → all fields marked invalid and shake", async () => {
-    const { anthropicField, deepgramField, cartesiaField, byokToggle, cursorBtn } = await setup({
+    const { anthropicField, deepgramField, cartesiaField, byokToggle, enrollContinue } = await setup({
       verify_api_keys: { anthropic: false, deepgram: false, cartesia: false },
     });
 
@@ -638,7 +651,7 @@ describe("gate: BYOK flow", () => {
     deepgramField().value = "bad2";
     cartesiaField().value = "bad3";
 
-    click(cursorBtn());
+    click(enrollContinue());
     await new Promise((r) => setTimeout(r, 0));
 
     expect(anthropicField().classList.contains("invalid")).toBe(true);
@@ -650,7 +663,7 @@ describe("gate: BYOK flow", () => {
   });
 
   test("verify_api_keys network error → hint set, not advanced", async () => {
-    const { gateHint, anthropicField, deepgramField, cartesiaField, byokToggle, cursorBtn, win } =
+    const { gateHint, anthropicField, deepgramField, cartesiaField, byokToggle, enrollContinue, win } =
       await setup({
         verify_api_keys: new Error("network error"),
       });
@@ -660,7 +673,7 @@ describe("gate: BYOK flow", () => {
     deepgramField().value = "dg";
     cartesiaField().value = "cart";
 
-    click(cursorBtn());
+    click(enrollContinue());
     await new Promise((r) => setTimeout(r, 0));
 
     expect(win().classList.contains("show-howto")).toBe(false);
@@ -764,13 +777,13 @@ describe("showHowTo: hotkey combo text", () => {
       configurable: true,
     });
 
-    const { invokeFn, codeInput, cursorBtn, hotkeyCombo } = await setup({
+    const { invokeFn, codeInput, enrollContinue, hotkeyCombo } = await setup({
       verify_invite_code: null,
       save_invite_code: null,
     });
 
     codeInput().value = "CODE";
-    click(cursorBtn());
+    click(enrollContinue());
     await new Promise((r) => setTimeout(r, 0));
 
     expect(hotkeyCombo().textContent).toBe("Ctrl + Space");
@@ -782,13 +795,13 @@ describe("showHowTo: hotkey combo text", () => {
       configurable: true,
     });
 
-    const { codeInput, cursorBtn, hotkeyCombo } = await setup({
+    const { codeInput, enrollContinue, hotkeyCombo } = await setup({
       verify_invite_code: null,
       save_invite_code: null,
     });
 
     codeInput().value = "CODE";
-    click(cursorBtn());
+    click(enrollContinue());
     await new Promise((r) => setTimeout(r, 0));
 
     expect(hotkeyCombo().textContent).toBe("⌃ Space");
@@ -807,17 +820,130 @@ describe("showHowTo: hotkey combo text", () => {
 
 describe("save_api_keys conditional call", () => {
   test("no key fields entered in invite flow → save_api_keys not called", async () => {
-    const { invokeFn, codeInput, cursorBtn } = await setup({
+    const { invokeFn, codeInput, enrollContinue } = await setup({
       verify_invite_code: null,
       save_invite_code: null,
       save_api_keys: null,
     });
 
     codeInput().value = "GOODCODE";
-    click(cursorBtn());
+    click(enrollContinue());
     await new Promise((r) => setTimeout(r, 0));
 
     const saveCalls = invokeFn.mock.calls.filter(([cmd]) => cmd === "save_api_keys");
     expect(saveCalls).toHaveLength(0);
+  });
+});
+
+// ============================================================
+// Welcome step: #cursor-button shows enrollment
+// ============================================================
+
+describe("welcome step: cursor button", () => {
+  test("clicking #cursor-button adds .show-enroll", async () => {
+    const { win, cursorBtn } = await setup();
+
+    expect(win().classList.contains("show-enroll")).toBe(false);
+    click(cursorBtn());
+    expect(win().classList.contains("show-enroll")).toBe(true);
+  });
+
+  test("clicking #cursor-button does not run the credential gate", async () => {
+    const { invokeFn, cursorBtn } = await setup();
+
+    click(cursorBtn());
+    await new Promise((r) => setTimeout(r, 0));
+
+    const gateCalls = invokeFn.mock.calls.filter(
+      ([cmd]) => cmd === "verify_invite_code" || cmd === "verify_api_keys",
+    );
+    expect(gateCalls).toHaveLength(0);
+  });
+});
+
+// ============================================================
+// Continue button label: trial vs code vs keys
+// ============================================================
+
+describe("continue button label", () => {
+  test("reads 'Get started' with an empty code, 'Continue' once typed", async () => {
+    const { codeInput, enrollContinue } = await setup();
+
+    expect(enrollContinue().textContent).toBe("Get started");
+
+    codeInput().value = "ABC";
+    fireInput(codeInput());
+    expect(enrollContinue().textContent).toBe("Continue");
+
+    codeInput().value = "";
+    fireInput(codeInput());
+    expect(enrollContinue().textContent).toBe("Get started");
+  });
+
+  test("reads 'Continue' in key-entry mode, reverts on back", async () => {
+    const { byokToggle, byokBack, enrollContinue } = await setup();
+
+    click(byokToggle());
+    expect(enrollContinue().textContent).toBe("Continue");
+
+    click(byokBack());
+    expect(enrollContinue().textContent).toBe("Get started");
+  });
+});
+
+// ============================================================
+// Access accordion: invite/key paths hidden by default
+// ============================================================
+
+describe("access accordion", () => {
+  test("access toggle reveals the options and focuses the code input", async () => {
+    const { win, codeInput } = await setup();
+    const accessToggle = document.getElementById("access-toggle");
+
+    expect(win().classList.contains("show-access")).toBe(false);
+    click(accessToggle);
+    expect(win().classList.contains("show-access")).toBe(true);
+    expect(document.activeElement).toBe(codeInput());
+
+    click(accessToggle);
+    expect(win().classList.contains("show-access")).toBe(false);
+  });
+
+  test("Escape from enrollment collapses access and byok states", async () => {
+    const { win, cursorBtn, byokToggle } = await setup();
+
+    click(cursorBtn());
+    click(document.getElementById("access-toggle"));
+    click(byokToggle());
+    expect(win().classList.contains("show-byok")).toBe(true);
+
+    fireKeydown(document.body, "Escape");
+    expect(win().classList.contains("show-enroll")).toBe(false);
+    expect(win().classList.contains("show-access")).toBe(false);
+    expect(win().classList.contains("show-byok")).toBe(false);
+  });
+});
+
+// ============================================================
+// Escape: step back from enrollment, close from welcome
+// ============================================================
+
+describe("Escape key", () => {
+  test("Escape on the enrollment step returns to welcome without closing", async () => {
+    const { win, cursorBtn, tauri } = await setup();
+
+    click(cursorBtn());
+    expect(win().classList.contains("show-enroll")).toBe(true);
+
+    fireKeydown(document.body, "Escape");
+    expect(win().classList.contains("show-enroll")).toBe(false);
+    expect(tauri._closeMock).not.toHaveBeenCalled();
+  });
+
+  test("Escape on the welcome screen closes the window", async () => {
+    const { tauri } = await setup();
+
+    fireKeydown(document.body, "Escape");
+    expect(tauri._closeMock).toHaveBeenCalledOnce();
   });
 });

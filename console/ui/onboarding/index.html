@@ -10,30 +10,42 @@
   </head>
   <body>
     <div class="window" data-tauri-drag-region>
-      <div id="outer-halo">
-        <div id="breathing-button"></div>
-      </div>
-      <button id="cursor-button" aria-label="Start Peeky">
-        <img src="../shared/cursor.svg" alt="" />
-      </button>
-      <div id="enroll">
-        <div id="invite">
-          <input type="text" id="invite-code" placeholder="Invite code (optional)" autocomplete="off" autocapitalize="characters" spellcheck="false" />
-          <span id="invite-status" aria-hidden="true"></span>
+      <div class="card" data-tauri-drag-region>
+        <div class="sheen" aria-hidden="true"></div>
+        <span class="wordmark"><img src="../shared/cursor.svg" alt="" />Peeky</span>
+        <div class="stage" data-tauri-drag-region>
+          <div class="ripple r1" aria-hidden="true"></div>
+          <div class="ripple r2" aria-hidden="true"></div>
+          <button id="cursor-button" aria-label="Start Peeky">
+            <img src="../shared/cursor.svg" alt="" />
+          </button>
         </div>
-        <div id="byok">
-          <input type="password" id="key-anthropic" placeholder="Anthropic API key" autocomplete="off" spellcheck="false" />
-          <input type="password" id="key-deepgram" placeholder="Deepgram API key" autocomplete="off" spellcheck="false" />
-          <input type="password" id="key-cartesia" placeholder="Cartesia API key" autocomplete="off" spellcheck="false" />
+        <p class="hint">Click to begin</p>
+        <div id="enroll">
+          <p id="enroll-title">You're in</p>
+          <p id="enroll-sub">Peeky is free while in beta. Hold <span id="enroll-hotkey">Ctrl+Space</span> anywhere to start.</p>
+          <button type="button" id="enroll-continue">Get started</button>
+          <button type="button" id="access-toggle" class="link-btn">Have an invite code or API keys?</button>
+          <div id="access-options">
+            <div id="invite">
+              <input type="text" id="invite-code" placeholder="Invite code" autocomplete="off" autocapitalize="characters" spellcheck="false" />
+              <span id="invite-status" aria-hidden="true"></span>
+            </div>
+            <div id="byok">
+              <input type="password" id="key-anthropic" placeholder="Anthropic API key" autocomplete="off" spellcheck="false" />
+              <input type="password" id="key-deepgram" placeholder="Deepgram API key" autocomplete="off" spellcheck="false" />
+              <input type="password" id="key-cartesia" placeholder="Cartesia API key" autocomplete="off" spellcheck="false" />
+            </div>
+            <button type="button" id="byok-toggle" class="link-btn">Bring your own API keys</button>
+            <button type="button" id="byok-back" class="link-btn">Use an invite code instead</button>
+          </div>
+          <p id="gate-hint" role="status" aria-live="polite"></p>
         </div>
-        <button type="button" id="byok-toggle" class="link-btn">Use your own API keys</button>
-        <button type="button" id="byok-back" class="link-btn">Use an invite code instead</button>
-        <p id="gate-hint" role="status" aria-live="polite"></p>
-      </div>
-      <div id="howto">
-        <p class="howto-title">You're all set</p>
-        <p class="howto-sub">Hold <kbd id="hotkey-combo">Ctrl + Space</kbd> and speak</p>
-        <button id="howto-done" type="button">Got it</button>
+        <div id="howto">
+          <p class="howto-title">You're all set</p>
+          <p class="howto-sub">Hold <kbd id="hotkey-combo">Ctrl + Space</kbd> and speak</p>
+          <button id="howto-done" type="button">Got it</button>
+        </div>
       </div>
     </div>
 

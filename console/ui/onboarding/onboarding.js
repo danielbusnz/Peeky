@@ -36,11 +36,30 @@ function setInviteState(state) {
     }
 }
 
+// The continue button doubles as the no-friction trial entry: with nothing
+// typed it reads "Get started", and flips to "Continue" the moment a code
+// is entered (or in the key-entry mode).
+const continueBtn = document.getElementById("enroll-continue");
+
+function updateContinueLabel() {
+    const win = document.querySelector(".window");
+    const inKeys = win.classList.contains("show-byok");
+    continueBtn.textContent = inKeys || codeInput.value.trim() ? "Continue" : "Get started";
+}
+
+// The invite/key inputs hide behind this link; almost nobody needs them.
+document.getElementById("access-toggle").addEventListener("click", () => {
+    const win = document.querySelector(".window");
+    win.classList.toggle("show-access");
+    if (win.classList.contains("show-access")) codeInput.focus();
+});
+
 // Clear any prior result the moment the user edits, so stale feedback doesn't
 // linger over a code that no longer matches it.
 codeInput.addEventListener("input", () => {
     setInviteState(null);
     setHint("");
+    updateContinueLabel();
 });
 
 codeInput.addEventListener("keydown", async (e) => {
@@ -73,10 +92,12 @@ const byokLabels = { anthropic: "Anthropic", deepgram: "Deepgram", cartesia: "Ca
 document.getElementById("byok-toggle").addEventListener("click", () => {
     document.querySelector(".window").classList.add("show-byok");
     byokFields.anthropic.focus();
+    updateContinueLabel();
 });
 document.getElementById("byok-back").addEventListener("click", () => {
     document.querySelector(".window").classList.remove("show-byok");
     setHint("");
+    updateContinueLabel();
 });
 
 // Editing a key field clears its pass/fail mark and any gate hint.
@@ -105,6 +126,9 @@ for (const field of Object.values(byokFields)) {
 function isMac() {
     return /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || "");
 }
+
+// The access-step subtitle pre-teaches the hotkey; match it to the platform.
+document.getElementById("enroll-hotkey").textContent = isMac() ? "⌃ Space" : "Ctrl+Space";
 
 // Swap the welcome view for the "how to use it" card, filling in the
 // platform's push-to-talk chord. macOS uses Ctrl+Space (the cross-platform
@@ -226,11 +250,17 @@ async function hasValidCredentials(invoke) {
     }
 }
 
-document.getElementById("cursor-button").addEventListener("click", async () => {
+// The cursor button just advances to the enrollment step; the credential
+// gate runs when the user hits Continue there.
+document.getElementById("cursor-button").addEventListener("click", () => {
     // TODO: Pop sound disabled - not working on macOS
     // popSound.currentTime = 0;
     // popSound.play().catch(() => { });
 
+    document.querySelector(".window").classList.add("show-enroll");
+});
+
+document.getElementById("enroll-continue").addEventListener("click", async () => {
     const { invoke } = window.__TAURI__.core;
 
     // Gate: can't advance without a valid code or working keys.
@@ -262,6 +292,26 @@ document.getElementById("cursor-button").addEventListener("click", async () => {
     // the user acknowledges it, so they always see how to talk before it starts.
     showHowTo();
 });
+
+// Escape steps back: enrollment returns to the welcome screen; the welcome
+// screen closes the launcher (next launch shows it again). Registered via a
+// window-global slot so re-evaluating this script (the test harness does, per
+// test) replaces the listener instead of stacking duplicates.
+if (window.__peekyEscapeHandler) {
+    document.removeEventListener("keydown", window.__peekyEscapeHandler);
+}
+window.__peekyEscapeHandler = (e) => {
+    if (e.key !== "Escape") return;
+    const win = document.querySelector(".window");
+    if (win.classList.contains("show-enroll") && !win.classList.contains("show-howto")) {
+        win.classList.remove("show-enroll", "show-access", "show-byok");
+        setHint("");
+        updateContinueLabel();
+        return;
+    }
+    window.__TAURI__?.window.getCurrentWindow().close();
+};
+document.addEventListener("keydown", window.__peekyEscapeHandler);
 
 document.getElementById("howto-done").addEventListener("click", async () => {
     const { invoke } = window.__TAURI__.core;

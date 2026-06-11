@@ -1,97 +1,224 @@
-/* Welcome page: the breathing cursor button with two orange halos behind it. */
+/* Welcome page: glass-blue card (the whole visible window) with breathing
+   rings around the cursor button. Visual language ported from the landing
+   page's bento cards (Peeky_Frontend tailwind.css). */
 
 .window {
-  background: #1a1a1a;
+  background: transparent;
   align-items: center;
   justify-content: center;
 }
 
-/* Three breathing animations sharing a 5s cadence and 50% peak so they pulse
-   in sync. Different amplitudes make the three layers feel distinct. */
-@keyframes breathing {
-  0%, 100% { transform: scale(0.9); }
-  50%      { transform: scale(1.15); }
-}
-
-@keyframes breathing-slow {
-  0%, 100% { transform: scale(0.97); }
-  50%      { transform: scale(1.03); }
-}
-
-@keyframes breathing-cursor {
-  0%, 100% { transform: scale(0.95); }
-  50%      { transform: scale(1.08); }
-}
-
-#outer-halo {
-  width: 280px;
-  height: 280px;
-  border-radius: 50%;
-  background: rgba(255, 140, 0, 0.05);
+/* The card IS the visible window: it fills the transparent OS window
+   edge to edge, so only its rounded corners show the desktop through. */
+.card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+  background: radial-gradient(92.09% 124.47% at 50% 99.24%, rgba(221, 226, 238, 0.4) 58.91%, rgba(187, 197, 221, 0.4) 100%), #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: breathing-slow 5s ease-in-out infinite;
+  overflow: hidden;
+  outline: 1px solid rgba(0, 0, 0, 0.05);
+  cursor: grab;
 }
 
-#breathing-button {
-  width: 180px;
-  height: 180px;
-  padding: 0;
-  border: 1px solid rgba(255, 140, 0, 0.1);
-  background: rgba(255, 140, 0, 0.1);
-  border-radius: 50%;
+/* bento-card inner sheen along the top-left edges */
+.sheen {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 1.899px 1.77px 8.174px rgba(168, 197, 255, 0.25), inset 1.007px 0.939px 4.087px rgba(168, 197, 255, 0.25);
+}
+
+.wordmark {
+  position: absolute;
+  top: 36px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: ui-rounded, -apple-system, system-ui, sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #1a1a1e;
+  pointer-events: none;
+}
+
+.wordmark img {
+  width: 17px;
+  height: 17px;
+}
+
+/* ---- breathing rings (landing page ripple, two rings) ---- */
+
+.stage {
+  position: relative;
+  width: 360px;
+  height: 360px;
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: breathing 5s ease-in-out infinite;
 }
 
-#cursor-button {
+.ripple {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 96px;
-  height: 96px;
-  background: transparent;
+  border-radius: 50%;
+  border: 1px solid rgba(147, 197, 253, 0.4);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.25), rgba(147, 197, 253, 0.25));
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+}
+
+.r1 { width: 136px; height: 136px; animation: ring-breathe-big 5s ease-in-out infinite; }
+.r2 { width: 216px; height: 216px; opacity: 0.55; animation: ring-breathe-mid 5s ease-in-out infinite; }
+
+/* shared 5s cadence, 50% peak; amplitude shrinks toward the outside */
+@keyframes ring-breathe-big {
+  0%, 100% { transform: translate(-50%, -50%) scale(0.9); }
+  50%      { transform: translate(-50%, -50%) scale(1.15); }
+}
+
+@keyframes ring-breathe-mid {
+  0%, 100% { transform: translate(-50%, -50%) scale(0.95); }
+  50%      { transform: translate(-50%, -50%) scale(1.08); }
+}
+
+/* ---- the cursor button (neumorphic badge from the landing page) ---- */
+
+#cursor-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
   border: none;
   padding: 0;
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
   outline: none;
-  user-select: none;
-  -webkit-user-select: none;
-  transition: transform 150ms ease-out;
+  border-radius: 50%;
+  background: #f5f5f5;
+  box-shadow: 0 0 0 1px rgba(16, 24, 40, 0.06), 0 6px 12px -2px rgba(0, 0, 0, 0.18), inset 0 -2px 2px -1px rgba(0, 0, 0, 0.2), 0 -6px 9px -1px rgba(255, 255, 255, 0.6), inset 0 2px 2px -1px rgba(255, 255, 255, 0.2), inset 0 0 3px 1px rgba(255, 255, 255, 0.8), inset 0 12px 18px 0 rgba(255, 255, 255, 0.2);
+  transition: transform 150ms ease-out, box-shadow 150ms ease-out;
 }
 
 #cursor-button:hover {
-  transform: translate(-50%, -50%) scale(1.2);
+  transform: scale(1.08);
+}
+
+#cursor-button:active {
+  transform: scale(0.93);
+  box-shadow: 0 0 0 1px rgba(16, 24, 40, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.12), inset 0 3px 7px rgba(0, 0, 0, 0.16), inset 0 -1px 2px rgba(255, 255, 255, 0.5);
 }
 
 #cursor-button img {
-  width: 100%;
-  height: 100%;
+  width: 44px;
+  height: 44px;
   display: block;
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
   -webkit-user-drag: none;
-  animation: breathing-cursor 5s ease-in-out infinite;
+  /* optical centering: the glyph's visual mass sits right+low of its box */
+  transform: translate(-1.3px, -2.6px);
 }
 
-/* Bottom enrollment block: invite code by default, swaps to the BYOK key
-   fields when .window has .show-byok. */
-#enroll {
+.hint {
   position: absolute;
-  bottom: 24px;
+  top: calc(50% + 132px);
   left: 50%;
   transform: translateX(-50%);
-  display: flex;
+  font-size: 13px;
+  color: #8e8e93;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ripple {
+    animation: none !important;
+  }
+}
+
+/* Enrollment step, shown after the cursor button is clicked (.show-enroll
+   on .window). Invite code by default, swaps to the BYOK key fields when
+   .window also has .show-byok. */
+#enroll {
+  display: none;
   flex-direction: column;
   align-items: center;
   gap: 8px;
+}
+
+.window.show-enroll .stage,
+.window.show-enroll .hint {
+  display: none;
+}
+
+.window.show-enroll #enroll {
+  display: flex;
+}
+
+#enroll {
+  width: 280px;
+}
+
+#enroll-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1a1e;
+}
+
+#enroll-sub {
+  margin: 6px 0 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+  color: #5c616b;
+}
+
+#enroll-hotkey {
+  font-weight: 600;
+  color: #1a1a1e;
+}
+
+#enroll-continue {
+  width: 100%;
+  background: #fd8a02;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 0;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+#enroll-continue:hover {
+  background: #ffa01f;
+}
+
+/* rare paths live behind the access link, accordion-style */
+#access-options {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.window.show-access #access-options {
+  display: flex;
 }
 
 #invite {
@@ -105,32 +232,32 @@
 }
 
 #byok input {
-  background: rgba(255,255,255,0.1);
-  border: 1px solid rgba(255,255,255,0.2);
+  background: #fff;
+  border: 1px solid rgba(16, 24, 40, 0.14);
   border-radius: 6px;
   padding: 7px 12px;
-  color: #fff;
+  color: #1a1a1e;
   font-size: 13px;
   width: 220px;
   outline: none;
 }
 
 #byok input::placeholder {
-  color: rgba(255,255,255,0.4);
+  color: #a3a8b3;
 }
 
 #byok input.saved::placeholder {
-  color: rgba(63,185,80,0.7);
+  color: rgba(46, 160, 67, 0.8);
 }
 
 #byok input.valid {
-  border-color: rgba(63,185,80,0.9);
-  box-shadow: 0 0 0 2px rgba(63,185,80,0.25);
+  border-color: rgba(46, 160, 67, 0.9);
+  box-shadow: 0 0 0 2px rgba(46, 160, 67, 0.2);
 }
 
 #byok input.invalid {
-  border-color: rgba(248,81,73,0.9);
-  box-shadow: 0 0 0 2px rgba(248,81,73,0.25);
+  border-color: rgba(207, 34, 46, 0.9);
+  box-shadow: 0 0 0 2px rgba(207, 34, 46, 0.2);
 }
 
 #gate-hint {
@@ -139,14 +266,14 @@
   max-width: 240px;
   text-align: center;
   font-size: 12px;
-  color: rgba(255,255,255,0.55);
+  color: #8e8e93;
 }
 
 .link-btn {
   background: none;
   border: none;
   padding: 2px;
-  color: rgba(255,255,255,0.45);
+  color: #8e8e93;
   font-size: 12px;
   cursor: pointer;
   text-decoration: underline;
@@ -154,7 +281,7 @@
 }
 
 .link-btn:hover {
-  color: rgba(255,255,255,0.75);
+  color: #5c616b;
 }
 
 /* Toggle between the two enrollment modes. */
@@ -176,13 +303,13 @@
 }
 
 #invite-code {
-  background: rgba(255,255,255,0.1);
-  border: 1px solid rgba(255,255,255,0.2);
+  background: #fff;
+  border: 1px solid rgba(16, 24, 40, 0.14);
   border-radius: 6px;
   /* Symmetric horizontal padding leaves room for the status icon on the
      right while keeping the centered text visually centered. */
   padding: 8px 28px;
-  color: #fff;
+  color: #1a1a1e;
   font-size: 13px;
   width: 180px;
   text-align: center;
@@ -191,17 +318,17 @@
 }
 
 #invite-code::placeholder {
-  color: rgba(255,255,255,0.4);
+  color: #a3a8b3;
 }
 
 #invite-code.valid {
-  border-color: rgba(63,185,80,0.9);
-  box-shadow: 0 0 0 2px rgba(63,185,80,0.25);
+  border-color: rgba(46, 160, 67, 0.9);
+  box-shadow: 0 0 0 2px rgba(46, 160, 67, 0.2);
 }
 
 #invite-code.invalid {
-  border-color: rgba(248,81,73,0.9);
-  box-shadow: 0 0 0 2px rgba(248,81,73,0.25);
+  border-color: rgba(207, 34, 46, 0.9);
+  box-shadow: 0 0 0 2px rgba(207, 34, 46, 0.2);
 }
 
 #invite-status {
@@ -216,12 +343,12 @@
 
 #invite-status.valid::after {
   content: "\2713"; /* ✓ */
-  color: #3fb950;
+  color: #2ea043;
 }
 
 #invite-status.invalid::after {
   content: "\2715"; /* ✕ */
-  color: #f85149;
+  color: #cf222e;
 }
 
 #invite-status.checking::after {
@@ -229,8 +356,8 @@
   display: block;
   width: 11px;
   height: 11px;
-  border: 2px solid rgba(255,255,255,0.25);
-  border-top-color: rgba(255,255,255,0.85);
+  border: 2px solid rgba(16, 24, 40, 0.15);
+  border-top-color: rgba(16, 24, 40, 0.6);
   border-radius: 50%;
   animation: invite-spin 0.6s linear infinite;
 }
@@ -254,7 +381,7 @@
 
 /* "How to use it" card, shown after the user clicks the cursor to start.
    Hidden until .window gets .show-howto, which also hides the breathing
-   cursor + invite field so the card is the only thing on screen. */
+   rings + invite field so the card is the only thing on screen. */
 #howto {
   display: none;
   flex-direction: column;
@@ -264,8 +391,10 @@
   padding: 0 24px;
 }
 
-.window.show-howto #outer-halo,
-.window.show-howto #cursor-button,
+/* These come after the .show-enroll rules so .show-howto wins when both
+   classes are present. */
+.window.show-howto .stage,
+.window.show-howto .hint,
 .window.show-howto #enroll {
   display: none;
 }
@@ -276,31 +405,32 @@
 
 .howto-title {
   margin: 0;
-  color: #fff;
+  color: #1a1a1e;
   font-size: 28px;
   font-weight: 600;
 }
 
 .howto-sub {
   margin: 0;
-  color: rgba(255,255,255,0.75);
+  color: #5c616b;
   font-size: 18px;
 }
 
 #hotkey-combo {
   display: inline-block;
-  background: rgba(255,255,255,0.1);
-  border: 1px solid rgba(255,255,255,0.25);
+  background: #fff;
+  border: 1px solid rgba(16, 24, 40, 0.14);
   border-radius: 6px;
   padding: 4px 10px;
   font-family: inherit;
   font-size: 17px;
-  color: #fff;
+  color: #1a1a1e;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
 }
 
 #howto-done {
   margin-top: 6px;
-  background: #ff8c00;
+  background: #fd8a02;
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -311,5 +441,5 @@
 }
 
 #howto-done:hover {
-  background: #ffa500;
+  background: #ffa01f;
 }
