@@ -145,7 +145,7 @@ The non-obvious "why"s. Check these before changing the related behavior.
 ## Where Things Go
 
 - **Unit tests**: inline in source files via `#[cfg(test)] mod tests`. Run with `cargo test`. Must be deterministic and free.
-- **Integration tests**: `peeky/tests/`. Run with `cargo test`. None exist yet but the directory is reserved.
+- **Integration tests**: `peeky/tests/`. Run with `cargo test`. `routing.rs` is the routing regression suite: real transcripts through the shipped routelet model, asserting it never confidently misroutes (deferring is always a pass). Known misroutes the next retrain must fix are `#[ignore]`d there; run them with `cargo test -- --ignored`.
 - **Demos**: `peeky/demos/demo_*.rs`. Hand-run dev tools. Each is a `[[bin]]` entry in `Cargo.toml`.
 - **Benchmarks**: `peeky/demos/bench_*.rs`. Same shape as demos but report latency stats over N iterations.
 - **Evals**: `peeky/evals/runners/*.rs` (runner code) + `peeky/evals/cases/*.json` (case data) + `peeky/evals/results/` (gitignored output). Run with `cargo run --bin eval_<name>`. LLM behavior tests. Stochastic, paid, not part of CI.
