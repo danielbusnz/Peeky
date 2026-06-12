@@ -6,12 +6,10 @@
 <p align="center">Inspired by <a href="https://heyclicky.com">Clicky</a></p>
 <p align="center">
   <img alt="Rust" src="https://img.shields.io/badge/Rust-orange?logo=rust&logoColor=white">
-  <img alt="License" src="https://img.shields.io/badge/License-MIT-blue">
   <img alt="Platform" src="https://img.shields.io/badge/Linux%20%7C%20Hyprland-black?logo=linux&logoColor=white">
   <img alt="macOS" src="https://img.shields.io/badge/macOS-black?logo=apple&logoColor=white">
   <img alt="Status" src="https://img.shields.io/badge/Status-WIP-yellow">
   <img alt="CI" src="https://github.com/danielbusnz-lgtm/Peeky/actions/workflows/ci.yml/badge.svg">
-  <a href="https://codecov.io/gh/danielbusnz-lgtm/Peeky"><img alt="Coverage" src="https://codecov.io/gh/danielbusnz-lgtm/Peeky/branch/main/graph/badge.svg"></a>
 </p>
 
 <p align="center">Hold the hotkey. Ask a question. Peeky handles the rest.</p>
