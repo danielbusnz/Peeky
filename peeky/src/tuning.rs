@@ -77,6 +77,15 @@ pub const AGENT_SETTLE_MS: u64 = 600;
 /// ↓ tighter request bodies. less long-range visual memory.
 pub const AGENT_KEEP_RECENT_SCREENSHOTS: usize = 3;
 
+// ────── Claude integration path ──────
+
+/// Max integration tool dispatches per turn before a forced spoken summary.
+/// Lets chains like spotlight_search → finder_open complete in one turn.
+/// ↑ longer chains finish. each extra call adds a model round-trip (~1s)
+///   before speech starts.
+/// ↓ snappier turns. multi-tool requests get narrated, not finished.
+pub const INTEGRATION_MAX_TOOL_CALLS: usize = 3;
+
 // ────── Working context (Tier 0) ──────
 
 /// Recent voice turns kept verbatim in the live working context and replayed
