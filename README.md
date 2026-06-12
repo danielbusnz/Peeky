@@ -3,7 +3,7 @@
 </p>
 
 <h1 align="center">Peeky</h1>
-<h3 align="center"> visit https://getpeeky.ai for free download</h3>
+<p align="center">Inspired by <a href="https://heyclicky.com">Clicky</a></p>
 <p align="center">
   <img alt="Rust" src="https://img.shields.io/badge/Rust-orange?logo=rust&logoColor=white">
   <img alt="License" src="https://img.shields.io/badge/License-MIT-blue">
@@ -14,25 +14,29 @@
   <a href="https://codecov.io/gh/danielbusnz-lgtm/Peeky"><img alt="Coverage" src="https://codecov.io/gh/danielbusnz-lgtm/Peeky/branch/main/graph/badge.svg"></a>
 </p>
 
-<p align="center">
-    hold the hotkey. Ask a Question. Peeky handles the rest.
+<p align="center">Hold the hotkey. Ask a question. Peeky handles the rest.</p>
 
 <p align="center">
   <img alt="Peeky Demo" src="peeky/assets/demo.gif" width="800">
 </p>
 
-<p align="center">
-Built in Rust. Runs on macOS and Linux. Windows on the way.
+## Why
+
+[Clicky](https://heyclicky.com) proved the idea: a small AI that sits next to your cursor, sees your screen, and points at things. I wanted it on Linux. That meant rebuilding the bottom of the stack, since screen capture, input injection, push-to-talk, and the cursor overlay all work differently there.
+
+Then I gave it hands. Clicky points. Peeky points, clicks, types, scrolls, and runs multi-step tasks. It also remembers facts about you between sessions, and it calls Gmail, Spotify, GitHub, and YouTube directly when the answer is not on the screen.
+
+The part I care about most: Peeky's cursor is its own, separate from yours. You watch every move before it happens. Ask it to do the work, or ask it to show you where to click.
 
 ## Get started (macOS)
 
-To get started, go to **[Download Peeky for macOS](https://getpeeky.ai)** , press download (enter email for more free access) drag **Peeky** into Applications, and launch it. First launch walks you through the free trial (or your own keys) and your push-to-talk hotkey. That's it. 
+Go to **[getpeeky.ai](https://getpeeky.ai)**, download, drag **Peeky** into Applications, and launch it. First launch walks you through the free trial (or your own keys) and your push-to-talk hotkey.
 
 Blocked as unverified? Right-click the app and choose **Open**.
 
 ### Bring your own keys
 
-Skip the hosted trial. On first launch, choose **use my own API keys** and paste your Anthropic, Deepgram, and Cartesia keys. They're stored in your OS keychain, every call goes straight to the provider, and nothing routes through our proxy or gets metered.
+On first launch, choose **use my own API keys** and paste your Anthropic, Deepgram, and Cartesia keys. They are stored in your OS keychain, every call goes straight to the provider, and nothing routes through the proxy or gets metered.
 
 ## Linux (Hyprland)
 
@@ -79,9 +83,24 @@ hotkey into my Hyprland config, and (optionally) pointing it at my own API
 keys instead of the hosted proxy. Walk me through it.
 ```
 
+### Use your own keys (Linux)
+
+Build from source and call the providers directly, no proxy, nothing metered. Drop a `.env` in the repo root:
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+DEEPGRAM_API_KEY=...
+CARTESIA_API_KEY=...
+PEEKY_ANTHROPIC_DIRECT=1
+PEEKY_DEEPGRAM_DIRECT=1
+PEEKY_CARTESIA_DIRECT=1
+```
+
+Each `_DIRECT=1` opts that provider out of the proxy. Mix and match, e.g. your own Anthropic key but the proxy for the rest.
+
 ## How it routes
 
-Every voice turn picks one of five paths based on what you said. Each path has a focused Claude prompt and a tight tool set, so the model can't get distracted into the wrong category.
+Every voice turn picks one of five paths based on what you said. Each path has a focused Claude prompt and a tight tool set.
 
 | Path | When it fires | What it does |
 | --- | --- | --- |
@@ -91,7 +110,20 @@ Every voice turn picks one of five paths based on what you said. Each path has a
 | `memory` | "remember my X is Y", "what's my Z" | Local JSONL store at `~/.config/peeky/memory.jsonl` |
 | `agent` | Multi-step chains: "open YouTube, search for X, play the top result" | Full agent loop with iterative screenshots |
 
-A hybrid classifier picks the path: sub-millisecond keyword match for clear cases (~80%), LLM fallback (~700ms) for ambiguous ones. Total release → action is typically ~1.2s for on device keys, 1.5s with proxy.
+A hybrid classifier picks the path: sub-millisecond keyword match for clear cases (~80%), LLM fallback (~700ms) for ambiguous ones. Total release to action is typically ~1.2s with on-device keys, ~1.5s with the proxy.
+
+## Built with
+
+| Layer | Tech |
+| --- | --- |
+| Core agent | Rust, Tokio (async) |
+| On-device classifier | ONNX via tract, BERT embeddings, int8 quantization |
+| Speech | Deepgram (STT) and Cartesia (TTS) over WebSocket streaming |
+| LLM | Anthropic Claude, SSE streaming, forced tool use |
+| Audio I/O | cpal capture, rodio playback |
+| Desktop app | Tauri 2 |
+| Backend proxy | Cloudflare Workers (TypeScript), KV, D1, R2 |
+| Platforms | Hyprland/Wayland, macOS, Windows (in progress) |
 
 ## Demos and benchmarks
 
@@ -110,32 +142,7 @@ Each reports per-stage latency.
 
 ## Tunable behavior
 
-`peeky/src/tuning.rs` holds every behavior dial in one place. Each constant has a `↑` / `↓` tradeoff comment so it's clear what changing the number does. Edit, recompile, see the effect.
-
-Knobs include: pre-roll buffer length, STT quiescence window, TTS first-flush minimum, agent loop step cap and settle time, screenshot history depth.
-
-## Clone and run with your own keys
-
-Build from source and call the providers directly, no proxy, nothing metered.
-
-```bash
-git clone https://github.com/danielbusnz-lgtm/peeky.git
-cd peeky
-cargo run --release -p peeky
-```
-
-Drop a `.env` in the repo root with your keys:
-
-```
-ANTHROPIC_API_KEY=sk-ant-...
-DEEPGRAM_API_KEY=...
-CARTESIA_API_KEY=...
-PEEKY_ANTHROPIC_DIRECT=1
-PEEKY_DEEPGRAM_DIRECT=1
-PEEKY_CARTESIA_DIRECT=1
-```
-
-Each `_DIRECT=1` opts that provider out of the proxy. Mix and match, e.g. your own Anthropic key but the proxy for the rest.
+`peeky/src/tuning.rs` holds every behavior dial in one place. Each constant has a `↑` / `↓` tradeoff comment. Knobs include: pre-roll buffer length, STT quiescence window, TTS first-flush minimum, agent loop step cap and settle time, screenshot history depth.
 
 ## Privacy
 
