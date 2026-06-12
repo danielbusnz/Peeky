@@ -114,6 +114,15 @@ fn run_one_turn(
         return Ok(());
     }
 
+    // Explicit agent cue: an utterance opening with "peeky agent" routes to
+    // the multi-step agent deterministically, before any classifier runs.
+    // The agent receives the task with the cue stripped. A bare cue with no
+    // task falls through to normal classification instead of spawning an
+    // agent with nothing to do.
+    let agent_task = crate::agent_cue::agent_cue(&transcript)
+        .filter(|task| !task.is_empty())
+        .map(str::to_string);
+
     // Hybrid classification, three tiers: the keyword allowlist decides the
     // route first (sub-millisecond) when it matches a bare transport command.
     // routelet (local ONNX, synchronous, ~45ms in release) runs every turn,
@@ -160,7 +169,13 @@ fn run_one_turn(
         ),
     }
 
-    let intent_result = if let Some(i) = keyword_intent {
+    let intent_result = if agent_task.is_some() {
+        eprintln!(
+            "[classifier] agent cue match at {:?} (overrides classifiers)",
+            release_t.elapsed()
+        );
+        Some(Intent::Agent)
+    } else if let Some(i) = keyword_intent {
         eprintln!(
             "[classifier] keyword match → {:?} at {:?} (overrides routelet)",
             i,
@@ -418,9 +433,11 @@ fn run_one_turn(
                 .await
             }
             Intent::Agent => {
+                // A cue-routed turn hands the agent the task with the cue
+                // stripped; a classifier-routed turn gets the full transcript.
                 run_agent(
                     claude,
-                    &transcript,
+                    agent_task.as_deref().unwrap_or(&transcript),
                     &resized_b64,
                     x,
                     y,
