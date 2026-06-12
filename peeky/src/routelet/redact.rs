@@ -47,19 +47,24 @@ fn redactors() -> &'static Redactors {
 ///
 /// Rules in order (earlier rules can consume text that later rules never see):
 ///   1. Lowercase, to match the all-lowercase training corpus.
-///   2. Strip trailing whitespace and terminal `.!?` that STT appends.
+///   2. Strip trailing whitespace and terminal `.!?` that STT appends, but if
+///      that trimmed tail held a `?`, append exactly one `?` back at the end.
+///      STT periods are noise; a terminal question mark is signal for the
+///      question register (capability checks, tag questions) the model is
+///      trained on via the augmenter's `?` variants.
 ///   3. Secret keyword tail: keep the keyword, mask everything after it.
 ///   4. Email addresses -> `<EMAIL>`.
 ///   5. Runs of 4+ digits -> `<NUM>`.
 pub(super) fn preprocess(text: &str) -> String {
     let r = redactors();
 
-    // Rules 1-2: lowercase, then trim trailing whitespace and terminal `.!?`.
-    // The training corpus is all lowercase with no terminal punctuation; STT
-    // output is mixed-case and punctuated, so this closes the surface skew.
+    // Rules 1-2: lowercase, then trim trailing whitespace and terminal `.!?`,
+    // remembering whether the trimmed tail held a question mark. The training
+    // corpus is all lowercase, so this closes the surface skew.
     let lowered = text.to_lowercase();
     let normalized =
         lowered.trim_end_matches(|c: char| matches!(c, '.' | '!' | '?') || c.is_whitespace());
+    let is_question = lowered[normalized.len()..].contains('?');
 
     // Rule 3: "password is hunter2" -> "password <SECRET>".
     let s = r
@@ -73,7 +78,10 @@ pub(super) fn preprocess(text: &str) -> String {
     let s = r.email.replace_all(&s, "<EMAIL>").into_owned();
 
     // Rule 3: runs of 4+ digits (PINs, card numbers, phone numbers, etc.).
-    r.digit_run.replace_all(&s, "<NUM>").into_owned()
+    let s = r.digit_run.replace_all(&s, "<NUM>").into_owned();
+
+    // Rule 2's question tail, restored after masking so it stays terminal.
+    if is_question { s + "?" } else { s }
 }
 
 /// Redact PII and secrets from a voice transcript before writing to the log.

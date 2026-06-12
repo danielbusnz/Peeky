@@ -6,12 +6,10 @@
 <p align="center">Inspired by <a href="https://heyclicky.com">Clicky</a></p>
 <p align="center">
   <img alt="Rust" src="https://img.shields.io/badge/Rust-orange?logo=rust&logoColor=white">
-  <img alt="License" src="https://img.shields.io/badge/License-MIT-blue">
   <img alt="Platform" src="https://img.shields.io/badge/Linux%20%7C%20Hyprland-black?logo=linux&logoColor=white">
   <img alt="macOS" src="https://img.shields.io/badge/macOS-black?logo=apple&logoColor=white">
   <img alt="Status" src="https://img.shields.io/badge/Status-WIP-yellow">
   <img alt="CI" src="https://github.com/danielbusnz-lgtm/Peeky/actions/workflows/ci.yml/badge.svg">
-  <a href="https://codecov.io/gh/danielbusnz-lgtm/Peeky"><img alt="Coverage" src="https://codecov.io/gh/danielbusnz-lgtm/Peeky/branch/main/graph/badge.svg"></a>
 </p>
 
 <p align="center">Hold the hotkey. Ask a question. Peeky handles the rest.</p>
@@ -30,7 +28,7 @@ The part I care about most: Peeky's cursor is its own, separate from yours. You 
 
 ## Get started (macOS)
 
-Go to **[getpeeky.ai](https://getpeeky.ai)**, download, drag **Peeky** into Applications, and launch it. First launch walks you through the free trial (or your own keys) and your push-to-talk hotkey.
+Go to **[getpeeky.ai](https://getpeeky.ai)**, download (enter your email for more free access), drag **Peeky** into Applications, and launch it. First launch walks you through the free trial (or your own keys) and your push-to-talk hotkey.
 
 Blocked as unverified? Right-click the app and choose **Open**.
 

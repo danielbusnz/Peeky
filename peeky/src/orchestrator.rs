@@ -343,7 +343,7 @@ fn run_one_turn(
         let reply = match intent {
             Intent::FindAction => {
                 eprintln!("[intent] → FindAction for: {:?}", transcript);
-                run_find_action(
+                let reply = run_find_action(
                     claude,
                     &transcript,
                     &resized_b64,
@@ -356,7 +356,29 @@ fn run_one_turn(
                     &cancel_claude,
                     &sentence_tx,
                 )
-                .await
+                .await;
+                // A turn must never end in silence. A FindAction that emitted
+                // no action (misroute, forbidden tool call, provider error)
+                // re-routes the same transcript to Chat, which can answer
+                // questions like "can you see my screen?". Chat never routes
+                // back here, so this cannot loop. A barge-in stays silent on
+                // purpose: the user cut the turn off themselves.
+                if reply.is_none() && !cancel_claude.is_cancelled() {
+                    eprintln!("[find_action] no action emitted; falling back to Chat");
+                    run_chat(
+                        claude,
+                        &transcript,
+                        &resized_b64,
+                        memory,
+                        working,
+                        release_t,
+                        &cancel_claude,
+                        &sentence_tx,
+                    )
+                    .await
+                } else {
+                    reply
+                }
             }
             Intent::Chat => {
                 eprintln!("[intent] → Chat for: {:?}", transcript);

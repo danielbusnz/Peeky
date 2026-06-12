@@ -6,6 +6,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). peeky f
 
 ## [Unreleased]
 
+## [0.1.21] - 2026-06-11
+
+### Changed
+
+- Redesign onboarding as a borderless card window: breathing-rings welcome screen, then a one-click "Get started" step with the invite code and API key fields tucked behind an accordion link.
+- New app icon: white pixel cursor on an orange tile.
+
+### Added
+
+- Escape steps back through onboarding and closes the window from the welcome screen.
+
+## [0.1.20] - 2026-06-10
+
+### Changed
+
+- Retrain the on-device intent router for the v0.1.19 macOS integrations: "turn off wifi", "next slide", "facetime mom" now route on-device instead of falling through to the wrong path.
+- Drop the `agent` class from the router. Agent turns route through the Claude classifier fallback until the spoken cue ships.
+- Keep terminal question marks through transcript preprocessing, so capability questions ("can you see my screen?") route to chat instead of firing an action.
+
 ## [0.1.19] - 2026-06-10
 
 ### Added
