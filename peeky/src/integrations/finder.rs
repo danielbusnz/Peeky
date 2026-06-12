@@ -111,15 +111,15 @@ fn expand_tilde_in(path: &str, home: &str) -> String {
     }
 }
 
-/// Fire-and-forget: open the file or folder, then bring Finder forward so a
-/// folder window is actually visible. Returns `{}` on success.
+/// Fire-and-forget: open the file or folder via `/usr/bin/open`. A file opens
+/// in its default app, a folder as a Finder window, and either way the target
+/// app comes to the front. The AppleScript route (`tell Finder ... activate`)
+/// raised Finder instead of the app the document opened in, leaving the
+/// document behind other windows. Returns `{}` on success.
 fn open(path: &str) -> String {
-    let script = format!(
-        "tell application \"Finder\"\nopen (POSIX file \"{}\")\nactivate\nend tell",
-        applescript::escape(path)
-    );
-    match applescript::run(&script) {
-        Ok(_) => "{}".to_string(),
+    match std::process::Command::new("open").arg(path).status() {
+        Ok(s) if s.success() => "{}".to_string(),
+        Ok(s) => err_body(&format!("finder_open: open exited with {s}")),
         Err(e) => err_body(&format!("finder_open failed: {e}")),
     }
 }
