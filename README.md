@@ -30,7 +30,7 @@ The part I care about most: Peeky's cursor is its own, separate from yours. You 
 
 ## Get started (macOS)
 
-Go to **[getpeeky.ai](https://getpeeky.ai)**, download, drag **Peeky** into Applications, and launch it. First launch walks you through the free trial (or your own keys) and your push-to-talk hotkey.
+Go to **[getpeeky.ai](https://getpeeky.ai)**, download (enter your email for more free access), drag **Peeky** into Applications, and launch it. First launch walks you through the free trial (or your own keys) and your push-to-talk hotkey.
 
 Blocked as unverified? Right-click the app and choose **Open**.
 
