@@ -47,6 +47,7 @@ pub mod shortcuts;
 pub mod spotify;
 pub mod spotlight;
 pub mod system;
+pub mod type_text;
 pub mod youtube;
 
 /// Tool schemas to inject into Claude's tools array. Only tools from
@@ -119,6 +120,9 @@ pub fn all_tools() -> Vec<serde_json::Value> {
     if maps::is_available() {
         tools.extend(maps::tools());
     }
+    if type_text::is_available() {
+        tools.extend(type_text::tools());
+    }
     tools
 }
 
@@ -190,6 +194,9 @@ pub fn dispatch(name: &str, input: &serde_json::Value) -> Option<String> {
         return Some(result);
     }
     if let Some(result) = maps::dispatch(name, input) {
+        return Some(result);
+    }
+    if let Some(result) = type_text::dispatch(name, input) {
         return Some(result);
     }
     None
