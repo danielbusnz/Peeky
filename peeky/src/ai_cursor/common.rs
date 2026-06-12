@@ -26,6 +26,12 @@ pub const X_OFFSET: i32 = 20;
 pub const POINT_DURATION: Duration = Duration::from_secs(3);
 pub const CURSOR_DISPLAY_SIZE: f64 = 18.0;
 
+/// Cursor sprite size in logical px: the base size times the demo-recording
+/// scale knob (see `painter::overlay_scale`).
+pub fn cursor_display_size() -> f64 {
+    CURSOR_DISPLAY_SIZE * crate::painter::overlay_scale()
+}
+
 pub const CURSOR_PNG: &[u8] = include_bytes!("../../assets/cursor.png");
 
 // ── Thread-safe channels ───────────────────────────────────────────────────

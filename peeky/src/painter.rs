@@ -28,6 +28,23 @@ fn current_audio_level() -> f64 {
     AUDIO_LEVEL_SOURCE.get().map(|f| f() as f64).unwrap_or(0.0)
 }
 
+/// Overlay scale factor from the optional `PEEKY_CURSOR_SCALE` env var
+/// (clamped to 0.5..=4.0, default 1.0). Exists for demo recordings, where
+/// the overlay must stay legible once the footage is shrunk into a video
+/// frame. Applies to every overlay state (cursor sprite, soundwave, loading
+/// spinner) so the states stay visually consistent. Lives here because the
+/// painter is compiled on every platform backend.
+pub fn overlay_scale() -> f64 {
+    static SCALE: OnceLock<f64> = OnceLock::new();
+    *SCALE.get_or_init(|| {
+        std::env::var("PEEKY_CURSOR_SCALE")
+            .ok()
+            .and_then(|v| v.parse::<f64>().ok())
+            .filter(|s| (0.5..=4.0).contains(s))
+            .unwrap_or(1.0)
+    })
+}
+
 // ── Soundwave constants (cursor-scale) ───────────────────────────────────────
 const N_BARS: usize = 5;
 const BAR_WIDTH: f64 = 3.0;
@@ -45,20 +62,27 @@ const SHAPE_FLOOR: f64 = 0.4;
 /// Animated soundwave shown while Peeky is in the listening state.
 pub struct Soundwave {
     start: Instant,
+    /// Uniform geometry multiplier, from `overlay_scale()`, so the wave
+    /// matches a demo-scaled cursor sprite.
+    scale: f64,
 }
 
 impl Soundwave {
     pub fn new() -> Self {
         Self {
             start: Instant::now(),
+            scale: overlay_scale(),
         }
     }
 
     /// One per visible bar, in left-to-right order, in local coords with the
     /// soundwave's visual center at (0, 0). Both backends consume this.
+    /// Already scaled; backends only add the corner radius, which scales via
+    /// `self.corner_radius()`.
     fn bars(&self) -> [(f64, f64, f64, f64); N_BARS] {
         let t = self.start.elapsed().as_secs_f64();
-        let (w, _h) = soundwave_size();
+        let s = self.scale;
+        let (w, _h) = self.size_unrotated();
         let origin_x = -w / 2.0;
         let weight_sum: f64 = HARMONICS.iter().map(|h| h.2).sum();
         let envelope = (0.3 + current_audio_level() * 2.0).min(1.0);
@@ -74,12 +98,21 @@ impl Soundwave {
             }
             let unit = (raw + 1.0) / 2.0;
             let shape = SHAPE_FLOOR + (1.0 - SHAPE_FLOOR) * (u * std::f64::consts::PI).sin();
-            let bar_h = (MIN_HEIGHT + (MAX_HEIGHT - MIN_HEIGHT) * unit * envelope) * shape;
-            let bx = origin_x + i as f64 * (BAR_WIDTH + BAR_GAP);
+            let bar_h = (MIN_HEIGHT + (MAX_HEIGHT - MIN_HEIGHT) * unit * envelope) * shape * s;
+            let bx = origin_x + i as f64 * (BAR_WIDTH + BAR_GAP) * s;
             let by = -bar_h / 2.0;
-            *slot = (bx, by, BAR_WIDTH, bar_h);
+            *slot = (bx, by, BAR_WIDTH * s, bar_h);
         }
         out
+    }
+
+    fn corner_radius(&self) -> f64 {
+        CORNER_RADIUS * self.scale
+    }
+
+    fn size_unrotated(&self) -> (f64, f64) {
+        let w = N_BARS as f64 * BAR_WIDTH + (N_BARS - 1) as f64 * BAR_GAP;
+        (w * self.scale, MAX_HEIGHT * self.scale)
     }
 }
 
@@ -87,11 +120,6 @@ impl Default for Soundwave {
     fn default() -> Self {
         Self::new()
     }
-}
-
-fn soundwave_size() -> (f64, f64) {
-    let w = N_BARS as f64 * BAR_WIDTH + (N_BARS - 1) as f64 * BAR_GAP;
-    (w, MAX_HEIGHT)
 }
 
 // ── LoadingSpinner constants (cursor-scale) ──────────────────────────────────
@@ -107,12 +135,15 @@ const SPINNER_COLOR: (f64, f64, f64) = (1.00, 0.55, 0.00);
 /// iOS-style radial spinner shown while Peeky is processing (Loading state).
 pub struct LoadingSpinner {
     start: Instant,
+    /// Uniform geometry multiplier, from `overlay_scale()`.
+    scale: f64,
 }
 
 impl LoadingSpinner {
     pub fn new() -> Self {
         Self {
             start: Instant::now(),
+            scale: overlay_scale(),
         }
     }
 
@@ -139,8 +170,8 @@ impl Default for LoadingSpinner {
     }
 }
 
-fn spinner_size() -> (f64, f64) {
-    let diameter = 2.0 * (SPINNER_INNER_RADIUS + SPINNER_BAR_LENGTH);
+fn spinner_size(scale: f64) -> (f64, f64) {
+    let diameter = 2.0 * (SPINNER_INNER_RADIUS + SPINNER_BAR_LENGTH) * scale;
     (diameter, diameter)
 }
 
@@ -227,18 +258,19 @@ mod cairo_backend {
         fn draw(&self, cr: &cairo::Context, x: f64, y: f64) {
             cr.set_source_rgba(COLOR.0, COLOR.1, COLOR.2, COLOR.3);
             for (bx, by, bw, bh) in self.bars() {
-                rounded_rect(cr, x + bx, y + by, bw, bh, CORNER_RADIUS);
+                rounded_rect(cr, x + bx, y + by, bw, bh, self.corner_radius());
                 cr.fill().expect("fill bar");
             }
         }
 
         fn size(&self) -> (f64, f64) {
-            soundwave_size()
+            self.size_unrotated()
         }
     }
 
     impl Drawable for LoadingSpinner {
         fn draw(&self, cr: &cairo::Context, x: f64, y: f64) {
+            let s = self.scale;
             for (angle, alpha) in self.bars() {
                 cr.save().expect("cairo save failed");
                 cr.translate(x, y);
@@ -246,11 +278,11 @@ mod cairo_backend {
                 cr.set_source_rgba(SPINNER_COLOR.0, SPINNER_COLOR.1, SPINNER_COLOR.2, alpha);
                 rounded_rect(
                     cr,
-                    SPINNER_INNER_RADIUS,
-                    -SPINNER_BAR_WIDTH / 2.0,
-                    SPINNER_BAR_LENGTH,
-                    SPINNER_BAR_WIDTH,
-                    SPINNER_CORNER_RADIUS,
+                    SPINNER_INNER_RADIUS * s,
+                    -SPINNER_BAR_WIDTH * s / 2.0,
+                    SPINNER_BAR_LENGTH * s,
+                    SPINNER_BAR_WIDTH * s,
+                    SPINNER_CORNER_RADIUS * s,
                 );
                 cr.fill().expect("fill bar");
                 cr.restore().expect("cairo restore failed");
@@ -258,7 +290,7 @@ mod cairo_backend {
         }
 
         fn size(&self) -> (f64, f64) {
-            spinner_size()
+            spinner_size(self.scale)
         }
     }
 
@@ -413,7 +445,7 @@ mod skia_backend {
                     (y + by) as f32,
                     bw as f32,
                     bh as f32,
-                    CORNER_RADIUS as f32,
+                    self.corner_radius() as f32,
                 ) {
                     pixmap.fill_path(
                         &path,
@@ -427,7 +459,7 @@ mod skia_backend {
         }
 
         fn size(&self) -> (f64, f64) {
-            soundwave_size()
+            self.size_unrotated()
         }
     }
 
@@ -438,14 +470,15 @@ mod skia_backend {
                 ..Default::default()
             };
 
-            // One unit bar at (SPINNER_INNER_RADIUS, -SPINNER_BAR_WIDTH/2) in
-            // local space, before rotation. Build it once and re-transform per bar.
+            // One unit bar at (inner_radius, -bar_width/2) in local space,
+            // before rotation. Build it once and re-transform per bar.
+            let s = self.scale as f32;
             let bar_path = match rounded_rect_path(
-                SPINNER_INNER_RADIUS as f32,
-                -(SPINNER_BAR_WIDTH as f32) / 2.0,
-                SPINNER_BAR_LENGTH as f32,
-                SPINNER_BAR_WIDTH as f32,
-                SPINNER_CORNER_RADIUS as f32,
+                SPINNER_INNER_RADIUS as f32 * s,
+                -(SPINNER_BAR_WIDTH as f32) * s / 2.0,
+                SPINNER_BAR_LENGTH as f32 * s,
+                SPINNER_BAR_WIDTH as f32 * s,
+                SPINNER_CORNER_RADIUS as f32 * s,
             ) {
                 Some(p) => p,
                 None => return,
@@ -468,7 +501,7 @@ mod skia_backend {
         }
 
         fn size(&self) -> (f64, f64) {
-            spinner_size()
+            spinner_size(self.scale)
         }
     }
 

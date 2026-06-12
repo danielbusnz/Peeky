@@ -19,7 +19,7 @@ use winit::window::{Window, WindowAttributes, WindowId};
 
 use super::CursorState;
 use super::common::{
-    self, CURSOR_DISPLAY_SIZE, CURSOR_PNG, CURSOR_SENDER, DirtyRect, STATE_SENDER, tick,
+    self, CURSOR_PNG, CURSOR_SENDER, DirtyRect, STATE_SENDER, cursor_display_size, tick,
 };
 use super::platform;
 use super::renderer::Renderer;
@@ -156,7 +156,7 @@ impl CursorApp {
         while let Ok(state) = self.state_receiver.try_recv() {
             self.drawable = match state {
                 CursorState::Idle => {
-                    Box::new(SpriteSkia::from_png(CURSOR_PNG, CURSOR_DISPLAY_SIZE))
+                    Box::new(SpriteSkia::from_png(CURSOR_PNG, cursor_display_size()))
                 }
                 CursorState::Listening => Box::new(Soundwave::new()),
                 CursorState::Loading => Box::new(LoadingSpinner::new()),
@@ -268,7 +268,7 @@ pub fn cursor(initial_x: i32, initial_y: i32) -> ! {
     let _ = STATE_SENDER.set(state_sender);
 
     let initial_drawable: Box<dyn DrawSkia> =
-        Box::new(SpriteSkia::from_png(CURSOR_PNG, CURSOR_DISPLAY_SIZE));
+        Box::new(SpriteSkia::from_png(CURSOR_PNG, cursor_display_size()));
 
     // Common attributes with platform-specific fullscreen handling.
     // macOS skips fullscreen (kills transparency) and sizes manually in resumed().
