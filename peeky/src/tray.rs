@@ -44,12 +44,11 @@ fn load_icon() -> Icon {
 /// Poll for menu events. Call from event loop. Returns true if quit was clicked.
 #[cfg(target_os = "macos")]
 pub fn poll() -> bool {
-    if let Ok(event) = MenuEvent::receiver().try_recv() {
-        if let Some(quit_id) = QUIT_ID.get() {
-            if &event.id == quit_id {
-                return true;
-            }
-        }
+    if let Ok(event) = MenuEvent::receiver().try_recv()
+        && let Some(quit_id) = QUIT_ID.get()
+        && event.id == *quit_id
+    {
+        return true;
     }
     false
 }
