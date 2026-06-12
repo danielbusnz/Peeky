@@ -81,7 +81,11 @@ jobs:
     # creep) without blocking work on green stable.
     continue-on-error: ${{ matrix.rust != 'stable' }}
     steps:
+      # lfs: true pulls the routelet model (embedder.onnx) instead of its
+      # LFS pointer; the routing regression suite loads it at test time.
       - uses: actions/checkout@v6
+        with:
+          lfs: true
 
       - uses: dtolnay/rust-toolchain@master
         with:
