@@ -16,7 +16,7 @@ export function cors(res: Response): Response {
     headers.set("access-control-allow-methods", "POST, OPTIONS");
     headers.set(
         "access-control-allow-headers",
-        "content-type, authorization, anthropic-version, anthropic-beta, x-peeky-device-id, x-peeky-invite-code",
+        "content-type, authorization, anthropic-version, anthropic-beta, x-peeky-device-id, x-peeky-invite-code, x-aegis-device-id, x-aegis-invite-code",
     );
     return new Response(res.body, { status: res.status, headers });
 }
@@ -31,6 +31,15 @@ export function passthroughHeaders(upstream: Headers): Headers {
 }
 
 /**
+ * Reads a client header by its current x-peeky-* name, falling back to the
+ * pre-rename x-aegis-* name that clients up to v0.1.9 still send. Drop the
+ * fallback once no v0.1.9 installs remain.
+ */
+export function clientHeader(request: Request, name: string): string | null {
+    return request.headers.get(`x-peeky-${name}`) ?? request.headers.get(`x-aegis-${name}`);
+}
+
+/**
  * Reads + validates the device id from the request. Returns the id on success,
  * or a ready-to-return error Response on failure. Caller pattern:
  *
@@ -39,7 +48,7 @@ export function passthroughHeaders(upstream: Headers): Headers {
  *   // ...use deviceId as a string
  */
 export function requireDeviceId(request: Request): string | Response {
-    const deviceId = request.headers.get("x-peeky-device-id");
+    const deviceId = clientHeader(request, "device-id");
     if (!deviceId || !UUID_RE.test(deviceId)) {
         return cors(jsonResponse(401, { error: "missing or invalid X-Peeky-Device-Id" }));
     }

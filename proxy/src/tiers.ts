@@ -4,7 +4,7 @@
 
 import { verifyJwt } from "./auth/jwt";
 import { ACCOUNT_DAILY_BUDGET, CODE_RE, TRIAL_DAILY_BUDGET } from "./constants";
-import { cors, jsonResponse, requireDeviceId } from "./http";
+import { clientHeader, cors, jsonResponse, requireDeviceId } from "./http";
 import type { Env, InviteCode, InviteLookup, Tier } from "./types";
 
 /**
@@ -61,7 +61,7 @@ export async function resolveTier(
     env: Env,
     deviceId: string,
 ): Promise<Tier | Response> {
-    const code = request.headers.get("x-peeky-invite-code");
+    const code = clientHeader(request, "invite-code");
     if (!code) {
         // No invite code: a valid session JWT upgrades to the account tier;
         // anyone else gets the anonymous trial. An invalid or expired token
@@ -120,7 +120,7 @@ export async function handleInviteVerify(request: Request, env: Env): Promise<Re
     const deviceId = requireDeviceId(request);
     if (deviceId instanceof Response) return deviceId;
 
-    const code = request.headers.get("x-peeky-invite-code");
+    const code = clientHeader(request, "invite-code");
     if (!code) {
         return cors(jsonResponse(400, { error: "missing invite code" }));
     }
