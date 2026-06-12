@@ -87,7 +87,10 @@ pub fn cursor(x: i32, y: i32) -> glib::ExitCode {
             .take()
             .expect("connect_activate fired more than once");
         let window = build_window(app);
-        let painter = Painter::new(Box::new(Sprite::from_png(CURSOR_PNG, CURSOR_DISPLAY_SIZE * crate::painter::overlay_scale())));
+        let painter = Painter::new(Box::new(Sprite::from_png(
+            CURSOR_PNG,
+            CURSOR_DISPLAY_SIZE * crate::painter::overlay_scale(),
+        )));
         window.set_child(Some(painter.widget()));
         make_click_through(&window);
         window.present();
@@ -171,8 +174,10 @@ fn start_tracking(
         // Drain state changes first; the latest one wins.
         while let Ok(state) = state_receiver.try_recv() {
             match state {
-                CursorState::Idle => painter
-                    .set_drawable(Box::new(Sprite::from_png(CURSOR_PNG, CURSOR_DISPLAY_SIZE * crate::painter::overlay_scale()))),
+                CursorState::Idle => painter.set_drawable(Box::new(Sprite::from_png(
+                    CURSOR_PNG,
+                    CURSOR_DISPLAY_SIZE * crate::painter::overlay_scale(),
+                ))),
                 CursorState::Listening => {
                     painter.set_drawable(Box::new(Soundwave::new()));
                 }

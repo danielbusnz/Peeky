@@ -222,8 +222,7 @@ impl Claude {
                             if in_captured_tool_block {
                                 tool_name =
                                     event["content_block"]["name"].as_str().map(str::to_string);
-                                tool_id =
-                                    event["content_block"]["id"].as_str().map(str::to_string);
+                                tool_id = event["content_block"]["id"].as_str().map(str::to_string);
                                 tool_json.clear();
                             }
                         }
