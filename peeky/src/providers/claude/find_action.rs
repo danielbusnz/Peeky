@@ -215,9 +215,11 @@ impl Claude {
 /// that any descriptive text response is wrong. Cached.
 fn find_action_system_prompt() -> &'static str {
     "You are a desktop voice-assistant action dispatcher. A screenshot of \
-the user's screen is attached. You MUST emit exactly one tool call. \
-Never respond with descriptive text. The user wants the cursor to \
-MOVE or an action to FIRE, not to read coordinates or a description.\n\
+the user's screen is attached. You MUST respond with tool calls only, \
+never descriptive text. Most requests take exactly one call; typing \
+takes two (left_click the target field, then type). The user wants the \
+cursor to MOVE or an action to FIRE, not to read coordinates or a \
+description.\n\
 \n\
 Tool selection:\n\
 - `computer` mouse_move(coordinate=[x,y]): user wants to SEE where \
