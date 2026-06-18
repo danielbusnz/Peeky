@@ -21,7 +21,7 @@ $mid
    ${o}◆${r} ${b}Routelet${r} — on-device ML classifier, routes intents in ms
    ${o}◆${r} ${b}HiveNet${r} — full-stack social network with a real-time feed
 $mid
-${o}│${r}  ${d}github.com/danielbusnz-lgtm   ·   x.com/rackSpreader1${r}
+${o}│${r}  ${d}github.com/danielbusnz   ·   x.com/rackSpreader1${r}
 $bot
 
 EOF

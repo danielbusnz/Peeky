@@ -9,7 +9,7 @@
   <img alt="Platform" src="https://img.shields.io/badge/Linux%20%7C%20Hyprland-black?logo=linux&logoColor=white">
   <img alt="macOS" src="https://img.shields.io/badge/macOS-black?logo=apple&logoColor=white">
   <img alt="Status" src="https://img.shields.io/badge/Status-WIP-yellow">
-  <img alt="CI" src="https://github.com/danielbusnz-lgtm/Peeky/actions/workflows/ci.yml/badge.svg">
+  <img alt="CI" src="https://github.com/danielbusnz/Peeky/actions/workflows/ci.yml/badge.svg">
 </p>
 
 <p align="center">Hold the hotkey. Ask a question. Peeky handles the rest.</p>
@@ -47,12 +47,12 @@ On first launch, choose **use my own API keys** and paste your Anthropic, Deepgr
 **Build and run**
 
 ```bash
-git clone https://github.com/danielbusnz-lgtm/peeky.git
+git clone https://github.com/danielbusnz/peeky.git
 cd peeky
 cargo run --release -p peeky
 ```
 
-All API calls route through a hosted Cloudflare Worker by default, so no keys are needed locally to try it. Prefer not to build? Grab the raw `peeky` binary from the [Releases page](https://github.com/danielbusnz-lgtm/Peeky/releases/latest).
+All API calls route through a hosted Cloudflare Worker by default, so no keys are needed locally to try it. Prefer not to build? Grab the raw `peeky` binary from the [Releases page](https://github.com/danielbusnz/Peeky/releases/latest).
 
 **Hotkey (Hyprland)**
 
@@ -72,7 +72,7 @@ Open Claude Code in an empty directory and paste:
 ```
 Hi Claude.
 
-Clone https://github.com/danielbusnz-lgtm/peeky.git into my current directory.
+Clone https://github.com/danielbusnz/peeky.git into my current directory.
 
 Then read AGENTS.md. I want to get Peeky running locally on Linux/Hyprland.
 

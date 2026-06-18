@@ -51,7 +51,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). peeky f
 - `demo_routelet` bin (`demos/src/bin/demo_routelet.rs`) for hand-testing the classifier.
 - `PRIVACY.md` documenting what leaves the device and how on-device logging works.
 - `PEEKY_ROUTELET_LOG` env var to opt into redacted router logging at `~/.config/peeky/routelet_log.jsonl` (capped at 5000 lines).
-- Chat mode now includes a screenshot so Claude can see the user's screen and answer contextual questions ([#51](https://github.com/danielbusnz-lgtm/Peeky/pull/51)).
+- Chat mode now includes a screenshot so Claude can see the user's screen and answer contextual questions ([#51](https://github.com/danielbusnz/Peeky/pull/51)).
 - Onboarding prompts macOS for microphone, accessibility, and screen recording permissions on first launch.
 - SQLite + FTS5 conversation log (`peeky/src/providers/claude/history.rs`). Per-turn record + keyword search with porter stemming and BM25 ranking.
 - Tool-routing eval harness (`peeky/evals/runners/tool_routing.rs`). Runs cases from `peeky/evals/cases/tool_routing.json` through the live classifier and reports pass rate, per-category breakdown, and confusion matrix.
@@ -67,7 +67,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). peeky f
 
 ### Fixed
 
-- macOS `.dmg` ships signed and notarized again. The release workflow now notarizes the bundle out of band with a bounded `notarytool` wait, preventing the 6 hour hang that wedged `v0.1.7` ([#52](https://github.com/danielbusnz-lgtm/Peeky/pull/52)).
+- macOS `.dmg` ships signed and notarized again. The release workflow now notarizes the bundle out of band with a bounded `notarytool` wait, preventing the 6 hour hang that wedged `v0.1.7` ([#52](https://github.com/danielbusnz/Peeky/pull/52)).
 
 ## [0.1.0]
 

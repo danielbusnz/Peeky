@@ -21,9 +21,9 @@ First-run guide for grabbing the latest CI artifact and verifying it on a Mac.
 ```bash
 mkdir -p ~/peeky-test && cd ~/peeky-test
 LATEST=$(gh run list --workflow=macos.yml --limit 1 \
-  --repo danielbusnz-lgtm/Peeky \
+  --repo danielbusnz/Peeky \
   --json databaseId --jq '.[0].databaseId')
-gh run download "$LATEST" --repo danielbusnz-lgtm/Peeky --name peeky-macos
+gh run download "$LATEST" --repo danielbusnz/Peeky --name peeky-macos
 chmod +x peeky
 ```
 
@@ -115,9 +115,9 @@ Pure-logic paths (classifier, memory, parsing) all pass tests. I/O paths (mic, s
 
 ```bash
 LATEST=$(gh run list --workflow=macos.yml --limit 1 \
-  --repo danielbusnz-lgtm/Peeky \
+  --repo danielbusnz/Peeky \
   --json databaseId --jq '.[0].databaseId')
-gh run download "$LATEST" --repo danielbusnz-lgtm/Peeky --name peeky-macos
+gh run download "$LATEST" --repo danielbusnz/Peeky --name peeky-macos
 chmod +x peeky
 xattr -d com.apple.quarantine ./peeky 2>/dev/null || true
 ./peeky

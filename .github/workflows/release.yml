@@ -90,7 +90,7 @@ jobs:
 
       # SLSA build provenance: signed attestation linking the artifact to
       # this exact workflow run and commit. Verifiable with
-      # `gh attestation verify peeky-linux-x86_64.tar.gz --repo danielbusnz-lgtm/Peeky`.
+      # `gh attestation verify peeky-linux-x86_64.tar.gz --repo danielbusnz/Peeky`.
       - name: Attest Linux artifact
         uses: actions/attest-build-provenance@v4
         with:
