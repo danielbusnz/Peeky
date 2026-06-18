@@ -127,8 +127,8 @@ impl Mic {
 
         // cpal demands a closure typed for the hardware's native sample
         // format. Some devices (Arctis Nova, ALSA hw:) only deliver I16;
-        // others deliver F32. Branch and produce a unified i16 PCM stream
-        // for Deepgram either way.
+        // others deliver F32, and some ALSA cards report I32. Branch and
+        // produce a unified i16 PCM stream for Deepgram either way.
         let stream = match sample_format {
             cpal::SampleFormat::F32 => {
                 let state_cb = state.clone();
@@ -187,6 +187,44 @@ impl Mic {
                                 .map(|frame| {
                                     let sum: i32 = frame.iter().map(|&s| s as i32).sum();
                                     (sum / frame.len() as i32) as i16
+                                })
+                                .collect()
+                        };
+                        route_samples(&state_cb, samples);
+                    },
+                    err_cb,
+                    None,
+                )
+            }
+            cpal::SampleFormat::I32 => {
+                let state_cb = state.clone();
+                self.device.build_input_stream(
+                    &config,
+                    move |data: &[i32], _: &cpal::InputCallbackInfo| {
+                        let scale = i32::MAX as f32;
+                        let rms = if data.is_empty() {
+                            0.0
+                        } else {
+                            let sum_sq: f32 = data
+                                .iter()
+                                .map(|&s| {
+                                    let f = s as f32 / scale;
+                                    f * f
+                                })
+                                .sum();
+                            (sum_sq / data.len() as f32).sqrt()
+                        };
+                        AUDIO_LEVEL.store(rms.to_bits(), Ordering::Relaxed);
+
+                        // Narrow 32-bit samples to i16 PCM (>> 16); downmix sums
+                        // in i64 so the multi-channel average can't overflow.
+                        let samples: Vec<i16> = if input_channels <= 1 {
+                            data.iter().map(|&s| (s >> 16) as i16).collect()
+                        } else {
+                            data.chunks(input_channels as usize)
+                                .map(|frame| {
+                                    let sum: i64 = frame.iter().map(|&s| s as i64).sum();
+                                    ((sum / frame.len() as i64) >> 16) as i16
                                 })
                                 .collect()
                         };
