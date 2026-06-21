@@ -14,16 +14,15 @@ const INTEGRATIONS = [
     { key: "youtube", name: "YouTube", connect: "yt-dlp (no auth)" },
 ];
 
-// How each backend state renders as a pill: label + the color classes layered
-// on top of the shared pill base.
+// How each backend state renders as a pill: label + modifier class applied
+// on top of the base "pill" class (defined in settings.css).
 const PILL = {
-    checking: { label: "Checking…", cls: "bg-white/10 text-gray-500" },
-    connected: { label: "Connected", cls: "bg-green-500/15 text-green-400" },
-    not_connected: { label: "Not connected", cls: "bg-white/10 text-gray-400" },
-    error: { label: "Error", cls: "bg-red-500/15 text-red-400" },
-    unknown: { label: "Unknown", cls: "bg-white/10 text-gray-500" },
+    checking:      { label: "Checking…",     cls: "pill--checking" },
+    connected:     { label: "Connected",     cls: "pill--connected" },
+    not_connected: { label: "Not connected", cls: "pill--not-connected" },
+    error:         { label: "Error",         cls: "pill--error" },
+    unknown:       { label: "Unknown",       cls: "pill--unknown" },
 };
-const PILL_BASE = "ml-auto rounded-full px-2 py-0.5 text-xs";
 
 /** Resize the (frameless) window to something settings-appropriate. */
 async function sizeWindow() {
@@ -34,15 +33,12 @@ async function sizeWindow() {
 
 function integrationRow({ key, name }) {
     const li = document.createElement("li");
-    li.className = "flex items-center gap-3 px-4 py-3";
+    li.className = "integration-row";
     li.innerHTML = `
-        <img src="../icons/${key}.svg" alt="" class="h-6 w-6" />
-        <div class="min-w-0">
-            <p class="font-medium">${name}</p>
-        </div>
-        <span class="${PILL_BASE} ${PILL.checking.cls}" data-status="${key}">${PILL.checking.label}</span>
-        <button class="rounded-md bg-[#ff8c00] px-3 py-1 text-sm font-semibold text-white
-                       hover:bg-[#ffa500]" data-connect="${key}">Connect</button>
+        <img src="../icons/${key}.svg" alt="" class="integration-icon" />
+        <span class="integration-name">${name}</span>
+        <span class="pill ${PILL.checking.cls}" data-status="${key}">${PILL.checking.label}</span>
+        <button class="btn-connect btn-connect--active" data-connect="${key}">Connect</button>
     `;
     return li;
 }
@@ -50,20 +46,22 @@ function integrationRow({ key, name }) {
 /** Paint one integration's pill + Connect button from a backend state. */
 function applyState(key, state, detail) {
     const pill = document.querySelector(`[data-status="${key}"]`);
-    const btn = document.querySelector(`[data-connect="${key}"]`);
+    const btn  = document.querySelector(`[data-connect="${key}"]`);
     const look = PILL[state] ?? PILL.unknown;
+
     if (pill) {
-        pill.className = `${PILL_BASE} ${look.cls}`;
+        pill.className = `pill ${look.cls}`;
         pill.textContent = look.label;
         if (detail) pill.title = detail;
     }
+
     if (btn) {
         const connected = state === "connected";
         btn.disabled = connected;
         btn.textContent = connected ? "Connected" : "Connect";
         btn.className = connected
-            ? "rounded-md bg-white/10 px-3 py-1 text-sm font-semibold text-gray-400 cursor-default"
-            : "rounded-md bg-[#ff8c00] px-3 py-1 text-sm font-semibold text-white hover:bg-[#ffa500]";
+            ? "btn-connect btn-connect--done"
+            : "btn-connect btn-connect--active";
     }
 }
 
@@ -85,7 +83,7 @@ function renderIntegrations() {
         const btn = e.target.closest("[data-connect]");
         if (!btn || btn.disabled) return;
         // Placeholder: connect flows arrive with the integrations panel work.
-        const key = btn.getAttribute("data-connect");
+        const key  = btn.getAttribute("data-connect");
         const pill = list.querySelector(`[data-status="${key}"]`);
         if (pill) pill.textContent = "Coming soon";
     });

@@ -1,0 +1,355 @@
+/* Settings window. Light glass card, 720x640, frameless Tauri window.
+   Visual language matches onboarding.css and the Peeky_Frontend landing page.
+   base.css is loaded first and provides .window. */
+
+/* ---- font + color tokens ---- */
+
+:root {
+  --font: ui-rounded, -apple-system, system-ui, sans-serif;
+
+  --text-primary:   #1a1a1e;
+  --text-secondary: #5c616b;
+  --text-hint:      #8e8e93;
+  --text-placeholder: #a3a8b3;
+
+  --accent-orange:  #fd8a02;
+  --accent-orange-hover: #ffa01f;
+  --accent-blue:    #0088ff;
+
+  --border:         rgba(16, 24, 40, 0.14);
+  --border-light:   rgba(16, 24, 40, 0.07);
+
+  --status-green:   #2ea043;
+  --status-green-bg: rgba(46, 160, 67, 0.10);
+  --status-red:     #cf222e;
+  --status-red-bg:  rgba(207, 34, 46, 0.10);
+  --status-neutral-bg: rgba(16, 24, 40, 0.06);
+}
+
+/* ---- reset ---- */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* base.css sets color:#fff on body; override for light theme */
+body {
+  font-family: var(--font);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+ul, li {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* ---- glass card (fills the entire OS window) ---- */
+
+.window {
+  background: transparent;
+}
+
+.card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+  background: radial-gradient(
+    92.09% 124.47% at 50% 99.24%,
+    rgba(221, 226, 238, 0.4) 58.91%,
+    rgba(187, 197, 221, 0.4) 100%
+  ), #fff;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  outline: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* inner sheen along top-left edges */
+.sheen {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 1.899px 1.77px 8.174px rgba(168, 197, 255, 0.25),
+    inset 1.007px 0.939px 4.087px rgba(168, 197, 255, 0.25);
+}
+
+/* ---- header / drag region ---- */
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 20px 13px;
+  border-bottom: 1px solid var(--border-light);
+  /* children must be pointer-events:auto to stay clickable inside drag region */
+  flex-shrink: 0;
+}
+
+.settings-header img.logo {
+  width: 18px;
+  height: 18px;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.settings-header h1 {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.header-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* must be clickable even inside the drag region */
+  pointer-events: auto;
+}
+
+#account-email {
+  font-size: 13px;
+  color: var(--text-hint);
+}
+
+#signout-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-orange);
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+
+#signout-btn:hover {
+  color: var(--accent-orange-hover);
+}
+
+/* ---- scrollable body ---- */
+
+.settings-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ---- section layout ---- */
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-hint);
+  margin: 0 0 4px;
+}
+
+.section-sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+/* ---- integration list ---- */
+
+#integrations {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.65);
+  overflow: hidden;
+}
+
+.integration-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.integration-row:last-child {
+  border-bottom: none;
+}
+
+.integration-icon {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  display: block;
+}
+
+.integration-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---- status pill ---- */
+
+.pill {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* state classes applied by applyState() in settings.js */
+.pill--checking {
+  background: var(--status-neutral-bg);
+  color: var(--text-hint);
+}
+
+.pill--connected {
+  background: var(--status-green-bg);
+  color: var(--status-green);
+}
+
+.pill--not-connected {
+  background: var(--status-neutral-bg);
+  color: var(--text-secondary);
+}
+
+.pill--error {
+  background: var(--status-red-bg);
+  color: var(--status-red);
+}
+
+.pill--unknown {
+  background: var(--status-neutral-bg);
+  color: var(--text-hint);
+}
+
+/* ---- connect button ---- */
+
+.btn-connect {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+  flex-shrink: 0;
+}
+
+.btn-connect--active {
+  background: var(--accent-orange);
+  color: #fff;
+}
+
+.btn-connect--active:hover {
+  background: var(--accent-orange-hover);
+}
+
+.btn-connect--done {
+  background: var(--status-neutral-bg);
+  color: var(--text-hint);
+  cursor: default;
+}
+
+/* ---- billing card ---- */
+
+.billing-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.65);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.billing-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.billing-plan-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-hint);
+}
+
+.billing-plan-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.btn-billing {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  background: var(--accent-orange);
+  color: #fff;
+  transition: background 120ms ease;
+  flex-shrink: 0;
+}
+
+.btn-billing:hover {
+  background: var(--accent-orange-hover);
+}
+
+/* ---- coming soon placeholder ---- */
+
+.coming-soon {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.65);
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-hint);
+  line-height: 1.5;
+}
+
+/* ---- focus ring (keyboard nav) ---- */
+
+:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+/* ---- reduced motion ---- */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

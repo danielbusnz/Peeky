@@ -1,48 +1,64 @@
 <!doctype html>
-<html lang="en" class="h-full bg-[#1a1a1a]">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Peeky · Settings</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="../shared/base.css" />
+    <link rel="stylesheet" href="settings.css" />
   </head>
-  <body class="h-full text-gray-100">
-    <!-- The window is frameless (decorations:false), so this top bar doubles as
-         the drag handle. -->
-    <header
-      data-tauri-drag-region
-      class="flex items-center gap-3 border-b border-white/10 px-5 py-3"
-    >
-      <img src="../shared/cursor.svg" alt="Peeky" class="h-7 w-auto" />
-      <h1 class="text-base font-semibold tracking-tight">Settings</h1>
-      <div class="ml-auto flex items-center gap-3 text-sm">
-        <span id="account-email" class="text-gray-400"></span>
-        <button id="signout-btn" class="font-semibold text-[#ff8c00] hover:text-[#ffa500]">
-          Sign out
-        </button>
+  <body>
+    <div class="window">
+      <div class="card">
+        <div class="sheen" aria-hidden="true"></div>
+
+        <!-- Drag handle. Interactive children (Sign out) must be pointer-events:auto
+             which settings.css handles via .header-right. -->
+        <header class="settings-header" data-tauri-drag-region>
+          <img class="logo" src="../shared/cursor.svg" alt="Peeky" />
+          <h1>Settings</h1>
+          <div class="header-right">
+            <span id="account-email"></span>
+            <button id="signout-btn" type="button">Sign out</button>
+          </div>
+        </header>
+
+        <main class="settings-body">
+
+          <!-- Integrations -->
+          <section class="settings-section" aria-labelledby="integrations-label">
+            <h2 class="section-label" id="integrations-label">Integrations</h2>
+            <p class="section-sub">Connect apps for Peeky. Credentials stay on this device.</p>
+            <ul id="integrations" role="list">
+              <!-- rows injected by settings.js -->
+            </ul>
+          </section>
+
+          <!-- Billing -->
+          <section class="settings-section" aria-labelledby="billing-label">
+            <h2 class="section-label" id="billing-label">Billing</h2>
+            <div class="billing-card">
+              <div class="billing-plan">
+                <span class="billing-plan-label">Current plan</span>
+                <span class="billing-plan-name">Free trial</span>
+              </div>
+              <button class="btn-billing" type="button" id="manage-subscription-btn">
+                Manage subscription
+              </button>
+            </div>
+          </section>
+
+          <!-- Cursor -->
+          <section class="settings-section" aria-labelledby="cursor-label">
+            <h2 class="section-label" id="cursor-label">Cursor</h2>
+            <div class="coming-soon">
+              Cursor and voice settings are coming soon.
+            </div>
+          </section>
+
+        </main>
       </div>
-    </header>
-
-    <main class="mx-auto max-w-2xl space-y-8 px-6 py-6">
-      <!-- Integrations -->
-      <section>
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-400">Integrations</h2>
-        <p class="mt-1 text-sm text-gray-500">
-          Connect apps for Peeky. Credentials stay on this device.
-        </p>
-        <ul id="integrations" class="mt-4 divide-y divide-white/5 rounded-lg bg-white/5">
-          <!-- rows injected by settings.js -->
-        </ul>
-      </section>
-
-      <!-- Cursor settings (placeholder until runtime config lands) -->
-      <section>
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-400">Cursor</h2>
-        <div class="mt-4 rounded-lg bg-white/5 px-4 py-6 text-center text-sm text-gray-500">
-          Cursor and voice settings are coming soon.
-        </div>
-      </section>
-    </main>
+    </div>
 
     <script src="settings.js" defer></script>
   </body>
