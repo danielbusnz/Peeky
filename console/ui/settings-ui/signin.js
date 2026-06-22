@@ -5,24 +5,8 @@
 
 const { invoke } = window.__TAURI__.core;
 
-// Auto-fit the Tauri window to the sign-in card. Reads the card's rendered
-// box once Tailwind has applied its classes, then resizes the OS window to
-// match plus a small margin, so the card size drives the window, not pixels
-// hardcoded in tauri.conf.json.
-const MARGIN = 16;
-
-async function fitWindowToCard() {
-    const card = document.getElementById("signin-card");
-    if (!card) return;
-    const rect = card.getBoundingClientRect();
-    const { getCurrentWindow, PhysicalSize } = window.__TAURI__.window;
-    await getCurrentWindow().setSize(
-        new PhysicalSize(
-            Math.ceil(rect.width + MARGIN * 2),
-            Math.ceil(rect.height + MARGIN * 2),
-        ),
-    );
-}
+// The card fills the OS window edge to edge (sized in tauri.conf.json), same
+// as the settings and onboarding pages, so there is no per-card resize here.
 
 const els = {
     btn: document.getElementById("github-btn"),
@@ -44,7 +28,6 @@ function showSignedOut() {
     els.btn.disabled = false;
     els.label.textContent = "Continue with GitHub";
     els.status.textContent = "";
-    fitWindowToCard();
 }
 
 els.btn.addEventListener("click", async () => {
@@ -75,7 +58,3 @@ els.signOut.addEventListener("click", async () => {
         // No session yet; leave the default signed-out UI.
     }
 })();
-
-// Tailwind via CDN applies styles after this script runs; wait one frame so
-// the card has its final layout before we measure.
-requestAnimationFrame(() => requestAnimationFrame(fitWindowToCard));

@@ -1,0 +1,188 @@
+/* Sign-in window. Light glass card, same visual language as onboarding.css
+   and settings.css and the Peeky_Frontend landing page. base.css is loaded
+   first and provides .window. The card fills the OS window edge to edge, so
+   only its rounded corners show the desktop through. */
+
+.window {
+  background: transparent;
+  align-items: center;
+  justify-content: center;
+}
+
+.card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+  background: radial-gradient(92.09% 124.47% at 50% 99.24%, rgba(221, 226, 238, 0.4) 58.91%, rgba(187, 197, 221, 0.4) 100%), #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  outline: 1px solid rgba(0, 0, 0, 0.05);
+  cursor: grab;
+}
+
+/* bento-card inner sheen along the top-left edges */
+.sheen {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 1.899px 1.77px 8.174px rgba(168, 197, 255, 0.25), inset 1.007px 0.939px 4.087px rgba(168, 197, 255, 0.25);
+}
+
+.wordmark {
+  position: absolute;
+  top: 36px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: ui-rounded, -apple-system, system-ui, sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #1a1a1e;
+  pointer-events: none;
+}
+
+.wordmark img {
+  width: 17px;
+  height: 17px;
+}
+
+/* ---- centered sign-in content ---- */
+
+.signin-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 280px;
+}
+
+.signin-logo {
+  width: 56px;
+  height: 56px;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.signin-title {
+  margin: 18px 0 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1a1e;
+}
+
+.signin-sub {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #5c616b;
+}
+
+/* ---- GitHub button: dark neutral on the light card ---- */
+
+.btn-github {
+  margin-top: 22px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: #1a1a1e;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 11px 0;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background 120ms ease, opacity 120ms ease;
+}
+
+.btn-github:hover {
+  background: #2c2c32;
+}
+
+.btn-github:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn-github-icon {
+  width: 18px;
+  height: 18px;
+  /* the mark ships black; invert to white for the dark button */
+  filter: invert(1);
+  pointer-events: none;
+}
+
+.signin-status {
+  margin: 12px 0 0;
+  min-height: 16px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #8e8e93;
+}
+
+/* ---- signed-in state (returning user, before redirect to settings) ---- */
+
+.signed-in {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.signed-in-text {
+  margin: 0;
+  font-size: 13px;
+  color: #5c616b;
+}
+
+.signed-in-text span {
+  font-weight: 600;
+  color: #1a1a1e;
+}
+
+.signout-link {
+  background: none;
+  border: none;
+  padding: 2px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fd8a02;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color 120ms ease;
+}
+
+.signout-link:hover {
+  color: #ffa01f;
+}
+
+/* JS toggles this in place of Tailwind's hidden utility */
+.hidden {
+  display: none !important;
+}
+
+:focus-visible {
+  outline: 2px solid #0088ff;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
