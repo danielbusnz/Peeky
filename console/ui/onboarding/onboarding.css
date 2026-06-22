@@ -11,26 +11,11 @@
 /* The card IS the visible window: it fills the transparent OS window
    edge to edge, so only its rounded corners show the desktop through. */
 .card {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  border-radius: 16px;
-  background: radial-gradient(92.09% 124.47% at 50% 99.24%, rgba(221, 226, 238, 0.4) 58.91%, rgba(187, 197, 221, 0.4) 100%), #fff;
-  display: flex;
+  /* shared card (gradient, radius, sheen) lives in base.css; onboarding centers
+     the cursor button and is draggable */
   align-items: center;
   justify-content: center;
-  overflow: hidden;
-  outline: 1px solid rgba(0, 0, 0, 0.05);
   cursor: grab;
-}
-
-/* bento-card inner sheen along the top-left edges */
-.sheen {
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  box-shadow: inset 1.899px 1.77px 8.174px rgba(168, 197, 255, 0.25), inset 1.007px 0.939px 4.087px rgba(168, 197, 255, 0.25);
 }
 
 .wordmark {

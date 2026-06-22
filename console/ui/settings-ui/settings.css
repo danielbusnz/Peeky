@@ -52,30 +52,9 @@ ul, li {
 }
 
 .card {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  border-radius: 16px;
-  background: radial-gradient(
-    92.09% 124.47% at 50% 99.24%,
-    rgba(221, 226, 238, 0.4) 58.91%,
-    rgba(187, 197, 221, 0.4) 100%
-  ), #fff;
-  display: flex;
+  /* shared card (gradient, radius, sheen) lives in base.css; settings stacks
+     its header + scrollable body vertically */
   flex-direction: column;
-  overflow: hidden;
-  outline: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-/* inner sheen along top-left edges */
-.sheen {
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  box-shadow:
-    inset 1.899px 1.77px 8.174px rgba(168, 197, 255, 0.25),
-    inset 1.007px 0.939px 4.087px rgba(168, 197, 255, 0.25);
 }
 
 /* ---- header / drag region ---- */
@@ -336,20 +315,4 @@ ul, li {
   font-size: 13px;
   color: var(--text-hint);
   line-height: 1.5;
-}
-
-/* ---- focus ring (keyboard nav) ---- */
-
-:focus-visible {
-  outline: 2px solid var(--accent-blue);
-  outline-offset: 2px;
-}
-
-/* ---- reduced motion ---- */
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    transition: none !important;
-    animation: none !important;
-  }
 }

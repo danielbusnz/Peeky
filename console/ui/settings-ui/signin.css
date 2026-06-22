@@ -10,47 +10,11 @@
 }
 
 .card {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  border-radius: 16px;
-  background: radial-gradient(92.09% 124.47% at 50% 99.24%, rgba(221, 226, 238, 0.4) 58.91%, rgba(187, 197, 221, 0.4) 100%), #fff;
-  display: flex;
+  /* shared card (gradient, radius, sheen) lives in base.css; sign-in centers
+     its content and is draggable */
   align-items: center;
   justify-content: center;
-  overflow: hidden;
-  outline: 1px solid rgba(0, 0, 0, 0.05);
   cursor: grab;
-}
-
-/* bento-card inner sheen along the top-left edges */
-.sheen {
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  box-shadow: inset 1.899px 1.77px 8.174px rgba(168, 197, 255, 0.25), inset 1.007px 0.939px 4.087px rgba(168, 197, 255, 0.25);
-}
-
-.wordmark {
-  position: absolute;
-  top: 36px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-family: ui-rounded, -apple-system, system-ui, sans-serif;
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: #1a1a1e;
-  pointer-events: none;
-}
-
-.wordmark img {
-  width: 17px;
-  height: 17px;
 }
 
 /* ---- centered sign-in content ---- */
@@ -173,16 +137,4 @@
 /* JS toggles this in place of Tailwind's hidden utility */
 .hidden {
   display: none !important;
-}
-
-:focus-visible {
-  outline: 2px solid #0088ff;
-  outline-offset: 2px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    transition: none !important;
-    animation: none !important;
-  }
 }
