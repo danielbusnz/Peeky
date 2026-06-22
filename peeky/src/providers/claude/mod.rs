@@ -107,6 +107,11 @@ impl Claude {
         if let Some(jwt) = super::session_jwt::load() {
             req = req.header(reqwest::header::AUTHORIZATION, format!("Bearer {jwt}"));
         }
+        // Dev-only: PEEKY_FORCE_EXHAUSTED makes the proxy return the budget wall
+        // with no upstream call, to exercise the upgrade flow for free.
+        if std::env::var_os("PEEKY_FORCE_EXHAUSTED").is_some() {
+            req = req.header(crate::providers::proxy_contract::FORCE_EXHAUSTED_HEADER, "1");
+        }
         req
     }
 

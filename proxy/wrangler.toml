@@ -2,6 +2,12 @@ name = "aegis-proxy"
 main = "src/index.ts"
 compatibility_date = "2026-05-15"
 
+[vars]
+# Dev-only: when "1", handlers honor the x-peeky-force-exhausted test header,
+# returning the budget wall with no upstream call so the client upgrade flow can
+# be tested for free. Set to "0" or remove before serving real production users.
+DEV_HEADERS = "1"
+
 # Trial and demo tiers meter against per-UTC-day budgets, not a lifetime turn
 # count. The trial default budget lives in src/constants.ts (TRIAL_DAILY_BUDGET);
 # demo budgets come from each invite record's daily_* fields.

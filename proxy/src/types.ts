@@ -44,6 +44,13 @@ export interface Env {
     GITHUB_CLIENT_SECRET: string;
     /** HS256 signing secret for peeky session JWTs. `wrangler secret put JWT_SECRET`. */
     JWT_SECRET: string;
+    /**
+     * Dev-only flag. When "1", handlers honor the x-peeky-force-exhausted test
+     * header (returns the budget wall with no upstream call) so the client
+     * upgrade flow can be exercised for free. Absent or "0" in production. Plain
+     * var, set in wrangler.toml [vars].
+     */
+    DEV_HEADERS?: string;
 }
 
 /**

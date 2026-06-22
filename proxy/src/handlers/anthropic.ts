@@ -28,6 +28,14 @@ export async function handleAnthropic(request: Request, env: Env, ctx: Execution
     if (tier instanceof Response) return tier;
 
     const key = dailyUsageKey(tier, deviceId, utcDateKey(new Date()));
+    // Dev-only test hook: force the budget wall with no upstream call so the
+    // client upgrade flow can be exercised without spending tokens. Gated on
+    // DEV_HEADERS so it is inert in production. Mirrors FORCE_EXHAUSTED_HEADER
+    // in peeky/src/providers/proxy_contract.rs.
+    if (env.DEV_HEADERS === "1" && request.headers.get("x-peeky-force-exhausted") === "1") {
+        return cors(jsonResponse(429, exhaustionBody(tier, "anthropic")));
+    }
+
     const usage = await readDailyUsage(env.USAGE_KV, key);
     if (anthropicExhausted(usage, tier.budget)) {
         return cors(jsonResponse(429, exhaustionBody(tier, "anthropic")));

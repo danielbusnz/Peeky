@@ -9,6 +9,11 @@ pub const DEVICE_ID_HEADER: &str = "x-peeky-device-id";
 /// Header carrying the invite code for demo-tier access.
 pub const INVITE_CODE_HEADER: &str = "x-peeky-invite-code";
 
+/// Dev-only test header. When the proxy has DEV_HEADERS enabled, its presence
+/// makes the proxy return the budget wall with no upstream call, so the client
+/// upgrade flow can be exercised for free. Sent when PEEKY_FORCE_EXHAUSTED is set.
+pub const FORCE_EXHAUSTED_HEADER: &str = "x-peeky-force-exhausted";
+
 /// Returns true if `s` is a plausible invite code format.
 /// Mirrors the proxy's CODE_RE: /^[A-Z0-9][A-Z0-9-]{6,62}[A-Z0-9]$/
 /// The proxy is the source of truth for expiry and device limits.
