@@ -30,7 +30,7 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -83,7 +83,7 @@ jobs:
     steps:
       # lfs: true pulls the routelet model (embedder.onnx) instead of its
       # LFS pointer; the routing regression suite loads it at test time.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           lfs: true
 
@@ -126,8 +126,8 @@ jobs:
     name: console js tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
