@@ -110,7 +110,10 @@ impl Claude {
         // Dev-only: PEEKY_FORCE_EXHAUSTED makes the proxy return the budget wall
         // with no upstream call, to exercise the upgrade flow for free.
         if std::env::var_os("PEEKY_FORCE_EXHAUSTED").is_some() {
-            req = req.header(crate::providers::proxy_contract::FORCE_EXHAUSTED_HEADER, "1");
+            req = req.header(
+                crate::providers::proxy_contract::FORCE_EXHAUSTED_HEADER,
+                "1",
+            );
         }
         req
     }
