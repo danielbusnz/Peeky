@@ -49,6 +49,18 @@ ignore = [
     # token expiry), tauri/plist (bundle metadata). No attacker-controlled
     # input reaches time's parser at runtime. Drop when tract relaxes the pin.
     "RUSTSEC-2026-0009",
+    # quick-xml <0.41: quadratic duplicate-attribute check (0194) and
+    # unbounded NsReader namespace allocation (0195). Fix is >=0.41.0 but all
+    # three copies are transitive and pinned lower: xcb (build-time codegen),
+    # tauri-utils/plist (bundle metadata), wayland-scanner (proc-macro
+    # codegen). No attacker-controlled XML reaches quick-xml at runtime.
+    # Drop when xcb, plist, and wayland-scanner allow quick-xml >=0.41.
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
+    # ttf-parser is unmaintained. Pulled in via winit -> sctk-adwaita ->
+    # ab_glyph for client-side decoration text; no fixed release or drop-in
+    # replacement exists. Clear when the winit chain moves off it.
+    "RUSTSEC-2026-0192",
 ]
 
 [licenses]
