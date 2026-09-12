@@ -50,6 +50,39 @@ fn clear_session_jwt_file() {
     }
 }
 
+/// The stored session JWT, or None when signed out. Reads the file (the
+/// source of truth), not the keychain.
+fn read_session_jwt() -> Option<String> {
+    let raw = std::fs::read_to_string(session_jwt_path()?).ok()?;
+    let token = raw.trim();
+    (!token.is_empty()).then(|| token.to_string())
+}
+
+/// One authenticated proxy call returning a JSON object. `path` is relative to
+/// the proxy base. Errors are user-facing strings the settings UI shows as is.
+async fn proxy_json(
+    method: reqwest::Method,
+    path: &str,
+    jwt: &str,
+) -> Result<serde_json::Value, String> {
+    let resp = reqwest::Client::new()
+        .request(method, format!("{}{path}", proxy_base()))
+        .bearer_auth(jwt)
+        .send()
+        .await
+        .map_err(|e| format!("couldn't reach the server: {e}"))?;
+    let status = resp.status();
+    let body: serde_json::Value = resp.json().await.unwrap_or(serde_json::Value::Null);
+    if !status.is_success() {
+        let detail = body
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("request failed");
+        return Err(format!("{detail} ({status})"));
+    }
+    Ok(body)
+}
+
 #[derive(serde::Serialize)]
 pub struct Account {
     email: Option<String>,
@@ -133,6 +166,36 @@ pub fn account_status() -> SessionStatus {
         signed_in,
         email: keychain_get(SESSION_EMAIL_ACCOUNT),
     }
+}
+
+/// The live plan ("free" or "pro") from the proxy. Read from the server, not
+/// the JWT claim, so a Stripe webhook flip shows up without re-signing in.
+#[tauri::command]
+pub async fn account_tier() -> Result<String, String> {
+    let jwt = read_session_jwt().ok_or("not signed in")?;
+    let body = proxy_json(reqwest::Method::GET, "/v1/account/me", &jwt).await?;
+    body.get("tier")
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+        .ok_or_else(|| "malformed response".to_string())
+}
+
+/// Open the browser on Stripe: Checkout for free users, the customer portal
+/// for subscribers. The proxy holds the Stripe key; this side only gets a URL.
+#[tauri::command]
+pub async fn manage_subscription() -> Result<(), String> {
+    let jwt = read_session_jwt().ok_or("not signed in")?;
+    let path = if account_tier().await? == "pro" {
+        "/v1/billing/portal"
+    } else {
+        "/v1/billing/checkout"
+    };
+    let body = proxy_json(reqwest::Method::POST, path, &jwt).await?;
+    let url = body
+        .get("url")
+        .and_then(|v| v.as_str())
+        .ok_or("malformed response")?;
+    open::that(url).map_err(|e| format!("couldn't open browser: {e}"))
 }
 
 /// Forget the stored session (token file + cached keychain entries).

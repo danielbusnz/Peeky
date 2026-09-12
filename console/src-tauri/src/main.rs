@@ -45,6 +45,8 @@ fn main() {
             account::github_sign_in,
             account::account_status,
             account::sign_out,
+            account::account_tier,
+            account::manage_subscription,
             integrations::integrations_status
         ])
         .setup(move |app| {

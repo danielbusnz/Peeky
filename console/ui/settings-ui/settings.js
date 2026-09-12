@@ -1,7 +1,9 @@
 // Settings page, shown once the user is signed in. Account section reads the
-// keychain session (account_status / sign_out). Integration status comes from
-// the peeky `integrations-status` subcommand, surfaced via the
-// integrations_status Tauri command. Connect flows are still to come.
+// keychain session (account_status / sign_out). Billing reads the live plan
+// from the proxy (account_tier) and hands off to Stripe in the browser
+// (manage_subscription). Integration status comes from the peeky
+// `integrations-status` subcommand, surfaced via the integrations_status
+// Tauri command. Connect flows are still to come.
 
 const { invoke } = window.__TAURI__.core;
 
@@ -89,6 +91,45 @@ function renderIntegrations() {
     });
 }
 
+// Plan name and button label per tier. Unknown tiers show as returned.
+const PLAN = {
+    free: { name: "Free", button: "Upgrade" },
+    pro:  { name: "Pro",  button: "Manage subscription" },
+};
+
+/** Paint the billing card from the proxy's view of the plan. */
+async function refreshPlan() {
+    const name = document.getElementById("billing-plan-name");
+    const btn  = document.getElementById("manage-subscription-btn");
+    try {
+        const tier = await invoke("account_tier");
+        const look = PLAN[tier] ?? { name: tier, button: "Manage subscription" };
+        name.textContent = look.name;
+        btn.textContent  = look.button;
+    } catch {
+        // Offline or proxy down: assume free, keep the button usable.
+        name.textContent = PLAN.free.name;
+        btn.textContent  = PLAN.free.button;
+    }
+}
+
+document.getElementById("manage-subscription-btn").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Opening…";
+    try {
+        await invoke("manage_subscription");
+        btn.textContent = label;
+    } catch (err) {
+        // No toast in this UI; the error stands in for the label for a beat.
+        btn.textContent = String(err);
+        setTimeout(() => { btn.textContent = label; }, 3000);
+    } finally {
+        btn.disabled = false;
+    }
+});
+
 document.getElementById("signout-btn").addEventListener("click", async () => {
     await invoke("sign_out");
     window.location.href = "signin.html";
@@ -110,4 +151,5 @@ document.getElementById("signout-btn").addEventListener("click", async () => {
         return;
     }
     refreshStatus();
+    refreshPlan();
 })();
