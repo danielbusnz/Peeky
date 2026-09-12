@@ -45,11 +45,17 @@ The app ships without API keys. By default every provider call routes through th
 | `/auth/github/start` | GET | none | Stashes `state` in KV, 302s to GitHub OAuth |
 | `/auth/github/callback` | GET | GitHub | Exchanges the code, upserts the user in D1, parks an peeky JWT under `state` |
 | `/auth/github/session` | GET | KV | Poll target: returns `pending`, or the JWT once the callback lands (single-use) |
+| `/v1/account/me` | GET | D1 | The signed-in user's live plan and email (console billing card) |
+| `/v1/billing/checkout` | POST | Stripe | Checkout Session for the monthly plan with a 7-day trial; returns the hosted URL |
+| `/v1/billing/portal` | POST | Stripe | Customer portal session for subscribers; returns the hosted URL |
+| `/v1/billing/webhook` | POST | Stripe -> us | Signature-verified subscription events; flips `subscription_tier` in D1 |
 | `OPTIONS *` | OPTIONS | none | CORS preflight |
 
-Deepgram and Cartesia never sit on the data path: the Worker only mints a token, then the client streams to them directly. Worker secrets: `ANTHROPIC_API_KEY`, `DEEPGRAM_API_KEY`, `CARTESIA_API_KEY`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `JWT_SECRET`. Source and deploy notes: `proxy/src/index.ts` and `proxy/README.md`.
+Deepgram and Cartesia never sit on the data path: the Worker only mints a token, then the client streams to them directly. Worker secrets: `ANTHROPIC_API_KEY`, `DEEPGRAM_API_KEY`, `CARTESIA_API_KEY`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `JWT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`. Source and deploy notes: `proxy/src/index.ts` and `proxy/README.md`.
 
 Accounts (social sign-in for billing + settings sync) live in a D1 database (`DB` binding, `proxy/migrations/`). Sign-in is Worker-mediated GitHub OAuth so the client secret never ships in the desktop binary; the console opens the browser and polls `/auth/github/session`, then stores the JWT in the OS keychain. Integration tokens stay on the device and are never stored server-side.
+
+Billing (`proxy/src/handlers/stripe.ts`). Signed-in accounts are `free` or `pro` (`users.subscription_tier`), each with its own daily budget in `constants.ts`. The plan is read from D1 on every metered request, not from the JWT's `tier` claim, so a Stripe webhook can flip it mid-session. Two purchase paths: in-app (Settings -> Checkout, matched by `client_reference_id`) and the landing-page payment link (matched by email in the webhook, or claimed at first sign-in via `claimSubscriptionByEmail`). Pure webhook helpers live in `proxy/src/billing/webhook.ts` and are tested with `npm test` (node --test, no bundler).
 
 ## Key Files
 

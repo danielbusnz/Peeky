@@ -170,10 +170,43 @@ re-minting (overwrites the old key with the same code, if you reuse the
 suffix) or `wrangler kv key put` directly. Delete a code with
 `wrangler kv key delete --binding=USAGE_KV invite:{CODE}`.
 
+## Billing
+
+Signed-in users are `free` or `pro` (`users.subscription_tier` in D1). Pro is
+a $12/month Stripe subscription with a 7-day trial, sold two ways: the
+landing-page payment link, and Checkout from the console's Settings page
+(`POST /v1/billing/checkout`). Subscribers manage it through the Stripe
+customer portal (`POST /v1/billing/portal`). Stripe reports changes to
+`POST /v1/billing/webhook`, which verifies the signature and sets the plan.
+
+Setup, once per environment:
+
+```bash
+npx wrangler secret put STRIPE_SECRET_KEY        # sk_live_... from Stripe > Developers > API keys
+```
+
+Then in Stripe > Developers > Webhooks add an endpoint pointing at
+`https://<worker>/v1/billing/webhook` with these events:
+`checkout.session.completed`, `customer.subscription.updated`,
+`customer.subscription.deleted`. Copy its signing secret:
+
+```bash
+npx wrangler secret put STRIPE_WEBHOOK_SECRET    # whsec_...
+```
+
+The customer portal needs a saved configuration in Stripe > Settings >
+Billing > Customer portal before `/v1/billing/portal` will work.
+`STRIPE_PRICE_ID` (the monthly price) is a plain var in `wrangler.toml`.
+
+Unit tests for the signature check and the status -> plan rule:
+
+```bash
+npm test
+```
+
 ## Future work
 
 - per-IP rate limiting (Cloudflare WAF or a Durable Object)
 - hardware-derived device IDs (machine-id, IOPlatformUUID, MachineGuid) so a
   reinstall doesn't reset the trial
 - global daily $ ceiling (fail-closed budget cap across all users)
-- Stripe-backed paid plan
