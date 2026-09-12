@@ -14,6 +14,7 @@
 // here and discarded; it is never stored. Integrations stay local.
 
 import { UUID_RE } from "../constants";
+import { claimSubscriptionByEmail } from "../handlers/stripe";
 import { jsonResponse } from "../http";
 import type { Env } from "../types";
 import { signJwt } from "./jwt";
@@ -86,6 +87,15 @@ export async function handleGithubCallback(request: Request, env: Env): Promise<
     }
 
     const user = await upsertUser(env, profile);
+    // A landing-page buyer pays before they have an account. First sign-in is
+    // where we can finally link that subscription to a user, by email.
+    if (user.stripeCustomerId === null && profile.email) {
+        try {
+            user.tier = await claimSubscriptionByEmail(env, user.id, profile.email);
+        } catch (err) {
+            console.error("[auth] subscription claim failed, leaving plan as is:", err);
+        }
+    }
     const token = await signJwt(
         { sub: user.id, email: profile.email, tier: user.tier },
         env.JWT_SECRET,
@@ -199,18 +209,22 @@ async function fetchIdentity(accessToken: string): Promise<GithubProfile | null>
 async function upsertUser(
     env: Env,
     profile: GithubProfile,
-): Promise<{ id: string; tier: string }> {
+): Promise<{ id: string; tier: string; stripeCustomerId: string | null }> {
     const existing = await env.DB.prepare(
-        "SELECT id, subscription_tier FROM users WHERE provider = ? AND provider_uid = ?",
+        "SELECT id, subscription_tier, stripe_customer_id FROM users WHERE provider = ? AND provider_uid = ?",
     )
         .bind("github", profile.provider_uid)
-        .first<{ id: string; subscription_tier: string }>();
+        .first<{ id: string; subscription_tier: string; stripe_customer_id: string | null }>();
 
     if (existing) {
         await env.DB.prepare("UPDATE users SET email = ?, name = ?, avatar_url = ? WHERE id = ?")
             .bind(profile.email, profile.name, profile.avatar_url, existing.id)
             .run();
-        return { id: existing.id, tier: existing.subscription_tier };
+        return {
+            id: existing.id,
+            tier: existing.subscription_tier,
+            stripeCustomerId: existing.stripe_customer_id,
+        };
     }
 
     const id = crypto.randomUUID();
@@ -227,7 +241,7 @@ async function upsertUser(
             Math.floor(Date.now() / 1000),
         )
         .run();
-    return { id, tier: "free" };
+    return { id, tier: "free", stripeCustomerId: null };
 }
 
 /** A tiny HTML page shown in the browser tab after the redirect dance. */

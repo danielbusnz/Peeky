@@ -21,6 +21,9 @@
 //   POST /v1/invite/verify        read-only check that an invite code is usable
 //   POST /v1/routelet/sample      store one redacted classification sample in R2
 //   POST /v1/billing/checkout     create a Stripe subscription Checkout Session
+//   POST /v1/billing/portal       create a Stripe customer portal session
+//   POST /v1/billing/webhook      Stripe -> us: subscription state changes
+//   GET  /v1/account/me           the signed-in user's live plan and email
 //
 // Why mixed patterns:
 //   Anthropic is HTTP request/response with streaming SSE. We forward bytes
@@ -37,9 +40,10 @@
 // in usage.ts, tier resolution in tiers.ts, shared plumbing in http.ts.
 
 import { handleGithubCallback, handleGithubSession, handleGithubStart } from "./auth/github";
+import { handleAccountMe } from "./handlers/account";
 import { handleAnthropic } from "./handlers/anthropic";
 import { handleRouteletSample } from "./handlers/routelet";
-import { handleCheckout } from "./handlers/stripe";
+import { handleCheckout, handlePortal, handleWebhook } from "./handlers/stripe";
 import { handleCartesiaToken, handleDeepgramToken } from "./handlers/tokens";
 import { cors } from "./http";
 import { handleInviteVerify } from "./tiers";
@@ -70,13 +74,22 @@ export default {
                 return handleRouteletSample(request, env);
             }
             if (url.pathname === "/v1/billing/checkout") {
-                return handleCheckout(request, env, ctx);
+                return handleCheckout(request, env);
+            }
+            if (url.pathname === "/v1/billing/portal") {
+                return handlePortal(request, env);
+            }
+            if (url.pathname === "/v1/billing/webhook") {
+                return handleWebhook(request, env);
             }
         }
 
         // GitHub sign-in. start + callback are browser redirects; session is
         // polled by the desktop client (via reqwest, so no CORS needed).
         if (request.method === "GET") {
+            if (url.pathname === "/v1/account/me") {
+                return handleAccountMe(request, env);
+            }
             if (url.pathname === "/auth/github/start") {
                 return handleGithubStart(request, env);
             }

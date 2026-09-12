@@ -84,7 +84,9 @@ export function exhaustionBody(tier: Tier, provider: string): Record<string, unk
         tier.kind === "trial"
             ? "Free trial spent for today. Sign in to keep going, or use your own API keys."
             : tier.kind === "account"
-                ? "Daily limit reached. It resets at 00:00 UTC."
+                ? tier.plan === "pro"
+                    ? "Daily limit reached. It resets at 00:00 UTC."
+                    : "Daily limit reached. Upgrade in Settings for more, or wait for 00:00 UTC."
                 : "This invite code's daily budget is spent. It resets at 00:00 UTC.";
     return { error, message, provider, tier: tier.kind };
 }

@@ -12,9 +12,14 @@ export interface Env {
     /** Stripe secret key (sk_...). Set via `wrangler secret put STRIPE_SECRET_KEY`. */
     STRIPE_SECRET_KEY: string;
     /**
-     * Recurring Price id (price_...) for the peeky subscription. Not a secret, a
-     * plain var so test and live can differ. Set in wrangler.toml [vars] (or
-     * .dev.vars for local dev).
+     * Signing secret (whsec_...) of the Stripe webhook endpoint that points at
+     * /v1/billing/webhook. Set via `wrangler secret put STRIPE_WEBHOOK_SECRET`.
+     */
+    STRIPE_WEBHOOK_SECRET: string;
+    /**
+     * Recurring Price id (price_...) for the monthly peeky subscription. Not a
+     * secret, a plain var so test and live can differ. Set in wrangler.toml
+     * [vars] (or .dev.vars for local dev).
      */
     STRIPE_PRICE_ID: string;
     /**
@@ -92,7 +97,7 @@ export type InviteCode = {
 
 export type Tier =
     | { kind: "trial"; budget: DailyBudget }
-    | { kind: "account"; userId: string; budget: DailyBudget }
+    | { kind: "account"; userId: string; plan: "free" | "pro"; budget: DailyBudget }
     | { kind: "demo"; code: string; budget: DailyBudget };
 
 /** Successful read-only resolution of an invite code against KV. */

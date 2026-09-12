@@ -2,8 +2,8 @@
 // as trial (no code) or demo (valid code), and serves the read-only verify
 // endpoint the onboarding UI calls.
 
-import { verifyJwt } from "./auth/jwt";
-import { ACCOUNT_DAILY_BUDGET, CODE_RE, TRIAL_DAILY_BUDGET } from "./constants";
+import { sessionFromRequest } from "./auth/jwt";
+import { ACCOUNT_DAILY_BUDGET, CODE_RE, PRO_DAILY_BUDGET, TRIAL_DAILY_BUDGET } from "./constants";
 import { clientHeader, cors, jsonResponse, requireDeviceId } from "./http";
 import type { Env, InviteCode, InviteLookup, Tier } from "./types";
 
@@ -67,12 +67,22 @@ export async function resolveTier(
         // anyone else gets the anonymous trial. An invalid or expired token
         // falls through to trial rather than 401, so a stale session still
         // runs on the free tier instead of being blocked mid-turn.
-        const auth = request.headers.get("authorization");
-        if (auth?.startsWith("Bearer ")) {
-            const claims = await verifyJwt(auth.slice("Bearer ".length), env.JWT_SECRET);
-            if (claims) {
-                return { kind: "account", userId: claims.sub, budget: ACCOUNT_DAILY_BUDGET };
-            }
+        //
+        // The plan comes from D1, not the JWT's `tier` claim: the token lives
+        // 30 days, and a Stripe webhook can flip the plan at any time. One
+        // indexed read per metered request is cheap next to the upstream call.
+        const claims = await sessionFromRequest(request, env.JWT_SECRET);
+        if (claims) {
+            const row = await env.DB.prepare("SELECT subscription_tier FROM users WHERE id = ?")
+                .bind(claims.sub)
+                .first<{ subscription_tier: string }>();
+            const plan = row?.subscription_tier === "pro" ? "pro" : "free";
+            return {
+                kind: "account",
+                userId: claims.sub,
+                plan,
+                budget: plan === "pro" ? PRO_DAILY_BUDGET : ACCOUNT_DAILY_BUDGET,
+            };
         }
         return { kind: "trial", budget: TRIAL_DAILY_BUDGET };
     }

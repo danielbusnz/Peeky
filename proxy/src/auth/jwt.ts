@@ -78,3 +78,13 @@ export async function verifyJwt(token: string, secret: string): Promise<JwtClaim
     }
     return claims;
 }
+
+/**
+ * The session behind a request's `Authorization: Bearer` header, or null when
+ * the header is missing or the token doesn't verify.
+ */
+export async function sessionFromRequest(request: Request, secret: string): Promise<JwtClaims | null> {
+    const auth = request.headers.get("authorization");
+    if (!auth?.startsWith("Bearer ")) return null;
+    return verifyJwt(auth.slice("Bearer ".length), secret);
+}

@@ -51,3 +51,22 @@ export const EST_OUTPUT_TOKENS_PER_TURN = 600;
 // an acceptable blast radius if one leaks.
 export const DEEPGRAM_TOKEN_TTL_SECONDS = 3600;
 export const CARTESIA_TOKEN_TTL_SECONDS = 3600;
+
+// Where Stripe sends the browser back after Checkout or the customer portal.
+export const SITE_URL = "https://getpeeky.ai";
+export const STRIPE_API_URL = "https://api.stripe.com/v1";
+// Free trial on the in-app Checkout. Matches the public payment link on the
+// landing page so both paths sell the same plan.
+export const STRIPE_TRIAL_DAYS = 7;
+// Webhook events with a timestamp further than this from now are treated as
+// replays. Stripe's own recommended default.
+export const STRIPE_SIGNATURE_TOLERANCE_SECONDS = 300;
+
+// Per-day budget for paid (pro) accounts. Sized for ~250 turns/day, which is
+// effectively "don't think about it" for one person.
+export const PRO_DAILY_BUDGET = {
+    input_tokens: 1_500_000,
+    output_tokens: 150_000,
+    deepgram: 250,
+    cartesia: 250,
+};

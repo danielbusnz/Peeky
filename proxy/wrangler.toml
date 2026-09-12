@@ -8,6 +8,10 @@ compatibility_date = "2026-05-15"
 # be tested for free. Set to "0" or remove before serving real production users.
 DEV_HEADERS = "1"
 
+# Monthly Peeky price (live mode, $12/month). The yearly price exists in Stripe
+# but only the landing-page payment link and this id are sold today.
+STRIPE_PRICE_ID = "price_1UCi5t8ZrkQ2KHN0lYgF6cDC"
+
 # Trial and demo tiers meter against per-UTC-day budgets, not a lifetime turn
 # count. The trial default budget lives in src/constants.ts (TRIAL_DAILY_BUDGET);
 # demo budgets come from each invite record's daily_* fields.
@@ -46,3 +50,5 @@ migrations_dir = "migrations"
 #   wrangler secret put GITHUB_CLIENT_ID
 #   wrangler secret put GITHUB_CLIENT_SECRET
 #   wrangler secret put JWT_SECRET
+#   wrangler secret put STRIPE_SECRET_KEY
+#   wrangler secret put STRIPE_WEBHOOK_SECRET   (from the endpoint in Stripe > Developers > Webhooks)
