@@ -20,19 +20,6 @@ ignore = [
     # tauri -> tauri-utils -> urlpattern -> unic-ucd-ident. No upgrade is
     # available; clear when tauri drops the unic chain upstream.
     "RUSTSEC-2025-0098",
-    # gtk-rs GTK3 bindings are unmaintained (the whole atk/gdk/gdk-pixbuf/gtk
-    # batch). Pulled in transitively via global-hotkey (Linux) and the Tauri
-    # console; no maintained replacement exists.
-    "RUSTSEC-2024-0411",
-    "RUSTSEC-2024-0412",
-    "RUSTSEC-2024-0413",
-    "RUSTSEC-2024-0414",
-    "RUSTSEC-2024-0415",
-    "RUSTSEC-2024-0416",
-    "RUSTSEC-2024-0417",
-    "RUSTSEC-2024-0418",
-    "RUSTSEC-2024-0419",
-    "RUSTSEC-2024-0420",
     # Other transitive unmaintained-crate notices (proc-macro-error via deps,
     # google-apis-rs via google-gmail1, and assorted transitive crates). All
     # are "unmaintained" advisories, not vulnerabilities.
@@ -61,6 +48,15 @@ ignore = [
     # ab_glyph for client-side decoration text; no fixed release or drop-in
     # replacement exists. Clear when the winit chain moves off it.
     "RUSTSEC-2026-0192",
+    # anymap2 is unmaintained. Build-time only: liquid-core (tract's template
+    # engine) pulls it in. Clear when tract drops liquid or liquid drops anymap2.
+    "RUSTSEC-2026-0319",
+    # zbus 5 chain (zvariant, zvariant_derive, zbus_names) is unmaintained in
+    # favor of zbus 6. Pulled in transitively through xcap (screen capture);
+    # clear when xcap moves to zbus 6.
+    "RUSTSEC-2026-0370",
+    "RUSTSEC-2026-0371",
+    "RUSTSEC-2026-0372",
 ]
 
 [licenses]
@@ -80,7 +76,6 @@ allow = [
     "MPL-2.0",
     "NCSA",
     "Unicode-3.0",
-    "Unicode-DFS-2016",
     "Zlib",
 ]
 confidence-threshold = 0.8
