@@ -129,6 +129,7 @@ fn intent_label(i: Option<Intent>) -> String {
         Some(Intent::Chat) => "Chat".to_string(),
         Some(Intent::Memory) => "Memory".to_string(),
         Some(Intent::Agent) => "Agent".to_string(),
+        Some(Intent::None) => "None".to_string(),
         None => "(none)".to_string(),
     }
 }
