@@ -57,6 +57,11 @@ ignore = [
     "RUSTSEC-2026-0370",
     "RUSTSEC-2026-0371",
     "RUSTSEC-2026-0372",
+    # chrono is unmaintained (all versions; no safe upgrade exists). Not a
+    # vulnerability. Pulled in transitively through google-gmail1 ->
+    # google-apis-common; peeky does not depend on it directly. Clear when
+    # google-apis-rs moves to jiff or time.
+    "RUSTSEC-2026-0543",
 ]
 
 [licenses]
