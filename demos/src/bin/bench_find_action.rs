@@ -283,7 +283,7 @@ fn run_once(
                 cb,
             ));
             let dur = t_fa.elapsed();
-            let fired = matches!(&result, Ok(Some(_)));
+            let fired = matches!(&result, Ok(actions) if !actions.is_empty());
             (Some(dur), fired)
         }
         _ => (None, false),

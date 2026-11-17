@@ -82,10 +82,8 @@ impl ScreenshotBackend for Backend {
         // xcap gives us an RGBA buffer directly. Convert to RGB for the resize.
         let rgba = image.into_raw();
         let mut rgb: Vec<u8> = Vec::with_capacity((src_w * src_h * 3) as usize);
-        for chunk in rgba.chunks_exact(4) {
-            rgb.push(chunk[0]);
-            rgb.push(chunk[1]);
-            rgb.push(chunk[2]);
+        for &[r, g, b, _] in rgba.as_chunks::<4>().0 {
+            rgb.extend_from_slice(&[r, g, b]);
         }
 
         let fir_src = FirImage::from_vec_u8(src_w, src_h, rgb, PixelType::U8x3)?;

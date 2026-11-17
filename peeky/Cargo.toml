@@ -2,7 +2,7 @@
 name = "peeky"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.89"
 license = "MIT"
 default-run = "peeky"
 
@@ -40,7 +40,7 @@ dirs = "5.0"
 # Regex engine for the routelet redaction pass (PII scrubbing before log write).
 # Compiled patterns are cached via OnceLock so per-call overhead is negligible.
 regex = "1.12.3"
-rusqlite = { version = "0.32", features = ["bundled", "blob"] }
+rusqlite = { version = "0.41", features = ["bundled", "blob"] }
 fast_image_resize = { version = "5", features = ["image"] }
 open = "5"
 url = "2"
