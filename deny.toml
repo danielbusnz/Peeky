@@ -57,6 +57,10 @@ ignore = [
     "RUSTSEC-2026-0370",
     "RUSTSEC-2026-0371",
     "RUSTSEC-2026-0372",
+    # chrono is unmaintained (no vulnerability, no fixed release). Transitive
+    # only, through google-gmail1 -> google-apis-common. Clear when the Gmail
+    # client moves off chrono or is replaced.
+    "RUSTSEC-2026-0543",
 ]
 
 [licenses]
