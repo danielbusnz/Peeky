@@ -8,6 +8,9 @@ description = "Peeky console: onboarding, sign-in, and settings GUI"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+# build.rs extends the TAURI_CONFIG merge patch that tauri-build reads. Already
+# in the build graph through tauri-build, so this adds no package.
+serde_json = "1"
 
 [dependencies]
 tauri = { version = "2", features = ["macos-private-api"] }
